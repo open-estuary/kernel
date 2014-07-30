@@ -43,13 +43,13 @@ struct gic_chip_data {
 	void __iomem		*dist_base;
 	struct redist_region	*redist_regions;
 	struct rdists		rdists;
-	struct irq_domain	*domain;
 	u64			redist_stride;
 	u32			nr_redist_regions;
 	unsigned int		irq_nr;
 };
 
 static struct gic_chip_data gic_data __read_mostly;
+static struct irq_domain *gic_domain = NULL;
 
 #define gic_data_rdist()		(this_cpu_ptr(gic_data.rdists.rdist))
 #define gic_data_rdist_rd_base()	(gic_data_rdist()->rd_base)
@@ -255,7 +255,7 @@ static asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs
 
 		if (likely(irqnr > 15 && irqnr < 1020) || irqnr >= 8192) {
 			int err;
-			err = handle_domain_irq(gic_data.domain, irqnr, regs);
+			err = handle_domain_irq(gic_domain, irqnr, regs);
 			if (err) {
 				WARN_ONCE(true, "Unexpected interrupt received!\n");
 				gic_write_eoir(irqnr);
@@ -754,11 +754,10 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 		gic_irqs = 1020;
 	gic_data.irq_nr = gic_irqs;
 
-	gic_data.domain = irq_domain_add_tree(node, &gic_irq_domain_ops,
-					      &gic_data);
+	gic_domain = irq_domain_add_tree(node, &gic_irq_domain_ops, &gic_data);
 	gic_data.rdists.rdist = alloc_percpu(typeof(*gic_data.rdists.rdist));
 
-	if (WARN_ON(!gic_data.domain) || WARN_ON(!gic_data.rdists.rdist)) {
+	if (WARN_ON(!gic_domain) || WARN_ON(!gic_data.rdists.rdist)) {
 		err = -ENOMEM;
 		goto out_free;
 	}
@@ -766,7 +765,7 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 	set_handle_irq(gic_handle_irq);
 
 	if (IS_ENABLED(CONFIG_ARM_GIC_V3_ITS) && gic_dist_supports_lpis())
-		its_init(node, &gic_data.rdists, gic_data.domain);
+		its_init(node, &gic_data.rdists, gic_domain);
 
 	gic_smp_init();
 	gic_dist_init();
@@ -776,8 +775,8 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 	return 0;
 
 out_free:
-	if (gic_data.domain)
-		irq_domain_remove(gic_data.domain);
+	if (gic_domain)
+		irq_domain_remove(gic_domain);
 	free_percpu(gic_data.rdists.rdist);
 out_unmap_rdist:
 	for (i = 0; i < nr_redist_regions; i++)
