@@ -315,4 +315,15 @@ config ARM_SMMU
 	  Say Y here if your SoC includes an IOMMU device implementing
 	  the ARM SMMU architecture.
 
+config HISI_SMMU
+    bool "Hisilicon Ltd. System MMU (SMMU) Support"
+    depends on ARM64 || (ARM_LPAE && OF)
+    select IOMMU_API
+    select ARM_DMA_USE_IOMMU if ARM
+    help
+      Support for implementations of the hisilicon System MMU architecture
+
+      Say Y here if your SoC includes an IOMMU device implementing
+      the hisilicon SMMU architecture.
+
 endif # IOMMU_SUPPORT
