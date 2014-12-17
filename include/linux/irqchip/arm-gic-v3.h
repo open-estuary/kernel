@@ -301,6 +301,11 @@
  */
 #define GIC_IRQ_TYPE_LPI		0xa110c8ed
 
+struct redist_region {
+	void __iomem		*redist_base;
+	unsigned long		phys_base;
+};
+
 struct rdists {
 	struct {
 		void __iomem	*rd_base;
@@ -308,6 +313,9 @@ struct rdists {
 		phys_addr_t	phys_base;
 	} __percpu		*rdist;
 	struct page		*prop_page;
+	struct redist_region	*regions;
+	u64			stride;
+	u32			nr_regions;
 	int			id_bits;
 	u64			flags;
 };

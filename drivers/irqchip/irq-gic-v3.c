@@ -34,17 +34,9 @@
 #include "irq-gic-common.h"
 #include "irqchip.h"
 
-struct redist_region {
-	void __iomem		*redist_base;
-	phys_addr_t		phys_base;
-};
-
 struct gic_chip_data {
 	void __iomem		*dist_base;
-	struct redist_region	*redist_regions;
 	struct rdists		rdists;
-	u64			redist_stride;
-	u32			nr_redist_regions;
 	unsigned int		irq_nr;
 };
 
@@ -315,8 +307,8 @@ static int gic_populate_rdist(void)
 	       MPIDR_AFFINITY_LEVEL(mpidr, 1) << 8 |
 	       MPIDR_AFFINITY_LEVEL(mpidr, 0));
 
-	for (i = 0; i < gic_data.nr_redist_regions; i++) {
-		void __iomem *ptr = gic_data.redist_regions[i].redist_base;
+	for (i = 0; i < gic_data.rdists.nr_regions; i++) {
+		void __iomem *ptr = gic_data.rdists.regions[i].redist_base;
 		u32 reg;
 
 		reg = readl_relaxed(ptr + GICR_PIDR2) & GIC_PIDR2_ARCH_MASK;
@@ -329,9 +321,9 @@ static int gic_populate_rdist(void)
 		do {
 			typer = readq_relaxed(ptr + GICR_TYPER);
 			if ((typer >> 32) == aff) {
-				u64 offset = ptr - gic_data.redist_regions[i].redist_base;
+				u64 offset = ptr - gic_data.rdists.regions[i].redist_base;
 				gic_data_rdist_rd_base() = ptr;
-				gic_data_rdist()->phys_base = gic_data.redist_regions[i].phys_base + offset;
+				gic_data_rdist()->phys_base = gic_data.rdists.regions[i].phys_base + offset;
 				pr_info("CPU%d: found redistributor %llx region %d:%pa\n",
 					smp_processor_id(),
 					(unsigned long long)mpidr,
@@ -339,8 +331,8 @@ static int gic_populate_rdist(void)
 				return 0;
 			}
 
-			if (gic_data.redist_stride) {
-				ptr += gic_data.redist_stride;
+			if (gic_data.rdists.stride) {
+				ptr += gic_data.rdists.stride;
 			} else {
 				ptr += SZ_64K * 2; /* Skip RD_base + SGI_base */
 				if (typer & GICR_TYPER_VLPIS)
@@ -739,9 +731,9 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 		redist_stride = 0;
 
 	gic_data.dist_base = dist_base;
-	gic_data.redist_regions = rdist_regs;
-	gic_data.nr_redist_regions = nr_redist_regions;
-	gic_data.redist_stride = redist_stride;
+	gic_data.rdists.regions = rdist_regs;
+	gic_data.rdists.nr_regions = nr_redist_regions;
+	gic_data.rdists.stride = redist_stride;
 
 	/*
 	 * Find out how many interrupts are supported.
