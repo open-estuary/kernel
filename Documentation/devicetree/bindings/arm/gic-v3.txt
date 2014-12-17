@@ -46,8 +46,7 @@ Optional
   of consecutive redistributors. Must be a multiple of 64kB.
 
 - #redistributor-regions: The number of independent contiguous regions
-  occupied by the redistributors. Required if more than one such
-  region is present.
+  occupied by the redistributors. Required if any such region is present.
 
 Sub-nodes:
 
@@ -73,6 +72,7 @@ Examples:
 		#size-cells = <2>;
 		ranges;
 		interrupt-controller;
+		#redistributor-regions = <1>;
 		reg = <0x0 0x2f000000 0 0x10000>,	// GICD
 		      <0x0 0x2f100000 0 0x200000>,	// GICR
 		      <0x0 0x2c000000 0 0x2000>,	// GICC
