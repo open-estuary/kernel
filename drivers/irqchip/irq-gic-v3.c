@@ -790,7 +790,7 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 	set_handle_irq(gic_handle_irq);
 
 	if (IS_ENABLED(CONFIG_ARM_GIC_V3_ITS) && gic_dist_supports_lpis())
-		its_init(node, &gic_rdists, gic_domain);
+		its_init(&gic_rdists, gic_domain);
 
 	gic_smp_init();
 	gic_dist_init();

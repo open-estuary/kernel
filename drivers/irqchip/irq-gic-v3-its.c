@@ -93,7 +93,6 @@ struct its_device {
 
 static LIST_HEAD(its_nodes);
 static DEFINE_SPINLOCK(its_lock);
-static struct device_node *gic_root_node;
 static struct rdists *gic_rdists;
 
 #define gic_data_rdist()		(raw_cpu_ptr(gic_rdists->rdist))
@@ -1400,15 +1399,12 @@ static struct of_device_id its_device_id[] = {
 	{},
 };
 
-int its_init(struct device_node *node, struct rdists *rdists,
-	     struct irq_domain *parent_domain)
+int its_init(struct rdists *rdists, struct irq_domain *parent_domain)
 {
 	struct device_node *np;
 
-	for (np = of_find_matching_node(node, its_device_id); np;
-	     np = of_find_matching_node(np, its_device_id)) {
+	for_each_matching_node(np, its_device_id)
 		its_probe(np, parent_domain);
-	}
 
 	if (list_empty(&its_nodes)) {
 		pr_warn("ITS: No ITS available, not enabling LPIs\n");
@@ -1416,7 +1412,6 @@ int its_init(struct device_node *node, struct rdists *rdists,
 	}
 
 	gic_rdists = rdists;
-	gic_root_node = node;
 
 	its_alloc_lpi_tables();
 	its_lpi_init(rdists->id_bits);
