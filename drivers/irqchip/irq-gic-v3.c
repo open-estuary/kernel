@@ -36,14 +36,14 @@
 
 struct gic_chip_data {
 	void __iomem		*dist_base;
-	struct rdists		rdists;
 	unsigned int		irq_nr;
 };
 
 static struct gic_chip_data gic_data __read_mostly;
 static struct irq_domain *gic_domain = NULL;
+static struct rdists gic_rdists;
 
-#define gic_data_rdist()		(this_cpu_ptr(gic_data.rdists.rdist))
+#define gic_data_rdist()		(this_cpu_ptr(gic_rdists.rdist))
 #define gic_data_rdist_rd_base()	(gic_data_rdist()->rd_base)
 #define gic_data_rdist_sgi_base()	(gic_data_rdist_rd_base() + SZ_64K)
 
@@ -307,8 +307,8 @@ static int gic_populate_rdist(void)
 	       MPIDR_AFFINITY_LEVEL(mpidr, 1) << 8 |
 	       MPIDR_AFFINITY_LEVEL(mpidr, 0));
 
-	for (i = 0; i < gic_data.rdists.nr_regions; i++) {
-		void __iomem *ptr = gic_data.rdists.regions[i].redist_base;
+	for (i = 0; i < gic_rdists.nr_regions; i++) {
+		void __iomem *ptr = gic_rdists.regions[i].redist_base;
 		u32 reg;
 
 		reg = readl_relaxed(ptr + GICR_PIDR2) & GIC_PIDR2_ARCH_MASK;
@@ -321,9 +321,9 @@ static int gic_populate_rdist(void)
 		do {
 			typer = readq_relaxed(ptr + GICR_TYPER);
 			if ((typer >> 32) == aff) {
-				u64 offset = ptr - gic_data.rdists.regions[i].redist_base;
+				u64 offset = ptr - gic_rdists.regions[i].redist_base;
 				gic_data_rdist_rd_base() = ptr;
-				gic_data_rdist()->phys_base = gic_data.rdists.regions[i].phys_base + offset;
+				gic_data_rdist()->phys_base = gic_rdists.regions[i].phys_base + offset;
 				pr_info("CPU%d: found redistributor %llx region %d:%pa\n",
 					smp_processor_id(),
 					(unsigned long long)mpidr,
@@ -331,8 +331,8 @@ static int gic_populate_rdist(void)
 				return 0;
 			}
 
-			if (gic_data.rdists.stride) {
-				ptr += gic_data.rdists.stride;
+			if (gic_rdists.stride) {
+				ptr += gic_rdists.stride;
 			} else {
 				ptr += SZ_64K * 2; /* Skip RD_base + SGI_base */
 				if (typer & GICR_TYPER_VLPIS)
@@ -571,7 +571,7 @@ static struct irq_chip gic_chip = {
 	.irq_set_affinity	= gic_set_affinity,
 };
 
-#define GIC_ID_NR		(1U << gic_data.rdists.id_bits)
+#define GIC_ID_NR		(1U << gic_rdists.id_bits)
 
 static int gic_irq_domain_map(struct irq_domain *d, unsigned int irq,
 			      irq_hw_number_t hw)
@@ -676,17 +676,79 @@ static const struct irq_domain_ops gic_irq_domain_ops = {
 	.free = gic_irq_domain_free,
 };
 
+static void gic_rdist_free(void)
+{
+	struct redist_region *rdist_regs = gic_rdists.regions;
+	int i;
+
+	free_percpu(gic_rdists.rdist);
+	for (i = 0; i < gic_rdists.nr_regions; i++)
+		if (rdist_regs[i].redist_base)
+			iounmap(rdist_regs[i].redist_base);
+	kfree(rdist_regs);
+}
+
+static int gic_rdist_of_init(struct device_node *node, int id_bits)
+{
+	struct redist_region *rdist_regs;
+	u64 redist_stride;
+	u32 redist_regions;
+	int err, i;
+
+	if (of_property_read_u32(node, "#redistributor-regions", &redist_regions))
+		return 0;
+
+	if (of_property_read_u64(node, "redistributor-stride", &redist_stride))
+		redist_stride = 0;
+
+	rdist_regs = kzalloc(sizeof(*rdist_regs) * redist_regions, GFP_KERNEL);
+	if (!rdist_regs)
+		return -ENOMEM;
+
+	for (i = 0; i < redist_regions; i++) {
+		struct resource res;
+
+		err = of_address_to_resource(node, 1 + i, &res);
+		rdist_regs[i].redist_base = of_iomap(node, 1 + i);
+		if (err || !rdist_regs[i].redist_base) {
+			pr_err("%s: couldn't map region %d\n",
+			       node->full_name, i);
+			err = -ENODEV;
+			goto out_unmap_rdist;
+		}
+		rdist_regs[i].phys_base = res.start;
+	}
+
+	gic_rdists.rdist = alloc_percpu(typeof(*gic_rdists.rdist));
+	if (WARN_ON(!gic_rdists.rdist)) {
+		err = -ENOMEM;
+		goto out_free_rdist;
+	}
+
+	gic_rdists.id_bits = id_bits;
+	gic_rdists.regions = rdist_regs;
+	gic_rdists.nr_regions = redist_regions;
+	gic_rdists.stride = redist_stride;
+
+	return 0;
+
+out_free_rdist:
+	free_percpu(gic_rdists.rdist);
+out_unmap_rdist:
+	for (i = 0; i < redist_regions; i++)
+		if (rdist_regs[i].redist_base)
+			iounmap(rdist_regs[i].redist_base);
+	kfree(rdist_regs);
+	return err;
+}
+
 static int __init gic_of_init(struct device_node *node, struct device_node *parent)
 {
 	void __iomem *dist_base;
-	struct redist_region *rdist_regs;
-	u64 redist_stride;
-	u32 nr_redist_regions;
 	u32 typer;
 	u32 reg;
 	int gic_irqs;
 	int err;
-	int i;
 
 	dist_base = of_iomap(node, 0);
 	if (!dist_base) {
@@ -703,61 +765,32 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 		goto out_unmap_dist;
 	}
 
-	if (of_property_read_u32(node, "#redistributor-regions", &nr_redist_regions))
-		nr_redist_regions = 1;
-
-	rdist_regs = kzalloc(sizeof(*rdist_regs) * nr_redist_regions, GFP_KERNEL);
-	if (!rdist_regs) {
-		err = -ENOMEM;
-		goto out_unmap_dist;
-	}
-
-	for (i = 0; i < nr_redist_regions; i++) {
-		struct resource res;
-		int ret;
-
-		ret = of_address_to_resource(node, 1 + i, &res);
-		rdist_regs[i].redist_base = of_iomap(node, 1 + i);
-		if (ret || !rdist_regs[i].redist_base) {
-			pr_err("%s: couldn't map region %d\n",
-			       node->full_name, i);
-			err = -ENODEV;
-			goto out_unmap_rdist;
-		}
-		rdist_regs[i].phys_base = res.start;
-	}
-
-	if (of_property_read_u64(node, "redistributor-stride", &redist_stride))
-		redist_stride = 0;
-
 	gic_data.dist_base = dist_base;
-	gic_data.rdists.regions = rdist_regs;
-	gic_data.rdists.nr_regions = nr_redist_regions;
-	gic_data.rdists.stride = redist_stride;
 
 	/*
 	 * Find out how many interrupts are supported.
 	 * The GIC only supports up to 1020 interrupt sources (SGI+PPI+SPI)
 	 */
 	typer = readl_relaxed(gic_data.dist_base + GICD_TYPER);
-	gic_data.rdists.id_bits = GICD_TYPER_ID_BITS(typer);
 	gic_irqs = GICD_TYPER_IRQS(typer);
 	if (gic_irqs > 1020)
 		gic_irqs = 1020;
 	gic_data.irq_nr = gic_irqs;
 
-	gic_domain = irq_domain_add_tree(node, &gic_irq_domain_ops, &gic_data);
-	gic_data.rdists.rdist = alloc_percpu(typeof(*gic_data.rdists.rdist));
+	err = gic_rdist_of_init(node, GICD_TYPER_ID_BITS(typer));
+	if (err)
+		goto out_unmap_dist;
 
-	if (WARN_ON(!gic_domain) || WARN_ON(!gic_data.rdists.rdist)) {
+	gic_domain = irq_domain_add_tree(node, &gic_irq_domain_ops, &gic_data);
+	if (WARN_ON(!gic_domain)) {
 		err = -ENOMEM;
-		goto out_free;
+		goto out_unmap_rdist;
 	}
 
 	set_handle_irq(gic_handle_irq);
 
 	if (IS_ENABLED(CONFIG_ARM_GIC_V3_ITS) && gic_dist_supports_lpis())
-		its_init(node, &gic_data.rdists, gic_domain);
+		its_init(node, &gic_rdists, gic_domain);
 
 	gic_smp_init();
 	gic_dist_init();
@@ -766,15 +799,8 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 
 	return 0;
 
-out_free:
-	if (gic_domain)
-		irq_domain_remove(gic_domain);
-	free_percpu(gic_data.rdists.rdist);
 out_unmap_rdist:
-	for (i = 0; i < nr_redist_regions; i++)
-		if (rdist_regs[i].redist_base)
-			iounmap(rdist_regs[i].redist_base);
-	kfree(rdist_regs);
+	gic_rdist_free();
 out_unmap_dist:
 	iounmap(dist_base);
 	return err;
