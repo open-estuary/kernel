@@ -35,6 +35,7 @@
 #include "irqchip.h"
 
 struct gic_chip_data {
+	unsigned int		sid;
 	void __iomem		*dist_base;
 	unsigned int		irq_nr;
 };
@@ -766,6 +767,9 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 	}
 
 	gic_data.dist_base = dist_base;
+
+	reg = readl_relaxed(gic_data.dist_base + GICD_SIDR);
+	gic_data.sid = reg & GIC_SID_MASK;
 
 	/*
 	 * Find out how many interrupts are supported.
