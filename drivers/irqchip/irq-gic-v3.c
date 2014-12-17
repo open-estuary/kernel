@@ -819,6 +819,9 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 	gic_irqs = GICD_TYPER_IRQS(typer);
 	gic_data->irq_nr = min(gic_irqs, 1020);
 
+	if (of_device_is_compatible(node, "hisilicon,gic-v3"))
+		gic_data->irq_nr = 0x80;
+
 	err = gic_rdist_of_init(node, GICD_TYPER_ID_BITS(typer));
 	if (err)
 		goto out_unmap_dist;
@@ -842,7 +845,9 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 
 	gic_smp_init();
 	gic_cpu_init();
-	gic_cpu_pm_init();
+
+	if (!of_device_is_compatible(node, "hisilicon,gic-v3"))
+		gic_cpu_pm_init();
 
 	gic_common_init = true;
 
@@ -863,3 +868,4 @@ out_free_gic:
 }
 
 IRQCHIP_DECLARE(gic_v3, "arm,gic-v3", gic_of_init);
+IRQCHIP_DECLARE(hic_v3, "hisilicon,gic-v3", gic_of_init);
