@@ -27,6 +27,10 @@ config ARM_GIC_V3_ITS
 	bool
 	select MBI
 
+config HISI_MBIGEN
+	bool
+	select MBI
+
 config ARM_NVIC
 	bool
 	select IRQ_DOMAIN
