@@ -17,6 +17,7 @@ config ARM64
 	select ARM_GIC_V2M if PCI_MSI
 	select ARM_GIC_V3
 	select ARM_GIC_V3_ITS if PCI_MSI
+	select IOMMU_SUPPORT
 	select BUILDTIME_EXTABLE_SORT
 	select CLONE_BACKWARDS
 	select COMMON_CLK
@@ -172,6 +173,15 @@ config ARCH_XGENE
 	bool "AppliedMicro X-Gene SOC Family"
 	help
 	  This enables support for AppliedMicro X-Gene SOC Family
+
+config ARCH_P660
+	bool "Hisilicon P660 SoC"
+	select MBI
+	select HISI_SMMU
+	select HISI_MBIGEN
+	select HIP05_GMAC
+	help
+	  This enables support for Hisilicon P660 SoC.
 
 endmenu
 
