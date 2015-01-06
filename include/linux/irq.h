@@ -30,6 +30,7 @@
 struct seq_file;
 struct module;
 struct msi_msg;
+struct mbi_msg;
 
 /*
  * IRQ line status.
@@ -122,6 +123,7 @@ enum {
 };
 
 struct msi_desc;
+struct mbi_desc;
 struct irq_domain;
 
 /**
@@ -141,6 +143,7 @@ struct irq_domain;
  * @chip_data:		platform-specific per-chip private data for the chip
  *			methods, to allow shared chip implementations
  * @msi_desc:		MSI descriptor
+ * @mbi_desc:		MBI descriptor
  * @affinity:		IRQ affinity on SMP
  *
  * The fields here need to overlay the ones in irq_desc until we
@@ -161,6 +164,7 @@ struct irq_data {
 	void			*handler_data;
 	void			*chip_data;
 	struct msi_desc		*msi_desc;
+	struct mbi_desc		*mbi_desc;
 	cpumask_var_t		affinity;
 };
 
@@ -324,6 +328,7 @@ static inline irq_hw_number_t irqd_to_hwirq(struct irq_data *d)
  *				irq_request_resources
  * @irq_compose_msi_msg:	optional to compose message content for MSI
  * @irq_write_msi_msg:	optional to write message content for MSI
+ * @irq_compose_msg:	optional to write message content for MBI
  * @flags:		chip specific flags
  */
 struct irq_chip {
@@ -362,6 +367,8 @@ struct irq_chip {
 
 	void		(*irq_compose_msi_msg)(struct irq_data *data, struct msi_msg *msg);
 	void		(*irq_write_msi_msg)(struct irq_data *data, struct msi_msg *msg);
+
+	void		(*irq_compose_msg)(struct irq_data *data, struct mbi_msg *msg);
 
 	unsigned long	flags;
 };
@@ -565,7 +572,11 @@ extern int irq_set_irq_type(unsigned int irq, unsigned int type);
 extern int irq_set_msi_desc(unsigned int irq, struct msi_desc *entry);
 extern int irq_set_msi_desc_off(unsigned int irq_base, unsigned int irq_offset,
 				struct msi_desc *entry);
+extern int irq_set_mbi_desc(unsigned int irq, struct mbi_desc *entry);
+extern int irq_set_mbi_desc_range(unsigned int irq, struct mbi_desc *entry,
+				  unsigned int count);
 extern struct irq_data *irq_get_irq_data(unsigned int irq);
+extern int irq_compose_mbi_msg(struct irq_data *data, struct mbi_msg *msg);
 
 static inline struct irq_chip *irq_get_chip(unsigned int irq)
 {
@@ -609,6 +620,21 @@ static inline struct msi_desc *irq_get_msi_desc(unsigned int irq)
 static inline struct msi_desc *irq_data_get_msi(struct irq_data *d)
 {
 	return d->msi_desc;
+}
+
+static inline struct mbi_desc *irq_get_mbi_desc(unsigned int irq)
+{
+	struct irq_data *d = irq_get_irq_data(irq);
+	return d ? d->mbi_desc : NULL;
+}
+
+static inline struct mbi_desc *irq_data_get_mbi(struct irq_data *d)
+{
+#ifdef CONFIG_IRQ_DOMAIN_HIERARCHY
+	/* MBI descriptors are stored in leaf nodes */
+	d = irq_get_irq_data(d->irq);
+#endif
+	return d->mbi_desc;
 }
 
 static inline u32 irq_get_trigger_type(unsigned int irq)
