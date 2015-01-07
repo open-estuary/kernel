@@ -8,6 +8,7 @@
 #include <linux/interrupt.h>
 #include <linux/mbi.h>
 #include <linux/slab.h>
+#include <linux/of.h>
 
 /**
  * mbi_alloc_desc() - allocate an MBI descriptor
@@ -169,4 +170,51 @@ struct irq_domain *mbi_create_irq_domain(struct device_node *np,
 					 struct irq_domain *parent, void *arg)
 {
 	return irq_domain_add_hierarchy(parent, 0, 0, np, &mbi_domain_ops, arg);
+}
+
+int mbi_parse_irqs(struct device *dev, struct mbi_ops *ops)
+{
+	struct device_node *node = dev->of_node;
+	struct device_node *mbic;
+	struct irq_domain *parent;
+	struct mbi_desc *desc;
+	const __be32 *label;
+	unsigned int len;
+	unsigned int msg_id, lines, offset, nvec;
+
+	mbic = of_parse_phandle(node, "msi-parent", 0);
+	if (!mbic)
+		return -EINVAL;
+
+	parent = irq_find_host(mbic);
+	if (!parent) {
+		pr_warn("MBI: invalid MSI parent for %s!\n",
+			node->full_name);
+		return -EINVAL;
+	}
+
+	label = of_get_property(node, "mbi", &len);
+	if (!label) {
+		pr_warn("MBI: no mbi description on %s!\n",
+			node->full_name);
+		return -EINVAL;
+	}
+
+	len /= sizeof(*label);
+	if (len < 4) {
+		pr_warn("MBI: bad MBI label detected on %s!\n",
+			node->full_name);
+		return -EINVAL;
+	}
+
+	msg_id	= be32_to_cpup(label++);
+	lines	= be32_to_cpup(label++);
+	offset	= be32_to_cpup(label++);
+	nvec	= be32_to_cpup(label++);
+
+	desc = mbi_alloc_desc(dev, ops, msg_id, lines, offset, NULL);
+	if (!desc)
+		return -ENOMEM;
+
+	return irq_domain_alloc_irqs(parent, nvec, dev_to_node(dev), desc);
 }

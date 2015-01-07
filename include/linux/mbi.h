@@ -69,4 +69,6 @@ struct mbi_desc *mbi_alloc_desc(struct device *dev, struct mbi_ops *ops,
 struct irq_domain *mbi_create_irq_domain(struct device_node *np,
 					 struct irq_domain *parent, void *arg);
 
+/* Function to parse and map message interrupts */
+int mbi_parse_irqs(struct device *dev, struct mbi_ops *ops);
 #endif /* _LINUX_MBI_H */
