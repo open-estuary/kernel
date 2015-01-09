@@ -183,6 +183,13 @@ config ARCH_P660
 	help
 	  This enables support for Hisilicon P660 SoC.
 
+config ARCH_Hi1610
+	bool "Hisilicon Hi1610 SoC"
+	select MBI
+	select HIP05_GMAC
+	help
+	  This enables support for Hisilicon Hi1610 SoC.
+
 endmenu
 
 menu "Bus support"

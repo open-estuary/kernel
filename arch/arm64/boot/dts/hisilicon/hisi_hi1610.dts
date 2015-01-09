@@ -1,0 +1,153 @@
+/**
+ * dts file for Hisilicon Hi1610
+ *
+ * Copyright (C) 2014, Hisilicon Ltd.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * publishhed by the Free Software Foundation.
+ *
+ */
+
+/dts-v1/;
+
+/memreserve/ 0x00000000 0x00010000;
+
+/ {
+	#address-cells = <2>;
+	#size-cells = <2>;
+	model = "Hisilicon PhosphorV660 Development Board";
+	compatible = "hisilicon,hip05-D02", "hisilicon,hisi-pv660";
+	interrupt-parent = <&gic>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@20000 {
+			device_type = "cpu";
+			compatible = "arm,armv8";
+			reg = <0x20000>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x0 0xfff8>;
+		};
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x00000000 0x0 0x3c000000>;
+	};
+
+	gic: interrupt-controller@6d000000 {
+		compatible = "hisilicon,gic-v3";
+		#interrupt-cells = <3>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		interrupt-controller;
+		#redistributor-regions = <1>;
+		redistributor-stride = <0x0 0x30000>;
+		reg = <0x0 0x6d000000 0x0 0x10000>,	/* GICD */
+		      <0x0 0x6d100000 0x0 0x300000>,	/* GICR c*/
+		      <0x0 0xfe000000 0x0 0x10000>;	/* GICC */
+
+		its: mbi-controller@0xc6000000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			reg = <0x0 0xc6000000 0x0 0x1000000>;
+		};
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <1 13 4>,
+			     <1 14 4>,
+			     <1 11 4>,
+			     <1 10 4>;
+	};
+
+	sas: sas@a3000000 {
+		compatible = "pv660, sas_controller";
+		reg = <0 0xa3000000 0 0x10000>,
+		      <0 0xc1000000 0 0x10000>;
+		dma-coherent;
+	};
+
+	mdio {
+		compatible = "hisilicon, hip05-mdio";
+		reg = <0x0 0x603c0000 0x0 0x1000>;
+		#address-cells = <0x1>;
+		#size-cells = <0x0>;
+
+		phy0: ethernet-phy@0 {
+			compatile = "ethernet-phy-ieee802.3-c22";
+			reg = <0>;
+			max-speed = <10>;
+		};
+
+		phy25: ethernet-phy@25 {
+			compatile = "ethernet-phy-ieee802.3-c22";
+			reg = <25>;
+			max-speed = <10>;
+		};
+	};
+
+	ppe: ppe@c2000000 {
+		compatible = "hisilicon, hip05-ppe", "syscon";
+		reg = <0 0xc2000000 0 0x1000>;
+	};
+
+	ge: ge@c2001000 {
+		compatible = "hisilicon, hip05-ge", "syscon";
+		reg = <0 0xc2001000 0 0x1000>;
+	};
+
+	gmac0: ethernet@c2080000 {
+		compatible = "hisilicon, hip05-mac";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0 0xc2080000 0 0x20000>,
+		      <0 0xc0000000 0 0x1000>;
+		msi-parent = <&its>;
+		mbi = <0x40b1c 9 0 2>;
+		phy-mode = "sgmii";
+		mac-address = [11 11 11 11 11 11];
+		phy-handle = <&phy25>;
+		ppe-handle = <&ppe 0>;
+		ge-handle = <&ge 10 1>;
+		dma-coherent;
+	};
+
+	pmu {
+		compatible = "arm,armv8-pmuv3";
+		interrupts = <1 7 4>;
+	};
+
+	peripherals {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x0 0x00000000 0x0 0xffffffff>;
+
+		refclk100mhz: refclk100mhz {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <6250000>;
+		};
+
+		serial0: uart@60300000 {
+			compatible = "snps,dw-apb-uart";
+			reg = <0x60300000 0x10000>;
+			interrupts = <0 317 4>;
+			clocks = <&refclk100mhz>;
+			clock-names = "apb_pclk";
+			reg-shift = <2>;
+		};
+	};
+
+	chosen {
+		bootargs = "rdinit=/init console=ttyS0 earlycon=uart8250,mmio32,0x60300000";
+		linux,initrd-start = <0x7000000>;
+		linux,initrd-end = <0xa000000>;
+	};
+};
