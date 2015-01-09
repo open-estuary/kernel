@@ -9,6 +9,7 @@
 
 #include <linux/module.h>
 #include <linux/interrupt.h>
+#include <linux/mbi.h>
 #include <linux/etherdevice.h>
 #include <linux/platform_device.h>
 #include <linux/of_net.h>
@@ -925,6 +926,7 @@ static int hip05_dev_probe(struct platform_device *pdev)
 	struct hip05_priv *priv;
 	struct resource *res;
 	const char *mac_addr;
+	int virq;
 	int ret;
 
 	ndev = alloc_netdev(sizeof(struct hip05_priv), "gmac%d",
@@ -999,18 +1001,27 @@ static int hip05_dev_probe(struct platform_device *pdev)
 		goto out_free_netdev;
 	}
 
-	priv->rx_irq = platform_get_irq(pdev, 0);
-	if (priv->rx_irq <= 0) {
-		netdev_err(ndev, "No rx irq resource\n");
-		ret = -EINVAL;
-		goto out_phy_node;
-	}
+	virq = mbi_parse_irqs(dev, NULL);
+	if (virq > 0) {
+		priv->tx_irq = virq;
+		priv->rx_irq = virq + 1;
+		netdev_info(ndev, "MBI enabled\n");
+	} else {
+		netdev_info(ndev, "Fall back to legacy interrupts.\n");
 
-	priv->tx_irq = platform_get_irq(pdev, 1);
-	if (priv->tx_irq <= 0) {
-		netdev_err(ndev, "No irq resource\n");
-		ret = -EINVAL;
-		goto out_phy_node;
+		priv->rx_irq = platform_get_irq(pdev, 0);
+		if (priv->rx_irq <= 0) {
+			netdev_err(ndev, "No rx irq resource\n");
+			ret = -EINVAL;
+			goto out_phy_node;
+		}
+
+		priv->tx_irq = platform_get_irq(pdev, 1);
+		if (priv->tx_irq <= 0) {
+			netdev_err(ndev, "No irq resource\n");
+			ret = -EINVAL;
+			goto out_phy_node;
+		}
 	}
 
 	ret = devm_request_irq(dev, priv->rx_irq, hip05_interrupt,
