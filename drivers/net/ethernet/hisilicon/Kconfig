@@ -5,7 +5,7 @@
 config NET_VENDOR_HISILICON
 	bool "Hisilicon devices"
 	default y
-	depends on ARM
+	depends on ARM || ARM64
 	---help---
 	  If you have a network (Ethernet) card belonging to this class, say Y
 	  and read the Ethernet-HOWTO, available from
@@ -23,5 +23,11 @@ config HIX5HD2_GMAC
 	select PHYLIB
 	help
 	  This selects the hix5hd2 mac family network device.
+
+config HIP05_GMAC
+	tristate "Hisilicon HIP05 Ethernet Support"
+	select PHYLIB
+	help
+	  This selects the hip05 network device.
 
 endif # NET_VENDOR_HISILICON
