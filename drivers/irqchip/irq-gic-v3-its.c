@@ -71,6 +71,7 @@ struct its_node {
 	struct its_collection	*collections;
 	struct list_head	its_device_list;
 	u64			flags;
+	u32			dev_id_bits;
 	u32			ite_size;
 };
 
@@ -777,6 +778,7 @@ static int its_alloc_tables(struct its_node *its)
 {
 	int err;
 	int i;
+	int size;
 	int psz = SZ_64K;
 	u64 shr = GITS_BASER_InnerShareable;
 
@@ -790,8 +792,13 @@ static int its_alloc_tables(struct its_node *its)
 		if (type == GITS_BASER_TYPE_NONE)
 			continue;
 
-		/* We're lazy and only allocate a single page for now */
-		base = (void *)get_zeroed_page(GFP_KERNEL);
+		if (type == GITS_BASER_TYPE_DEVICE)
+			size = (1 << its->dev_id_bits) * SZ_8;
+		else
+			size = PAGE_SIZE;
+
+		base = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO,
+						get_order(size / PAGE_SIZE));
 		if (!base) {
 			err = -ENOMEM;
 			goto out_free;
@@ -819,7 +826,7 @@ retry_baser:
 			break;
 		}
 
-		val |= (PAGE_SIZE / psz) - 1;
+		val |= (size / psz) - 1;
 
 		writeq_relaxed(val, its->base + GITS_BASER + i * 8);
 		tmp = readq_relaxed(its->base + GITS_BASER + i * 8);
@@ -1219,7 +1226,7 @@ static int its_probe(struct device_node *node, struct irq_domain *parent)
 	struct its_node *its;
 	void __iomem *its_base;
 	u32 val;
-	u64 baser, tmp;
+	u64 baser, typer, tmp;
 	int err;
 
 	err = of_address_to_resource(node, 0, &res);
@@ -1255,7 +1262,10 @@ static int its_probe(struct device_node *node, struct irq_domain *parent)
 	its->base = its_base;
 	its->phys_base = res.start;
 	its->node = node;
-	its->ite_size = ((readl_relaxed(its_base + GITS_TYPER) >> 4) & 0xf) + 1;
+
+	typer = readq_relaxed(its_base + GITS_TYPER);
+	its->ite_size = ((typer >> 4) & 0xf) + 1;
+	its->dev_id_bits = ((typer >> 13) & 0x1f) + 1;
 
 	its->cmd_base = kzalloc(ITS_CMD_QUEUE_SZ, GFP_KERNEL);
 	if (!its->cmd_base) {
