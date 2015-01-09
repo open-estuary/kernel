@@ -777,7 +777,7 @@ static int its_alloc_tables(struct its_node *its)
 {
 	int err;
 	int i;
-	int psz = PAGE_SIZE;
+	int psz = SZ_64K;
 	u64 shr = GITS_BASER_InnerShareable;
 
 	for (i = 0; i < GITS_BASER_NR_REGS; i++) {
