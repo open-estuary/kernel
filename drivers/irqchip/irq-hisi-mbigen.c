@@ -93,7 +93,7 @@ static struct mbigen_node *mbigen_create_node(struct mbigen *mbigen,
 	if (!mgn)
 		return NULL;
 
-	INIT_LIST_HEAD(&mbigen->entry);
+	INIT_LIST_HEAD(&mgn->entry);
 	mgn->mbigen = mbigen;
 	mgn->source = node;
 	mgn->irq = virq;
