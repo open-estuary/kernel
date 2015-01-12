@@ -117,41 +117,48 @@ static void mbigen_free(struct mbigen *mbigen)
 }
 
 static struct mbigen *mbigen_get_device(struct mbigen_chip *chip,
-					unsigned int nid)
+                                        unsigned int nid)
 {
-	struct mbigen *tmp, *mbigen = NULL;
+	struct mbigen *tmp, *mbigen;
+	bool found = false;
 
 	if (nid >= MG_NR) {
 		pr_warn("MBIGEN: Device ID exceeds max number!\n");
 		return NULL;
 	}
 
+	/*
+	 * Stop working if no memory available, even if we could
+	 * get what we want.
+	 */
+	tmp = kzalloc(sizeof(*tmp), GFP_KERNEL);
+	if (!tmp)
+		return NULL;
+
 	raw_spin_lock(&chip->lock);
 
-	list_for_each_entry(tmp, &chip->nodes, entry) {
-		if (tmp->nid == nid) {
-			mbigen = tmp;
+	list_for_each_entry(mbigen, &chip->nodes, entry) {
+		if (mbigen->nid == nid) {
+			found = true;
 			break;
 		}
 	}
 
-	if (mbigen)
-		goto out;
+	if (!found) {
+		tmp->chip = chip;
+		tmp->nid = nid;
+		raw_spin_lock_init(&tmp->lock);
+		INIT_LIST_HEAD(&tmp->entry);
+		INIT_LIST_HEAD(&tmp->nodes);
 
-	mbigen = kzalloc(sizeof(*mbigen), GFP_KERNEL);
-	if (!mbigen)
-		goto out;
+		list_add(&tmp->entry, &chip->nodes);
 
-	raw_spin_lock_init(&mbigen->lock);
-	INIT_LIST_HEAD(&mbigen->entry);
-	INIT_LIST_HEAD(&mbigen->nodes);
-	mbigen->chip = chip;
-	mbigen->nid = nid;
+		mbigen = tmp;
+		tmp = NULL;
+	}
 
-	list_add(&mbigen->entry, &chip->nodes);
-
-out:
 	raw_spin_unlock(&chip->lock);
+	kfree(tmp);
 
 	return mbigen;
 }
