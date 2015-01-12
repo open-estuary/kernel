@@ -218,3 +218,4 @@ int mbi_parse_irqs(struct device *dev, struct mbi_ops *ops)
 
 	return irq_domain_alloc_irqs(parent, nvec, dev_to_node(dev), desc);
 }
+EXPORT_SYMBOL(mbi_parse_irqs);
