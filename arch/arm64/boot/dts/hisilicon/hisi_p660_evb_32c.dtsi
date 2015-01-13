@@ -388,18 +388,40 @@
 		};
 	};
 
+	ppe0: ppe@c2000000 {
+		compatible = "hisilicon, hip05-ppe", "syscon";
+		reg = <0 0xc2000000 0 0x1000>;
+	};
+
+	ge0: ge@c2001000 {
+		compatible = "hisilicon, hip05-ge", "syscon";
+		reg = <0 0xc2001000 0 0x1000>;
+	};
+
+	ppe1: ppe@c2100000 {
+		compatible = "hisilicon, hip05-ppe", "syscon";
+		reg = <0 0xc2100000 0 0x1000>;
+	};
+
+	ge1: ge@c2101000 {
+		compatible = "hisilicon, hip05-ge", "syscon";
+		reg = <0 0xc2101000 0 0x1000>;
+	};
+
 	gmac0: ethernet@c2000000 {
 		compatible = "hisilicon, hip05-mac";
 		#address-cells = <1>;
 		#size-cells = <0>;
 		interrupt-parent = <&mbigen_dsa>;
-		reg = <0 0xc2000000 0 0x100000>,
+		reg = <0 0xc2080000 0 0x20000>,
 		      <0 0xc0000000 0 0x1000>;
 		interrupts = <15 1>, /* rx irq */
 			     <14 1>; /* tx irq */
 		phy-mode = "sgmii";
 		mac-address = [11 11 11 11 11 11];
 		phy-handle = <&phy0>;
+		ppe-handle = <&ppe0 0>;
+		ge-handle = <&ge0 100 1>;
 		dma-coherent;
 	};
 
@@ -408,13 +430,15 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		interrupt-parent = <&mbigen_dsa>;
-		reg = <0 0xc2100000 0 0x100000>,
+		reg = <0 0xc2180000 0 0x30000>,
 		      <0 0xc0000000 0 0x1000>;
 		interrupts = <21 1>, /* rx irq */
 			     <20 1>; /* tx irq */
 		phy-mode = "sgmii";
 		mac-address = [11 11 11 11 11 11];
 		phy-handle = <&phy2>;
+		ppe-handle = <&ppe1 0>;
+		ge-handle = <&ge1 100 1>;
 		dma-coherent;
 	};
 
