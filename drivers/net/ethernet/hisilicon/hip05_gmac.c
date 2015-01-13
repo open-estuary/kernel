@@ -996,7 +996,7 @@ static int hip05_dev_probe(struct platform_device *pdev)
 
 	priv->phy_mode = of_get_phy_mode(node);
 	if (priv->phy_mode < 0) {
-		netdev_err(ndev, "not find phy-mode\n");
+		dev_err(dev, "not find phy-mode\n");
 		ret = -EINVAL;
 		goto out_free_netdev;
 	}
@@ -1005,20 +1005,20 @@ static int hip05_dev_probe(struct platform_device *pdev)
 	if (virq > 0) {
 		priv->tx_irq = virq;
 		priv->rx_irq = virq + 1;
-		netdev_info(ndev, "MBI enabled\n");
+		dev_info(dev, "MBI enabled\n");
 	} else {
-		netdev_info(ndev, "Fall back to legacy interrupts.\n");
+		dev_info(dev, "Use the legacy interrupts.\n");
 
 		priv->rx_irq = platform_get_irq(pdev, 0);
 		if (priv->rx_irq <= 0) {
-			netdev_err(ndev, "No rx irq resource\n");
+			dev_err(dev, "No rx irq resource\n");
 			ret = -EINVAL;
 			goto out_phy_node;
 		}
 
 		priv->tx_irq = platform_get_irq(pdev, 1);
 		if (priv->tx_irq <= 0) {
-			netdev_err(ndev, "No irq resource\n");
+			dev_err(dev, "No irq resource\n");
 			ret = -EINVAL;
 			goto out_phy_node;
 		}
@@ -1027,21 +1027,21 @@ static int hip05_dev_probe(struct platform_device *pdev)
 	ret = devm_request_irq(dev, priv->rx_irq, hip05_interrupt,
 			       0, pdev->name, ndev);
 	if (ret) {
-		netdev_err(ndev, "devm_request_irq rx ailed\n");
+		dev_err(dev, "devm_request_irq rx ailed\n");
 		goto out_phy_node;
 	}
 	disable_irq(priv->rx_irq);
 	ret = devm_request_irq(dev, priv->tx_irq, hip05_interrupt,
 			       0, pdev->name, ndev);
 	if (ret) {
-		netdev_err(ndev, "devm_request_irq tx failed\n");
+		dev_err(dev, "devm_request_irq tx failed\n");
 		goto out_phy_node;
 	}
 	disable_irq(priv->tx_irq);
 
 	priv->phy_node = of_parse_phandle(node, "phy-handle", 0);
 	if (!priv->phy_node) {
-		netdev_err(ndev, "could not find phy-handle\n");
+		dev_err(dev, "could not find phy-handle\n");
 		ret = -EINVAL;
 		goto out_phy_node;
 	}
@@ -1052,7 +1052,7 @@ static int hip05_dev_probe(struct platform_device *pdev)
 	if (!is_valid_ether_addr(ndev->dev_addr)) {
 		eth_hw_addr_random(ndev);
 		hip05_hw_set_mac_addr(ndev);
-		netdev_warn(ndev, "using random MAC address %pM\n",
+		dev_warn(dev, "using random MAC address %pM\n",
 			    ndev->dev_addr);
 	}
 
@@ -1076,7 +1076,7 @@ static int hip05_dev_probe(struct platform_device *pdev)
 	netif_napi_add(ndev, &priv->napi, hip05_poll, NAPI_POLL_WEIGHT);
 	ret = register_netdev(priv->netdev);
 	if (ret) {
-		netdev_err(ndev, "register_netdev failed!");
+		dev_err(dev, "register_netdev failed!");
 		goto out_destroy_queue;
 	}
 
