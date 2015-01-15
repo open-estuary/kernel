@@ -219,3 +219,29 @@ int mbi_parse_irqs(struct device *dev, struct mbi_ops *ops)
 	return irq_domain_alloc_irqs(parent, nvec, dev_to_node(dev), desc);
 }
 EXPORT_SYMBOL(mbi_parse_irqs);
+
+void mbi_free_irqs(struct device *dev, unsigned int virq, unsigned int nvec)
+{
+	struct mbi_desc *desc;
+	int start = virq, left = nvec;
+
+again:
+	desc = irq_get_mbi_desc(start);
+	if (WARN_ON(!desc)			||
+	    WARN_ON(desc->mbi.dev != dev)	||
+	    WARN_ON(desc->irq != start)		||
+	    WARN_ON(desc->nvec > left))
+		return;
+
+	start += desc->nvec;
+	left -= desc->nvec;
+
+	irq_domain_free_irqs(desc->irq, desc->nvec);
+	kfree(desc);
+
+	if (left > 0)
+		goto again;
+
+	WARN_ON(left < 0);
+}
+EXPORT_SYMBOL(mbi_free_irqs);

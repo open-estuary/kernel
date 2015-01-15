@@ -71,4 +71,5 @@ struct irq_domain *mbi_create_irq_domain(struct device_node *np,
 
 /* Function to parse and map message interrupts */
 int mbi_parse_irqs(struct device *dev, struct mbi_ops *ops);
+void mbi_free_irqs(struct device *dev, unsigned int virq, unsigned int nvec);
 #endif /* _LINUX_MBI_H */
