@@ -36,6 +36,7 @@ arm64-obj-$(CONFIG_PCI)			+= pci.o
 arm64-obj-$(CONFIG_ARMV8_DEPRECATED)	+= armv8_deprecated.o
 
 obj-y					+= $(arm64-obj-y) vdso/
+obj-$(CONFIG_ARM64_ILP32)		+= vdso-ilp32/
 obj-m					+= $(arm64-obj-m)
 head-y					:= head.o
 extra-y					:= $(head-y) vmlinux.lds
@@ -43,3 +44,7 @@ extra-y					:= $(head-y) vmlinux.lds
 # vDSO - this must be built first to generate the symbol offsets
 $(call objectify,$(arm64-obj-y)): $(obj)/vdso/vdso-offsets.h
 $(obj)/vdso/vdso-offsets.h: $(obj)/vdso
+
+# vDSO - this must be built first to generate the symbol offsets
+$(call objectify,$(arm64-obj-y)): $(obj)/vdso-ilp32/vdso-ilp32-offsets.h
+$(obj)/vdso-ilp32/vdso-ilp32-offsets.h: $(obj)/vdso-ilp32
