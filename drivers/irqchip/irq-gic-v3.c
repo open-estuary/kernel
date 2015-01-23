@@ -279,7 +279,14 @@ static asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs
 		if (likely(irqnr > 15 && irqnr < 1020) || irqnr >= 8192) {
 			int err;
 			err = handle_domain_irq(gic_domain, irqnr, regs);
-			if (err) {
+			if (likely(!err)) {
+				/*
+				 * Issue an explicit EOI for LPIs, since edge
+				 * interrupt flow handler won't cover this.
+				 */
+				if (irqnr >= 8192)
+					gic_write_eoir(irqnr);
+			} else {
 				WARN_ONCE(true, "Unexpected interrupt received!\n");
 				gic_write_eoir(irqnr);
 			}
@@ -642,7 +649,7 @@ static int gic_irq_domain_map(struct irq_domain *d, unsigned int irq,
 		if (!gic_support_lpis)
 			return -EPERM;
 		irq_domain_set_info(d, irq, hw, &gic_chip, d->host_data,
-				    handle_fasteoi_irq, NULL, NULL);
+				    handle_edge_irq, NULL, NULL);
 		set_irq_flags(irq, IRQF_VALID);
 	}
 
