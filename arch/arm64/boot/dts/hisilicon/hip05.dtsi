@@ -329,6 +329,15 @@
 			dma-coherent;
 		};
 
+		ahci: sata@b1002800 {
+			compatible = "hisilicon,p660-ahci";
+			interrupt-parent = <&mbigen_pcie>;
+			reg = <0xb1002800 0x10000>,
+			      <0xb1000000 0x10000>;
+			interrupts = <382 4>;
+			dma-coherent;
+		};
+
 		m3_i2c0: i2c@a00e0000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
