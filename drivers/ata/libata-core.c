@@ -3488,6 +3488,7 @@ int ata_wait_ready(struct ata_link *link, unsigned long deadline,
 		ata_msleep(link->ap, 50);
 	}
 }
+EXPORT_SYMBOL_GPL(ata_wait_ready);
 
 /**
  *	ata_wait_after_reset - wait for link to become ready after reset
@@ -5289,6 +5290,7 @@ bool ata_phys_link_offline(struct ata_link *link)
 		return true;
 	return false;
 }
+EXPORT_SYMBOL_GPL(ata_phys_link_offline);
 
 /**
  *	ata_link_online - test whether the given link is online
