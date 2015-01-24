@@ -154,6 +154,33 @@ config ARCH_SEATTLE
 	help
 	  This enables support for AMD Seattle SOC Family
 
+config ARCH_HISI
+	bool "Hisilicon SoC Family"
+	select MBI
+	select HIP05_GMAC
+	help
+	  This enables support for Hisilicon SOC Family
+
+if ARCH_HISI
+
+menu "Hisilicon platform type"
+config ARCH_P660
+	def_bool ARCH_HISI
+	bool "Hisilicon P660 SoC"
+	select HISI_SMMU
+	select HISI_MBIGEN
+	help
+	  This enables support for Hisilicon P660 SoC
+
+config ARCH_Hi1610
+	def_bool ARCH_HISI
+	bool "Hisilicon Hi1610 SoC"
+	help
+	  This enables support for Hisilicon Hi1610 SoC
+endmenu
+
+endif
+
 config ARCH_THUNDER
 	bool "Cavium Inc. Thunder SoC Family"
 	help
@@ -174,21 +201,6 @@ config ARCH_XGENE
 	help
 	  This enables support for AppliedMicro X-Gene SOC Family
 
-config ARCH_P660
-	bool "Hisilicon P660 SoC"
-	select MBI
-	select HISI_SMMU
-	select HISI_MBIGEN
-	select HIP05_GMAC
-	help
-	  This enables support for Hisilicon P660 SoC.
-
-config ARCH_Hi1610
-	bool "Hisilicon Hi1610 SoC"
-	select MBI
-	select HIP05_GMAC
-	help
-	  This enables support for Hisilicon Hi1610 SoC.
 
 endmenu
 
