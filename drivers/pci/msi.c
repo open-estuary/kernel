@@ -780,6 +780,9 @@ static void __iomem *msix_map_region(struct pci_dev *dev, unsigned nr_entries)
 	pci_read_config_dword(dev, dev->msix_cap + PCI_MSIX_TABLE,
 			      &table_offset);
 	bir = (u8)(table_offset & PCI_MSIX_TABLE_BIR);
+	if (!pci_resource_flags(dev, bir))
+		return NULL;
+
 	table_offset &= PCI_MSIX_TABLE_OFFSET;
 	phys_addr = pci_resource_start(dev, bir) + table_offset;
 
