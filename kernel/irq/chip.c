@@ -948,7 +948,8 @@ void irq_cpu_offline(void)
 void irq_chip_ack_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_ack(data);
+	if (data->chip->irq_ack)
+		data->chip->irq_ack(data);
 }
 
 /**
@@ -958,7 +959,8 @@ void irq_chip_ack_parent(struct irq_data *data)
 void irq_chip_mask_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_mask(data);
+	if (data->chip->irq_mask)
+		data->chip->irq_mask(data);
 }
 
 /**
@@ -968,7 +970,8 @@ void irq_chip_mask_parent(struct irq_data *data)
 void irq_chip_unmask_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_unmask(data);
+	if (data->chip->irq_unmask)
+		data->chip->irq_unmask(data);
 }
 
 /**
@@ -978,7 +981,8 @@ void irq_chip_unmask_parent(struct irq_data *data)
 void irq_chip_eoi_parent(struct irq_data *data)
 {
 	data = data->parent_data;
-	data->chip->irq_eoi(data);
+	if (data->chip->irq_eoi)
+		data->chip->irq_eoi(data);
 }
 
 /**
