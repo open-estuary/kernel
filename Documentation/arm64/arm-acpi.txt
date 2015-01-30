@@ -1,0 +1,327 @@
+ACPI on ARMv8 Servers
+---------------------
+ACPI can be used for ARMv8 general purpose servers designed to follow
+the ARM SBSA (Server Base System Architecture) and SBBR (Server Base
+Boot Requirements) specifications, currently available to those with
+an ARM login at http://silver.arm.com.
+
+The ARMv8 kernel implements the reduced hardware model of ACPI version
+5.1 and later.  Links to the specification and all external documents
+it refers to are managed by the UEFI Forum.  The specification is
+available at http://www.uefi.org/specifications and external documents
+can be found via http://www.uefi.org/acpi.
+
+If an ARMv8 system does not meet the requirements of the SBSA, or cannot
+be described using the mechanisms defined in the required ACPI specifications,
+then it is likely that Device Tree (DT) is more suitable than ACPI for the
+hardware.
+
+
+Relationship with Device Tree
+-----------------------------
+ACPI support in drivers and subsystems for ARMv8 should never be mutually
+exclusive with DT support at compile time.
+
+At boot time the kernel will only use one description method depending on
+parameters passed from the bootloader (including kernel bootargs).
+
+Regardless of whether DT or ACPI is used, the kernel must always be capable
+of booting with either scheme (in kernels with both schemes enabled at compile
+time).
+
+
+Booting using ACPI tables
+-------------------------
+The only defined method for passing ACPI tables to the kernel on ARMv8
+is via the UEFI system configuration table.
+
+Processing of ACPI tables may be disabled by passing acpi=off on the kernel
+command line; this is the default behavior if both ACPI and DT tables are
+present.  If acpi=force is used, the kernel will ONLY use device configuration
+information contained in the ACPI tables if those tables are available.
+
+In order for the kernel to load and use ACPI tables, the UEFI implementation
+MUST set the ACPI_20_TABLE_GUID to point to the RSDP table (the table with
+the ACPI signature "RSD PTR ").  If this pointer is incorrect and acpi=force
+is used, the kernel will disable ACPI and try to use DT to boot instead.
+
+If the pointer to the RSDP table is correct, the table will be mapped into
+the kernel by the ACPI core, using the address provided by UEFI.
+
+The ACPI core will then locate and map in all other ACPI tables provided by
+using the addresses in the RSDP table to find the XSDT (eXtended System
+Description Table).  The XSDT in turn provides the addresses to all other
+ACPI tables provided by the system firmware; the ACPI core will then traverse
+this table and map in the tables listed.
+
+The ACPI core will ignore any provided RSDT (Root System Description Table).
+RSDTs have been deprecated and are ignored on arm64 since they only allow
+for 32-bit addresses.
+
+Further, the ACPI core will only use the 64-bit address fields in the FADT
+(Fixed ACPI Description Table).  Any 32-bit address fields in the FADT will
+be ignored on arm64.
+
+Hardware reduced mode (see Section 4.1 of the ACPI 5.1 specification) will
+be enforced by the ACPI core on arm64.  Doing so allows the ACPI core to
+run less complex code since it no longer has to provide support for legacy
+hardware from other architectures.
+
+For the ACPI core to operate properly, and in turn provide the information
+the kernel needs to configure devices, it expects to find the following
+tables (all section numbers refer to the ACPI 5.1 specfication):
+
+    -- RSDP (Root System Description Pointer), section 5.2.5
+
+    -- XSDT (eXtended System Description Table), section 5.2.8
+
+    -- FADT (Fixed ACPI Description Table), section 5.2.9
+
+    -- DSDT (Differentiated System Description Table), section
+       5.2.11.1
+
+    -- MADT (Multiple APIC Description Table), section 5.2.12
+
+    -- GTDT (Generic Timer Description Table), section 5.2.24
+
+    -- If PCI is supported, the MCFG (Memory mapped ConFiGuration
+       Table), section 5.2.6, specifically Table 5-31.
+
+If the above tables are not all present, the kernel may or may not be
+able to boot properly since it may not be able to configure all of the
+devices available.
+
+
+ACPI Detection
+--------------
+Drivers should determine their probe() type by checking for a null
+value for ACPI_HANDLE, or checking .of_node, or other information in
+the device structure.  This is detailed further in the "Driver 
+Recommendations" section.
+
+In non-driver code, if the presence of ACPI needs to be detected at
+runtime, then check the value of acpi_disabled. If CONFIG_ACPI is not
+set, acpi_disabled will always be 1.
+
+
+Device Enumeration
+------------------
+Device descriptions in ACPI should use standard recognized ACPI interfaces.
+These may contain less information than is typically provided via a Device
+Tree description for the same device.  This is also one of the reasons that
+ACPI can be useful -- the driver takes into account that it may have less
+detailed information about the device and uses sensible defaults instead.
+If done properly in the driver, the hardware can change and improve over
+time without the driver having to change at all.
+
+Clocks provide an excellent example.  In DT, clocks need to be specified
+and the drivers need to take them into account.  In ACPI, the assumption
+is that UEFI will leave the device in a reasonable default state, including
+any clock settings.  If for some reason the driver needs to change a clock
+value, this can be done in an ACPI method; all the driver needs to do is
+invoke the method and not concern itself with what the method needs to do
+to change the clock.  Changing the hardware can then take place over time
+by changing what the ACPI method does, and not the driver.
+
+ACPI drivers should only look at one specific ASL object -- the _DSD object
+-- for device driver parameters (known in DT as "bindings", or "Device
+Properties" in ACPI).  DT bindings also will be reviewed before used.  The UEFI
+Forum provides a mechanism for registering such bindings [URL TBD by ASWG]
+so that they may be used on any operating system supporting ACPI.  Device
+properties that have not been registered with the UEFI Forum should not be
+used.
+
+Drivers should look for device properties in the _DSD object ONLY; the _DSD
+object is described in the ACPI specification section 6.2.5, but more
+specifically, use the _DSD Device Properties UUID:
+
+   -- UUID: daffd814-6eba-4d8c-8a91-bc9bbf4aa301
+   
+   -- http://www.uefi.org/sites/default/files/resources/_DSD-device-properties-UUID.pdf
+
+The kernel has an interface for looking up device properties in a manner
+independent of whether DT or ACPI is being used and that interface should
+be used; it can eliminate some duplication of code paths in driver probing
+functions and discourage divergence between DT bindings and ACPI device
+properties.
+
+ACPI tables are described with a formal language called ASL, the ACPI
+Source Language (section 19 of the specification).  This means that there
+are always multiple ways to describe the same thing -- including device
+properties.  For example, device properties could use an ASL construct
+that looks like this: Name(KEY0, "value0").  An ACPI device driver would
+then retrieve the value of the property by evaluating the KEY0 object.
+However, using Name() this way has multiple problems: (1) ACPI limits
+names ("KEY0") to four characters unlike DT; (2) there is no industry
+wide registry that maintains a list of names, minimzing re-use; (3)
+there is also no registry for the definition of property values ("value0"),
+again making re-use difficult; and (4) how does one maintain backward
+compatibility as new hardware comes out?  The _DSD method was created
+to solve precisely these sorts of problems; Linux drivers should ALWAYS
+use the _DSD method for device properties and nothing else.
+
+The _DSM object (ACPI Section 9.14.1) could also be used for conveying
+device properties to a driver.  Linux drivers should only expect it to
+be used if _DSD cannot represent the data required, and there is no way
+to create a new UUID for the _DSD object.  Note that there is even less
+regulation of the use of _DSM than there is of _DSD.  Drivers that depend
+on the contents of _DSM objects will be more difficult to maintain over
+time because of this.
+
+The _DSD object is a very flexible mechanism in ACPI, as are the registered
+Device Properties.  This flexibility allows _DSD to cover more than just the
+generic server case and care should be taken in device drivers not to expect
+it to replicate highly specific embedded behaviour from DT.
+
+Both DT bindings and ACPI device properties for device drivers have review
+processes.  Use them.  And, before creating new device properties, check to
+be sure that they have not been defined before and either registered in the
+Linux kernel documentation or the UEFI Forum.  If the device drivers supports
+ACPI and DT, please make sure the device properties are consistent in both
+places.
+
+
+Programmable Power Control Resources
+------------------------------------
+Programmable power control resources include such resources as voltage/current
+providers (regulators) and clock sources.
+
+The kernel assumes that power control of these resources is represented with
+Power Resource Objects (ACPI section 7.1).  The ACPI core will then handle
+correctly enabling and disabling resources as they are needed.  In order to
+get that to work, ACPI assumes each device has defined D-states and that these
+can be controlled through the optional ACPI methods _PS0, _PS1, _PS2, and _PS3;
+in ACPI, _PS0 is the method to invoke to turn a device full on, and _PS3 is for
+turning a device full off.
+
+There are two options for using those Power Resources.
+   -- be managed in _PSx routine which gets called on entry to Dx.
+
+   -- be declared separately as power resources with their own _ON and _OFF
+      methods.  They are then tied back to D-states for a particular device
+      via _PRx which specifies which power resources a device needs to be on
+      while in Dx.  Kernel then tracks number of devices using a power resource
+      and calls _ON/_OFF as needed.
+
+The kernel ACPI code will also assume that the _PSx methods follow the normal
+ACPI rules for such methods:
+
+   -- If either _PS0 or _PS3 is implemented, then the other method must also
+      be implemented.
+
+   -- If a device requires usage or setup of a power resource when on, the ASL
+      should organize that it is allocated/enabled using the _PS0 method.
+
+   -- Resources allocated or enabled in the _PS0 method should be disabled
+      or de-allocated in the _PS3 method.
+
+   -- Firmware will leave the resources in a reasonable state before handing
+      over control to the kernel.
+
+Such code in _PSx methods will of course be very platform specific.  But,
+this allows the driver to abstract out the interface for operating the device
+and avoid having to read special non-standard values from ACPI tables. Further,
+abstracting the use of these resources allows the hardware to change over time
+without requiring updates to the driver.
+
+
+Clocks
+------
+ACPI makes the assumption that clocks are initialized by the firmware -- 
+UEFI, in this case -- to some working value before control is handed over
+to the kernel.  This has implications for devices such as UARTs, or SoC-driven
+LCD displays, for example.
+
+When the kernel boots, the clock is assumed to be set to a reasonable
+working value.  If for some reason the frequency needs to change -- e.g.,
+throttling for power management -- the device driver should expect that 
+process to be abstracted out into some ACPI method that can be invoked 
+(please see the ACPI specification for further recommendations on standard
+methods to be expected) except CPU clocks where CPPC provides a much richer
+interface instead of some method.  If it is not, there is no direct way for
+ACPI to control the clocks.
+
+
+Driver Recommendations
+----------------------
+DO NOT remove any DT handling when adding ACPI support for a driver.  The
+same device may be used on many different systems.
+
+DO try to structure the driver so that it is data-driven.  That is, set up
+a struct containing internal per-device state based on defaults and whatever
+else must be discovered by the driver probe function.  Then, have the rest
+of the driver operate off of the contents of that struct.  Doing so should
+allow most divergence between ACPI and DT functionality to be kept local to
+the probe function instead of being scattered throughout the driver.  For
+example:
+
+static int device_probe_dt(struct platform_device *pdev)
+{
+	/* DT specific functionality */
+	...
+}
+
+static int device_probe_acpi(struct platform_device *pdev)
+{
+	/* ACPI specific functionality */
+	...
+}
+
+static int device_probe(stuct platform_device *pdev)
+{
+	...
+	struct device_node node = pdev->dev.of_node;
+	...
+
+	if (node)
+		ret = device_probe_dt(pdev);
+	else if (ACPI_HANDLE(&pdev->dev))
+		ret = device_probe_acpi(pdev);
+	else
+		/* other initialization */
+		...
+	/* Continue with any generic probe operations */
+	...
+}
+
+DO keep the MODULE_DEVICE_TABLE entries together in the driver to make it
+clear the different names the driver is probed for, both from DT and from
+ACPI:
+
+static struct of_device_id virtio_mmio_match[] = {
+        { .compatible = "virtio,mmio", },
+        { }
+};
+MODULE_DEVICE_TABLE(of, virtio_mmio_match);
+
+static const struct acpi_device_id virtio_mmio_acpi_match[] = {
+        { "LNRO0005", },
+        { }
+};
+MODULE_DEVICE_TABLE(acpi, virtio_mmio_acpi_match);
+
+
+ASWG
+----
+The following areas are not yet fully defined for ARM in the 5.1 version
+of the ACPI specification and are expected to be worked through in the 
+UEFI ACPI Specification Working Group (ASWG):
+
+   -- ACPI based CPU topology
+   -- ACPI based CPU idle control
+   -- ACPI based SMMU and its IO topology
+   -- ITS support for GIC in MADT
+
+Participation in this group is open to all UEFI members.  Please see
+http://www.uefi.org/workinggroup for details on group membership.
+
+It is the intent of the ARMv8 ACPI kernel code to follow the ACPI specification
+as closely as possible, and to only implement functionality that complies with
+the released standards from UEFI ASWG.  As a practical matter, there will be
+vendors that provide bad ACPI tables or violate the standards in some way.
+If this is because of errors, quirks and fixups may be necessary, but will
+be avoided if possible.  If there are features missing from ACPI that preclude
+it from being used on a platform, ECRs (Engineering Change Requests) should be
+submitted to ASWG and go through the normal approval process; for those that
+are not UEFI members, many other members of the Linux community are and would
+likely be willing to assist in submitting ECRs.
