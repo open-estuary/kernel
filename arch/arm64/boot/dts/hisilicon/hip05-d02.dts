@@ -25,6 +25,30 @@
 	chosen {
 		bootargs = "earlycon=uart8250,mmio32,0x80300000 console=ttyS0,115200 initrd=0x7000000,350M";
 	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		pwrbutton {
+			label = "Power Button";
+			gpios = <&porta 8 1>;
+			linux,input-type = <0x16>;
+			linux,code = <116>;
+			debounce-interval = <0>;
+		};
+	};
+
+	gpio_leds {
+		compatible = "gpio-leds";
+		led@1 {
+			label = "Heartbeat";
+			gpios = <&porta 12 1>;
+			linux,default-trigger = "heartbeat";
+			default-state = "on";
+		};
+	};
 };
 
 &uart0 {
