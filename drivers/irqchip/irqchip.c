@@ -11,6 +11,7 @@
 #include <linux/init.h>
 #include <linux/of_irq.h>
 #include <linux/irqchip.h>
+#include <linux/irqchip/arm-gic-acpi.h>
 
 /*
  * This special of_device_id is the sentinel at the end of the
@@ -26,4 +27,6 @@ extern struct of_device_id __irqchip_of_table[];
 void __init irqchip_init(void)
 {
 	of_irq_init(__irqchip_of_table);
+
+	acpi_gic_init();
 }
