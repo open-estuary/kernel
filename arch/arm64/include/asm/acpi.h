@@ -12,6 +12,8 @@
 #ifndef _ASM_ACPI_H
 #define _ASM_ACPI_H
 
+#include <asm/smp_plat.h>
+
 /* Basic configuration for ACPI */
 #ifdef	CONFIG_ACPI
 #define acpi_strict 1	/* No out-of-spec workarounds on ARM64 */
@@ -44,6 +46,33 @@ static inline void enable_acpi(void)
 	acpi_pci_disabled = 0;
 	acpi_noirq = 0;
 }
+
+/* MPIDR value provided in GICC structure is 64 bits, but the
+ * existing apic_id (CPU hardware ID) using in acpi processor
+ * driver is 32-bit, to conform to the same datatype we need
+ * to repack the GICC structure MPIDR.
+ *
+ * Only 32 bits of MPIDR are used:
+ *
+ * Bits [0:7] Aff0;
+ * Bits [8:15] Aff1;
+ * Bits [16:23] Aff2;
+ * Bits [32:39] Aff3;
+ */
+static inline u32 pack_mpidr(u64 mpidr)
+{
+	return (u32) ((mpidr & 0xff00000000) >> 8) | mpidr;
+}
+
+/*
+ * The ACPI processor driver for ACPI core code needs this macro
+ * to find out this cpu was already mapped (mapping from CPU hardware
+ * ID to CPU logical ID) or not.
+ *
+ * cpu_logical_map(cpu) is the mapping of MPIDR and the logical cpu,
+ * and MPIDR is the cpu hardware ID we needed to pack.
+ */
+#define cpu_physical_id(cpu) pack_mpidr(cpu_logical_map(cpu))
 
 /*
  * It's used from ACPI core in kdump to boot UP system with SMP kernel,

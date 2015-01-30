@@ -24,7 +24,6 @@
 #include <linux/bootmem.h>
 #include <linux/smp.h>
 
-#include <asm/smp_plat.h>
 #include <asm/cputype.h>
 #include <asm/cpu_ops.h>
 
