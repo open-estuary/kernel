@@ -334,9 +334,12 @@ void __init acpi_gic_init(void)
 		return;
 	}
 
-	err = gic_v2_acpi_init(table);
+	err = gic_v3_acpi_init(table);
+	if (err)
+		err = gic_v2_acpi_init(table);
 	if (err)
 		pr_err("Failed to initialize GIC IRQ controller");
+
 
 	early_acpi_os_unmap_memory((char *)table, tbl_size);
 }
