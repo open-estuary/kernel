@@ -1,11 +1,17 @@
 #ifndef _ACPI_IO_H_
 #define _ACPI_IO_H_
 
+#include <linux/mm.h>
 #include <linux/io.h>
 
 static inline void __iomem *acpi_os_ioremap(acpi_physical_address phys,
 					    acpi_size size)
 {
+#ifdef CONFIG_ARM64
+	if (!page_is_ram(phys >> PAGE_SHIFT))
+		return ioremap(phys, size);
+#endif
+
        return ioremap_cache(phys, size);
 }
 
