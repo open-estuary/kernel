@@ -15,6 +15,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <linux/acpi.h>
 #include <linux/bitmap.h>
 #include <linux/cpu.h>
 #include <linux/delay.h>
@@ -31,6 +32,7 @@
 #include <linux/slab.h>
 
 #include <linux/irqchip/arm-gic-v3.h>
+#include <linux/irqchip/arm-gic-acpi.h>
 
 #include <asm/cacheflush.h>
 #include <asm/cputype.h>
@@ -1309,7 +1311,7 @@ out_free_its:
 	return ERR_PTR(err);
 }
 
-static int its_of_probe(struct device_node *node,
+static int __init its_of_probe(struct device_node *node,
 			struct irq_domain *parent_domain)
 {
 	struct resource res;
@@ -1377,17 +1379,82 @@ int its_cpu_init(void)
 	return 0;
 }
 
+#ifdef CONFIG_ACPI
+struct irq_domain *its_parent_domain; /* parent domain of ITS */
+static int __init gic_acpi_parse_madt_its(struct acpi_subtable_header *header,
+			const unsigned long end)
+{
+	struct acpi_madt_generic_its *its_entry;
+	struct its_node *its;
+	void __iomem *its_base;
+	u32 val;
+	int err;
+
+	if (BAD_MADT_ENTRY(header, end))
+		return -EINVAL;
+
+	its_entry = (struct acpi_madt_generic_its *)header;
+	its_base = ioremap(its_entry->base_address, 2 * SZ_64K);
+	if (!its_base) {
+		pr_warn("ACPI: unable to map num %d ITS registers\n",
+			its_entry->its_id);
+		return -ENOMEM;
+	}
+
+	val = readl_relaxed(its_base + GITS_PIDR2) & GIC_PIDR2_ARCH_MASK;
+	if (val != 0x30 && val != 0x40) {
+		pr_warn("ACPI: Num %d ITS is not detected, giving up\n",
+			its_entry->its_id);
+		err = -ENODEV;
+		goto out_unmap;
+	}
+
+	pr_info("ITS: ID: 0x%x\n", its_entry->its_id);
+
+	/* ITS always work as msi controller in ACPI case */
+	its = its_probe(its_base, its_entry->base_address, NULL,
+			its_parent_domain, 1);
+	if (!IS_ERR(its))
+		return 0;
+
+	err = PTR_ERR(its);
+out_unmap:
+	iounmap(its_base);
+	pr_err("ACPI: failed probing num %d (%d) ITS\n", its_entry->its_id, err);
+	return err;
+}
+
+static void __init its_acpi_probe(struct irq_domain *parent_domain)
+{
+	int count;
+
+	its_parent_domain = parent_domain;
+	count = acpi_table_parse_madt(ACPI_MADT_TYPE_GENERIC_ITS,
+			gic_acpi_parse_madt_its, 0);
+	if (!count)
+		pr_info("ACPI: No valid GIC ITS entries exist\n");
+	else if (count < 0)
+		pr_err("ACPI: Error during GIC ITS entries parsing\n");
+}
+#else
+static inline void __init its_acpi_probe(struct irq_domain *parent_domain) { }
+#endif
+
 static struct of_device_id its_device_id[] = {
 	{	.compatible	= "arm,gic-v3-its",	},
 	{},
 };
 
-int its_init(struct rdists *rdists, struct irq_domain *parent_domain)
+int __init its_init(struct rdists *rdists, struct irq_domain *parent_domain)
 {
-	struct device_node *np;
+	if (acpi_disabled) {
+		struct device_node *np;
 
-	for_each_matching_node(np, its_device_id)
-		its_of_probe(np, parent_domain);
+		for_each_matching_node(np, its_device_id)
+			its_of_probe(np, parent_domain);
+	} else {
+		its_acpi_probe(parent_domain);
+	}
 
 	if (list_empty(&its_nodes)) {
 		pr_warn("ITS: No ITS available, not enabling LPIs\n");
