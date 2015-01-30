@@ -67,3 +67,20 @@ void __init acpi_boot_table_init(void)
 	if (acpi_table_init())
 		disable_acpi();
 }
+
+static int __init parse_acpi(char *arg)
+{
+	if (!arg)
+		return -EINVAL;
+
+	/* "acpi=off" disables both ACPI table parsing and interpreter */
+	if (strcmp(arg, "off") == 0)
+		disable_acpi();
+	else if (strcmp(arg, "force") == 0) /* force ACPI to be enabled */
+		enable_acpi();
+	else
+		return -EINVAL;	/* Core will print when we return error */
+
+	return 0;
+}
+early_param("acpi", parse_acpi);

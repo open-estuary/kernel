@@ -26,6 +26,13 @@ static inline void disable_acpi(void)
 	acpi_noirq = 1;
 }
 
+static inline void enable_acpi(void)
+{
+	acpi_disabled = 0;
+	acpi_pci_disabled = 0;
+	acpi_noirq = 0;
+}
+
 /*
  * It's used from ACPI core in kdump to boot UP system with SMP kernel,
  * with this check the ACPI core will not override the CPU index
@@ -40,6 +47,8 @@ static inline bool acpi_has_cpu_in_madt(void)
 
 static inline void arch_fix_phys_package_id(int num, u32 slot) { }
 
+#else
+static inline void disable_acpi(void) { }
 #endif /* CONFIG_ACPI */
 
 #endif /*_ASM_ACPI_H*/
