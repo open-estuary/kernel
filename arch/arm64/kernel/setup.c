@@ -423,7 +423,8 @@ void __init setup_arch(char **cmdline_p)
 	efi_idmap_init();
 	early_ioremap_reset();
 
-	unflatten_device_tree();
+	if (acpi_disabled)
+		unflatten_device_tree();
 
 	psci_init();
 
