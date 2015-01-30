@@ -19,6 +19,18 @@ extern int acpi_disabled;
 extern int acpi_noirq;
 extern int acpi_pci_disabled;
 
+/* 1 to indicate PSCI 0.2+ is implemented */
+static inline bool acpi_psci_present(void)
+{
+	return acpi_gbl_FADT.arm_boot_flags & ACPI_FADT_PSCI_COMPLIANT;
+}
+
+/* 1 to indicate HVC must be used instead of SMC as the PSCI conduit */
+static inline bool acpi_psci_use_hvc(void)
+{
+	return acpi_gbl_FADT.arm_boot_flags & ACPI_FADT_PSCI_USE_HVC;
+}
+
 static inline void disable_acpi(void)
 {
 	acpi_disabled = 1;
@@ -49,6 +61,8 @@ static inline void arch_fix_phys_package_id(int num, u32 slot) { }
 
 #else
 static inline void disable_acpi(void) { }
+static inline bool acpi_psci_present(void) { return false; }
+static inline bool acpi_psci_use_hvc(void) { return false; }
 #endif /* CONFIG_ACPI */
 
 #endif /*_ASM_ACPI_H*/
