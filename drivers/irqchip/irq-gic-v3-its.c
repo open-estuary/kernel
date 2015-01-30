@@ -1220,47 +1220,25 @@ static const struct irq_domain_ops its_domain_ops = {
 	.deactivate		= its_irq_domain_deactivate,
 };
 
-static int its_probe(struct device_node *node, struct irq_domain *parent)
+static struct its_node *its_probe(void __iomem *its_base,
+			unsigned long its_phys_base,
+			struct device_node *node,
+			struct irq_domain *parent,
+			bool is_msi_controller)
 {
-	struct resource res;
 	struct its_node *its;
-	void __iomem *its_base;
-	u32 val;
 	u64 baser, typer, tmp;
 	int err;
 
-	err = of_address_to_resource(node, 0, &res);
-	if (err) {
-		pr_warn("%s: no regs?\n", node->full_name);
-		return -ENXIO;
-	}
-
-	its_base = ioremap(res.start, resource_size(&res));
-	if (!its_base) {
-		pr_warn("%s: unable to map registers\n", node->full_name);
-		return -ENOMEM;
-	}
-
-	val = readl_relaxed(its_base + GITS_PIDR2) & GIC_PIDR2_ARCH_MASK;
-	if (val != 0x30 && val != 0x40) {
-		pr_warn("%s: no ITS detected, giving up\n", node->full_name);
-		err = -ENODEV;
-		goto out_unmap;
-	}
-
-	pr_info("ITS: %s\n", node->full_name);
-
 	its = kzalloc(sizeof(*its), GFP_KERNEL);
-	if (!its) {
-		err = -ENOMEM;
-		goto out_unmap;
-	}
+	if (!its)
+		return ERR_PTR(-ENOMEM);
 
 	raw_spin_lock_init(&its->lock);
 	INIT_LIST_HEAD(&its->entry);
 	INIT_LIST_HEAD(&its->its_device_list);
 	its->base = its_base;
-	its->phys_base = res.start;
+	its->phys_base = its_phys_base;
 	its->node = node;
 
 	typer = readq_relaxed(its_base + GITS_TYPER);
@@ -1298,7 +1276,7 @@ static int its_probe(struct device_node *node, struct irq_domain *parent)
 		its->flags |= ITS_FLAGS_CMDQ_NEEDS_FLUSHING;
 	}
 
-	if (of_property_read_bool(its->node, "msi-controller")) {
+	if (is_msi_controller) {
 		its->domain = irq_domain_add_tree(NULL, &its_domain_ops, its);
 		if (!its->domain) {
 			err = -ENOMEM;
@@ -1318,19 +1296,61 @@ static int its_probe(struct device_node *node, struct irq_domain *parent)
 	list_add(&its->entry, &its_nodes);
 	spin_unlock(&its_lock);
 
-	return 0;
+	return its;
 
 out_free_domains:
-	if (its->mbidom)
-		irq_domain_remove(its->mbidom);
-	if (its->domain)
-		irq_domain_remove(its->domain);
+	irq_domain_remove(its->domain);
 out_free_tables:
 	its_free_tables(its);
 out_free_cmd:
 	kfree(its->cmd_base);
 out_free_its:
 	kfree(its);
+	return ERR_PTR(err);
+}
+
+static int its_of_probe(struct device_node *node,
+			struct irq_domain *parent_domain)
+{
+	struct resource res;
+	struct its_node *its;
+	void __iomem *its_base;
+	u32 val;
+	int err;
+	bool is_msi_controller;
+
+	err = of_address_to_resource(node, 0, &res);
+	if (err) {
+		pr_warn("%s: no regs?\n", node->full_name);
+		return -ENXIO;
+	}
+
+	its_base = ioremap(res.start, resource_size(&res));
+	if (!its_base) {
+		pr_warn("%s: unable to map registers\n", node->full_name);
+		return -ENOMEM;
+	}
+
+	val = readl_relaxed(its_base + GITS_PIDR2) & GIC_PIDR2_ARCH_MASK;
+	if (val != 0x30 && val != 0x40) {
+		pr_warn("%s: no ITS detected, giving up\n", node->full_name);
+		err = -ENODEV;
+		goto out_unmap;
+	}
+
+	pr_info("ITS: %s\n", node->full_name);
+
+	if (of_property_read_bool(node, "msi-controller"))
+		is_msi_controller = true;
+
+	its = its_probe(its_base, res.start, node, parent_domain, is_msi_controller);
+	if (IS_ERR(its)) {
+		err = PTR_ERR(its);
+		goto out_unmap;
+	}
+
+	return err;
+
 out_unmap:
 	iounmap(its_base);
 	pr_err("ITS: failed probing %s (%d)\n", node->full_name, err);
@@ -1367,7 +1387,7 @@ int its_init(struct rdists *rdists, struct irq_domain *parent_domain)
 	struct device_node *np;
 
 	for_each_matching_node(np, its_device_id)
-		its_probe(np, parent_domain);
+		its_of_probe(np, parent_domain);
 
 	if (list_empty(&its_nodes)) {
 		pr_warn("ITS: No ITS available, not enabling LPIs\n");
