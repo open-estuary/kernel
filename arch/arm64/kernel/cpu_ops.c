@@ -27,7 +27,7 @@ extern const struct cpu_operations cpu_psci_ops;
 
 const struct cpu_operations *cpu_ops[NR_CPUS];
 
-static const struct cpu_operations *supported_cpu_ops[] __initconst = {
+static const struct cpu_operations *supported_cpu_ops[] = {
 #ifdef CONFIG_SMP
 	&smp_spin_table_ops,
 #endif
@@ -35,9 +35,12 @@ static const struct cpu_operations *supported_cpu_ops[] __initconst = {
 	NULL,
 };
 
-static const struct cpu_operations * __init cpu_get_ops(const char *name)
+const struct cpu_operations *cpu_get_ops(const char *name)
 {
 	const struct cpu_operations **ops = supported_cpu_ops;
+
+	if (!name)
+		return NULL;
 
 	while (*ops) {
 		if (!strcmp(name, (*ops)->name))
