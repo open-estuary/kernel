@@ -30,7 +30,12 @@ int pci_msi_ignore_mask;
 #define msix_table_size(flags)	((flags & PCI_MSIX_FLAGS_QSIZE) + 1)
 
 #if defined(CONFIG_MBI)
-static void pci_write_mbi_msg(struct mbi_desc *desc, struct mbi_msg *msg) {}
+static void pci_write_mbi_msg(struct mbi_desc *desc, struct mbi_msg *msg)
+{
+	struct msi_desc *entry = desc->data;
+
+	__pci_write_msi_msg(entry, (struct msi_msg *) msg);
+}
 
 static void msi_set_mask_bit(struct irq_data *data, u32 flag);
 
@@ -62,22 +67,24 @@ static int pci_msi_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
 	int request_id = PCI_DEVID(pdev->bus->number, pdev->devfn);
 	struct msi_desc *entry;
 	struct mbi_desc *desc;
-	int i, ret;
+	int i, ret, ofst = 0;
 
 	if (!domain)
 		return arch_setup_msi_irqs(pdev, nvec, type);
 
 	list_for_each_entry(entry, &pdev->msi_list, list) {
 		desc = mbi_alloc_desc(dev, &pci_mbi_ops, request_id,
-				      entry->nvec_used, 0, entry);
+				      nvec, ofst, entry);
 		if (!desc)
 			return -ENOMEM;
-		ret = irq_domain_alloc_irqs(domain, nvec, dev_to_node(dev), desc);
+		ret = irq_domain_alloc_irqs(domain, entry->nvec_used,
+					    dev_to_node(dev), desc);
 		if (ret < 0)
 			return ret;
 		for (i = 0; i < entry->nvec_used; i++)
 			irq_set_msi_desc_off(ret, i, entry);
 		desc = NULL;
+		ofst++;
 	}
 
 	return 0;
