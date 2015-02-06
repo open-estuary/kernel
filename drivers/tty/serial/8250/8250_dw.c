@@ -28,6 +28,7 @@
 #include <linux/clk.h>
 #include <linux/reset.h>
 #include <linux/pm_runtime.h>
+#include <linux/mbi.h>
 
 #include <asm/byteorder.h>
 
@@ -390,18 +391,32 @@ static int dw8250_probe(struct platform_device *pdev)
 {
 	struct uart_8250_port uart = {};
 	struct resource *regs = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	struct resource *irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
+	struct resource *irq;
 	struct dw8250_data *data;
+	int virq;
 	int err;
 
-	if (!regs || !irq) {
-		dev_err(&pdev->dev, "no registers/irq defined\n");
+	if (!regs) {
+		dev_err(&pdev->dev, "no registers defined\n");
 		return -EINVAL;
+	}
+
+	virq = mbi_parse_irqs(&pdev->dev, NULL);
+	if (virq > 0) {
+		uart.port.irq = virq;
+		dev_info(&pdev->dev, "use the MBI irq\n");
+	} else {
+		irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
+		if (irq <=0) {
+			dev_err(&pdev->dev, "no irq defined\n");
+			return -EINVAL;
+		}
+		dev_info(&pdev->dev, "use the legacy irq\n");
+		uart.port.irq = irq->start;
 	}
 
 	spin_lock_init(&uart.port.lock);
 	uart.port.mapbase = regs->start;
-	uart.port.irq = irq->start;
 	uart.port.handle_irq = dw8250_handle_irq;
 	uart.port.pm = dw8250_do_pm;
 	uart.port.type = PORT_8250;
