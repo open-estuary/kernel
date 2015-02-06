@@ -850,8 +850,11 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 	set_handle_irq(gic_handle_irq);
 
 	gic_support_lpis = gic_dist_supports_lpis(typer);
-	if (gic_support_lpis)
-		its_init(&gic_rdists, gic_domain);
+	if (gic_support_lpis) {
+		err = its_init(&gic_rdists, gic_domain);
+		if (err)
+			gic_support_lpis = 0;
+	}
 
 	gic_smp_init();
 	gic_cpu_init();
