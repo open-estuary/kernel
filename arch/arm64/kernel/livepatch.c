@@ -18,8 +18,11 @@
  */
 
 #include <linux/module.h>
+#include <linux/uaccess.h>
 #include <asm/livepatch.h>
 
+extern int static_relocate(struct module *mod, unsigned long type,
+			   void * loc, unsigned long value);
 /**
  * klp_write_module_reloc() - write a relocation in a module
  * @mod:	module in which the section to be modified is found
@@ -33,6 +36,6 @@
 int klp_write_module_reloc(struct module *mod, unsigned long type,
 			   unsigned long loc, unsigned long value)
 {
-	pr_err("lpc_write_module_reloc has not supported now\n");
-	return -ENOSYS;
+	/* Perform the static relocation. */
+	return static_relocate(mod, type, (void *)loc, value);
 }
