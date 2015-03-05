@@ -93,12 +93,27 @@
 	ldr	\reg, [\reg]
 	.endm
 
+	/* for instrumented function's parent */
+	.macro fentry_get_parent_fp reg
+	ldr	\reg, [x29]
+	.endm
+
 	/* for instrumented function */
 	.macro mcount_get_pc0 reg
 	mcount_adjust_addr	\reg, x30
 	.endm
 
+	/* for instrumented function */
+	.macro fentry_get_pc0 reg
+	mcount_adjust_addr	\reg, x30
+	.endm
+
 	.macro mcount_get_pc reg
+	ldr	\reg, [x29, #8]
+	mcount_adjust_addr	\reg, \reg
+	.endm
+
+	.macro fentry_get_pc reg
 	ldr	\reg, [x29, #8]
 	mcount_adjust_addr	\reg, \reg
 	.endm
@@ -109,10 +124,25 @@
 	mcount_adjust_addr	\reg, \reg
 	.endm
 
+	.macro fentry_get_lr reg, base
+	ldr	\reg, [\base, #72]	//S_X9
+	mcount_adjust_addr	\reg, \reg
+	.endm
+
 	.macro mcount_get_lr_addr reg
 	ldr	\reg, [x29]
 	add	\reg, \reg, #8
 	.endm
+
+	.macro fentry_get_lr_addr reg, base
+	add	\reg, \base, #72	//S_X9
+	.endm
+
+#ifdef	CC_USING_FENTRY
+#define	function_hook	__fentry__
+#else
+#define	function_hook	_mcount
+#endif
 
 #ifndef CONFIG_DYNAMIC_FTRACE
 /*
@@ -123,7 +153,7 @@
  *     - tracer function to probe instrumented function's entry,
  *     - ftrace_graph_caller to set up an exit hook
  */
-ENTRY(_mcount)
+ENTRY(function_hook)
 	mcount_enter
 	save_mcount_regs
 
@@ -133,8 +163,13 @@ ENTRY(_mcount)
 	cmp	x0, x2			// if (ftrace_trace_function
 	b.eq	skip_ftrace_call	//     != ftrace_stub) {
 
+#ifdef CC_USING_FENTRY
+	fentry_get_pc	x0		//       function's pc
+	fentry_get_lr	x1, sp		//       function's lr (= parent's pc)
+#else
 	mcount_get_pc	x0		//       function's pc
 	mcount_get_lr	x1		//       function's lr (= parent's pc)
+#endif
 	blr	x2			//   (*ftrace_trace_function)(pc, lr);
 
 #ifndef CONFIG_FUNCTION_GRAPH_TRACER
@@ -161,7 +196,7 @@ skip_ftrace_call:
 	restore_mcount_regs
 	mcount_exit
 #endif /* CONFIG_FUNCTION_GRAPH_TRACER */
-ENDPROC(_mcount)
+ENDPROC(function_hook)
 
 #else /* CONFIG_DYNAMIC_FTRACE */
 /*
@@ -170,9 +205,9 @@ ENDPROC(_mcount)
  * and later on, NOP to branch to ftrace_caller() when enabled or branch to
  * NOP when disabled per-function base.
  */
-ENTRY(_mcount)
+ENTRY(function_hook)
 	ret
-ENDPROC(_mcount)
+ENDPROC(function_hook)
 
 /*
  * void ftrace_caller(unsigned long return_address)
@@ -189,8 +224,13 @@ ENTRY(ftrace_caller)
 
 	adrp	x0, function_trace_op
 	ldr	x2, [x0, #:lo12:function_trace_op]
+#ifdef CC_USING_FENTRY
+	fentry_get_pc0	x0		//     function's pc
+	fentry_get_lr	x1, sp		//     function's lr
+#else
 	mcount_get_pc0	x0		//     function's pc
 	mcount_get_lr	x1		//     function's lr
+#endif
 	mov	x3, #0
 
 	.global ftrace_call
@@ -237,8 +277,13 @@ ENTRY(ftrace_regs_caller)
 
 	adrp	x0, function_trace_op
 	ldr	x2, [x0, #:lo12:function_trace_op]
+#ifdef CC_USING_FENTRY
+	fentry_get_pc0	x0		//     function's pc
+	fentry_get_lr	x1, sp		//     function's lr
+#else
 	mcount_get_pc0	x0		//     function's pc
 	mcount_get_lr	x1		//     function's lr
+#endif
 	mov	x3, sp
 
 	.global ftrace_regs_call
@@ -282,9 +327,15 @@ ENDPROC(ftrace_stub)
  * and run return_to_handler() later on its exit.
  */
 ENTRY(ftrace_graph_caller)
+#ifdef CC_USING_FENTRY
+	fentry_get_lr_addr	x0, sp	//     pointer to function's saved lr
+	fentry_get_pc		x1	//     function's pc
+	fentry_get_parent_fp	x2	//     parent's fp
+#else
 	mcount_get_lr_addr	  x0	//     pointer to function's saved lr
 	mcount_get_pc		  x1	//     function's pc
 	mcount_get_parent_fp	  x2	//     parent's fp
+#endif
 	bl	prepare_ftrace_return	// prepare_ftrace_return(&lr, pc, fp)
 
 	restore_mcount_regs
