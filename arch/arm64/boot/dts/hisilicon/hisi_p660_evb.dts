@@ -26,6 +26,6 @@
 	chosen {
 		bootargs = "rdinit=/init console=ttyS0,115200 earlycon=uart8250,mmio32,0x60300000";
 		linux,initrd-start = <0x7000000>;
-		linux,initrd-end = <0xa000000>;
+		linux,initrd-end = <0x20000000>;
 	};
 };
