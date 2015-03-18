@@ -3,7 +3,8 @@
 #
 
 config NET_VENDOR_HISILICON
-	bool "Hisilicon devices"
+#	bool "Hisilicon devices"
+	tristate "Hisilicon devices"
 	default y
 	depends on ARM || ARM64
 	---help---
@@ -29,5 +30,17 @@ config HIP05_GMAC
 	select PHYLIB
 	help
 	  This selects the hip05 network device.
+
+config HIP04_ETH
+	tristate "HISILICON P04 Ethernet support"
+	select NET_CORE
+	select PHYLIB
+	select MARVELL_PHY
+	select MFD_SYSCON
+	---help---
+	  If you wish to compile a kernel for a hardware with hisilicon p04 SoC and
+	  want to use the internal ethernet then you should answer Y to this.
+
+source "drivers/net/ethernet/hisilicon/nic_drv/Kconfig"
 
 endif # NET_VENDOR_HISILICON
