@@ -55,6 +55,10 @@
 	status = "okay";
 };
 
+&ahci0 {
+	status = "okay";
+};
+
 &m3_i2c0 {
 	clock-frequency = <400000>;
 	status = "okay";
