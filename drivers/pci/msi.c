@@ -57,7 +57,10 @@ static struct mbi_ops pci_mbi_ops = {
 
 static struct irq_domain *pci_msi_get_domain(struct pci_dev *dev)
 {
-	return dev->bus->domain;
+	if (dev->bus->msi)
+		return dev->bus->msi->domain;
+
+	return NULL;
 }
 
 static int pci_msi_setup_msi_irqs(struct pci_dev *pdev, int nvec, int type)
