@@ -782,7 +782,7 @@ static int its_alloc_tables(struct its_node *its)
 	int i;
 	int size;
 	int psz = SZ_64K;
-	u64 shr = GITS_BASER_InnerShareable;
+	u64 shr = GITS_BASER_Shareable;
 
 	for (i = 0; i < GITS_BASER_NR_REGS; i++) {
 		u64 val = readq_relaxed(its->base + GITS_BASER + i * 8);
@@ -936,7 +936,7 @@ static void its_cpu_init_lpis(void)
 
 	/* set PROPBASE */
 	val = (page_to_phys(gic_rdists->prop_page) |
-	       GICR_PROPBASER_InnerShareable |
+	       GICR_PROPBASER_Shareable |
 	       GICR_PROPBASER_WaWb |
 	       ((LPI_NRBITS - 1) & GICR_PROPBASER_IDBITS_MASK));
 
@@ -950,7 +950,7 @@ static void its_cpu_init_lpis(void)
 
 	/* set PENDBASE */
 	val = (page_to_phys(pend_page) |
-	       GICR_PROPBASER_InnerShareable |
+	       GICR_PROPBASER_Shareable |
 	       GICR_PROPBASER_WaWb);
 
 	writeq_relaxed(val, rbase + GICR_PENDBASER);
@@ -1264,7 +1264,7 @@ static struct its_node *its_probe(void __iomem *its_base,
 
 	baser = (virt_to_phys(its->cmd_base)	|
 		 GITS_CBASER_WaWb		|
-		 GITS_CBASER_InnerShareable	|
+		 GITS_CBASER_Shareable		|
 		 (ITS_CMD_QUEUE_SZ / SZ_4K - 1)	|
 		 GITS_CBASER_VALID);
 

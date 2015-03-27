@@ -175,6 +175,11 @@ config ARCH_P660
 	help
 	  This enables support for Hisilicon P660 SoC
 
+config P660_2P
+	bool "P660 2P additional"
+	help
+	  This add some special handling to support P660 2P EVB.
+
 config ARCH_Hi1610
 	def_bool ARCH_HISI
 	bool "Hisilicon Hi1610 SoC"

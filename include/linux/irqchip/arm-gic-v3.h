@@ -62,6 +62,12 @@
 #define GIC_PIDR2_ARCH_GICv4		0x40
 #define GIC_SID_MASK			0x7
 
+#ifdef CONFIG_P660_2P
+#define GIC_SH_DOMAIN			1UL	/* outer shareable */
+#else
+#define GIC_SH_DOMAIN			2UL	/* inner shareable */
+#endif
+
 /*
  * Re-Distributor registers, offsets from RD_base
  */
@@ -90,8 +96,7 @@
 #define GICR_WAKER_ChildrenAsleep	(1U << 2)
 
 #define GICR_PROPBASER_NonShareable	(0U << 10)
-#define GICR_PROPBASER_InnerShareable	(1U << 10)
-#define GICR_PROPBASER_OuterShareable	(2U << 10)
+#define GICR_PROPBASER_Shareable	(GIC_SH_DOMAIN << 10)
 #define GICR_PROPBASER_SHAREABILITY_MASK (3UL << 10)
 #define GICR_PROPBASER_nCnB		(0U << 7)
 #define GICR_PROPBASER_nC		(1U << 7)
@@ -148,8 +153,7 @@
 #define GITS_CBASER_RaWaWt		(6UL << 59)
 #define GITS_CBASER_RaWaWb		(7UL << 59)
 #define GITS_CBASER_NonShareable	(0UL << 10)
-#define GITS_CBASER_InnerShareable	(1UL << 10)
-#define GITS_CBASER_OuterShareable	(2UL << 10)
+#define GITS_CBASER_Shareable		(GIC_SH_DOMAIN << 10)
 #define GITS_CBASER_SHAREABILITY_MASK	(3UL << 10)
 
 #define GITS_BASER_NR_REGS		8
@@ -168,8 +172,7 @@
 #define GITS_BASER_ENTRY_SIZE_SHIFT	(48)
 #define GITS_BASER_ENTRY_SIZE(r)	((((r) >> GITS_BASER_ENTRY_SIZE_SHIFT) & 0xff) + 1)
 #define GITS_BASER_NonShareable		(0UL << 10)
-#define GITS_BASER_InnerShareable	(1UL << 10)
-#define GITS_BASER_OuterShareable	(2UL << 10)
+#define GITS_BASER_Shareable		(GIC_SH_DOMAIN << 10)
 #define GITS_BASER_SHAREABILITY_SHIFT	(10)
 #define GITS_BASER_SHAREABILITY_MASK	(3UL << GITS_BASER_SHAREABILITY_SHIFT)
 #define GITS_BASER_PAGE_SIZE_SHIFT	(8)

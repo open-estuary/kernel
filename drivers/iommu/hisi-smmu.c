@@ -44,13 +44,17 @@
 /* SMMU global address space */
 #define SMMU_GR0(smmu)		((smmu)->base)
 
+#ifdef CONFIG_P660_2P
+#define SH_DOMAIN               2       /* outer shareable */
+#else
+#define SH_DOMAIN               3       /* inner shareable */
+#endif
+
 /* Page table bits */
 #define SMMU_PTE_XN		(((pteval_t)3) << 53)
 #define SMMU_PTE_CONT		(((pteval_t)1) << 52)
 #define SMMU_PTE_AF		(((pteval_t)1) << 10)
-#define SMMU_PTE_SH_NS		(((pteval_t)0) << 8)
-#define SMMU_PTE_SH_OS		(((pteval_t)2) << 8)
-#define SMMU_PTE_SH_IS		(((pteval_t)3) << 8)
+#define SMMU_PTE_SH		(((pteval_t)SH_DOMAIN) << 8)
 #define SMMU_PTE_PAGE		(((pteval_t)3) << 0)
 
 #if PAGE_SIZE == SZ_4K
@@ -132,10 +136,10 @@
 
 #define CFG_CBF_S1_ORGN_WA		(1 << 12)
 #define CFG_CBF_S1_IRGN_WA		(1 << 10)
-#define CFG_CBF_S1_SHCFG_IS		(3 << 8)
+#define CFG_CBF_S1_SHCFG		(SH_DOMAIN << 8)
 #define CFG_CBF_S2_ORGN_WA		(1 << 4)
 #define CFG_CBF_S2_IRGN_WA		(1 << 2)
-#define CFG_CBF_S2_SHCFG_IS		(3 << 0)
+#define CFG_CBF_S2_SHCFG		(SH_DOMAIN << 0)
 
 /* Configuration registers */
 #define sCR0_CLIENTPD			(1 << 0)
@@ -202,16 +206,20 @@
 
 #define SCTLR_WACFG_WA		(2 << 26)
 #define SCTLR_RACFG_RA		(2 << 24)
-#define SCTLR_SHCFG_IS		(2 << 22)
+#ifdef CONFIG_P660_2P
+#define SCTLR_SHCFG		(1 << 22)
+#else
+#define SCTLR_SHCFG		(2 << 22)
+#endif
 #define SCTLR_MTCFG		(1 << 20)
 #define SCTLR_MEMATTR_WB	(0xf << 16)
 #define SCTLR_MEMATTR_NC	(0x5 << 16)
 #define SCTLR_MEMATTR_NGNRE	(0x1 << 16)
 #define SCTLR_CACHE_WBRAWA	(SCTLR_WACFG_WA | SCTLR_RACFG_RA | \
-			SCTLR_SHCFG_IS | SCTLR_MTCFG | SCTLR_MEMATTR_WB)
-#define SCTLR_CACHE_NC		(SCTLR_SHCFG_IS | \
+			SCTLR_SHCFG | SCTLR_MTCFG | SCTLR_MEMATTR_WB)
+#define SCTLR_CACHE_NC		(SCTLR_SHCFG | \
 			SCTLR_MTCFG | SCTLR_MEMATTR_NC)
-#define SCTLR_CACHE_NGNRE	(SCTLR_SHCFG_IS | \
+#define SCTLR_CACHE_NGNRE	(SCTLR_SHCFG | \
 			SCTLR_MTCFG | SCTLR_MEMATTR_NGNRE)
 
 #define SCTLR_CFCFG			(1 << 7)
@@ -928,7 +936,7 @@ static int hisi_smmu_alloc_init_pte(struct hisi_smmu_device *smmu, pmd_t *pmd,
 	else */if (!(flags & (IOMMU_READ | IOMMU_WRITE)))
 		pteval &= ~SMMU_PTE_PAGE;
 
-	pteval |= SMMU_PTE_SH_IS;
+	pteval |= SMMU_PTE_SH;
 	start = pmd_page_vaddr(*pmd) + pte_index(addr);
 	pte = start;
 
@@ -1241,8 +1249,8 @@ static int hisi_smmu_device_reset(struct hisi_smmu_device *smmu)
 	/* unmask all global interrupt */
 	writel_relaxed(0, gr0_base + SMMU_CFG_GFIM);
 
-	reg  = CFG_CBF_S1_ORGN_WA | CFG_CBF_S1_IRGN_WA | CFG_CBF_S1_SHCFG_IS;
-	reg |= CFG_CBF_S2_ORGN_WA | CFG_CBF_S2_IRGN_WA | CFG_CBF_S2_SHCFG_IS;
+	reg  = CFG_CBF_S1_ORGN_WA | CFG_CBF_S1_IRGN_WA | CFG_CBF_S1_SHCFG;
+	reg |= CFG_CBF_S2_ORGN_WA | CFG_CBF_S2_IRGN_WA | CFG_CBF_S2_SHCFG;
 	writel_relaxed(reg, gr0_base + SMMU_CFG_CBF);
 
 	/* stage 2 context bank table */
