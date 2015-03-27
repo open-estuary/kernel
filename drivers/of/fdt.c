@@ -850,6 +850,29 @@ u64 __init dt_mem_next_cell(int s, const __be32 **cellp)
 	return of_read_number(p, s);
 }
 
+#ifdef CONFIG_COPYCAT_NUMA
+void __init early_init_dt_add_memory_arch_numa(u64 base, u64 size, int nid)
+{
+	const u64 phys_offset = __pa(PAGE_OFFSET);
+
+	base &= PAGE_MASK;
+	size &= PAGE_MASK;
+	if (base + size < phys_offset) {
+		pr_warn("Ignoring memory block 0x%llx - 0x%llx\n",
+			   base, base + size);
+		return;
+	}
+	if (base < phys_offset) {
+		pr_warn("Ignoring memory range 0x%llx - 0x%llx\n",
+			   base, phys_offset);
+		size -= phys_offset - base;
+		base = phys_offset;
+	}
+
+	memblock_add_node(base, size, nid);
+}
+#endif
+
 /**
  * early_init_dt_scan_memory - Look for an parse memory nodes
  */
@@ -882,6 +905,26 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 	pr_debug("memory scan node %s, reg size %d, data: %x %x %x %x,\n",
 	    uname, l, reg[0], reg[1], reg[2], reg[3]);
 
+#ifdef CONFIG_COPYCAT_NUMA
+	while ((endp - reg) >= dt_root_addr_cells + dt_root_size_cells) {
+		u64 base, size, nid;
+
+		base = dt_mem_next_cell(dt_root_addr_cells, &reg);
+		size = dt_mem_next_cell(dt_root_size_cells, &reg);
+
+		nid  = 0xff & base;
+		base = (base >> 8) << 8;
+
+		node_set_online(nid);
+
+		if (size == 0)
+			continue;
+		pr_debug(" - %llx ,  %llx\n", (unsigned long long)base,
+		    (unsigned long long)size);
+
+		early_init_dt_add_memory_arch_numa(base, size, nid);
+	}
+#else
 	while ((endp - reg) >= (dt_root_addr_cells + dt_root_size_cells)) {
 		u64 base, size;
 
@@ -895,6 +938,7 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 
 		early_init_dt_add_memory_arch(base, size);
 	}
+#endif
 
 	return 0;
 }

@@ -180,6 +180,34 @@ config P660_2P
 	help
 	  This add some special handling to support P660 2P EVB.
 
+config COPYCAT_NUMA
+	bool "Temporary P660 2P NUMA support"
+	select HAVE_MEMBLOCK_NODE_MAP
+	help
+	  Say Y to compile the kernel to support NUMA (Non-Uniform Memory
+	  Access).  This option is for configuring high-end multiprocessor
+	  server systems.  If in doubt, say N.
+
+config NUMA
+	def_bool COPYCAT_NUMA
+
+config NODES_SHIFT
+	int "Max num nodes shift(1-10)"
+	range 1 10
+	default "1"
+	depends on NEED_MULTIPLE_NODES
+	help
+	  This option specifies the maximum number of nodes in your SSI system.
+	  MAX_NUMNODES will be 2^(This value).
+	  If in doubt, use the default.
+
+config USE_PERCPU_NUMA_NODE_ID
+	def_bool y
+	depends on NUMA
+
+config HAVE_MEMORYLESS_NODES
+	def_bool NUMA
+
 config ARCH_Hi1610
 	def_bool ARCH_HISI
 	bool "Hisilicon Hi1610 SoC"
