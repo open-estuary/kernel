@@ -51,6 +51,16 @@ static struct rdists gic_rdists;
 static u8 gic_support_lpis;
 static bool gic_common_init = false;
 
+#ifdef CONFIG_P660_2P
+static DEFINE_SPINLOCK(g_gbl_lock);
+static u64 g_irq_cnt[64][8];
+static u32 g_irq_try[64][8];
+
+static void gic_send_sgi(u64 cluster_id, u16 tlist, unsigned int irq);
+extern int irq_do_set_affinity(struct irq_data *data,
+				const struct cpumask *mask, bool force);
+#endif
+
 #define gic_data_rdist()		(this_cpu_ptr(gic_rdists.rdist))
 #define gic_data_rdist_rd_base()	(gic_data_rdist()->rd_base)
 #define gic_data_rdist_sgi_base()	(gic_data_rdist_rd_base() + SZ_64K)
@@ -145,10 +155,12 @@ static void __maybe_unused gic_write_grpen1(u64 val)
 	isb();
 }
 
+#ifndef CONFIG_P660_2P
 static void __maybe_unused gic_write_sgi1r(u64 val)
 {
 	asm volatile("msr_s " __stringify(ICC_SGI1R_EL1) ", %0" : : "r" (val));
 }
+#endif
 
 static void gic_enable_sre(void)
 {
@@ -297,7 +309,37 @@ static asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs
 		if (irqnr < 16) {
 			gic_write_eoir(irqnr);
 #ifdef CONFIG_SMP
+			#ifdef CONFIG_P660_2P
+			{
+				unsigned long flags;
+				u32 cpu = smp_processor_id();
+				u64 i, need_try;
+
+				spin_lock_irqsave(&g_gbl_lock, flags);
+				g_irq_cnt[cpu][irqnr] = 0;
+				g_irq_try[cpu][irqnr] = 0;
+				spin_unlock_irqrestore(&g_gbl_lock, flags);
+
+				handle_IPI(irqnr, regs);
+
+				for (i = 0; i < 8; i++) {
+					spin_lock_irqsave(&g_gbl_lock, flags);
+					need_try = g_irq_try[cpu][i];
+					g_irq_try[cpu][i] = 0;
+					spin_unlock_irqrestore(&g_gbl_lock, flags);
+
+					if (need_try) {
+						u64 cluster_id = cpu_logical_map(cpu) & ~0xffUL;
+
+						gic_send_sgi(cluster_id, (u16)(1 << (cpu & 0x3)), i);
+						cpu_relax();
+						break;
+					}
+				}
+			}
+			#else
 			handle_IPI(irqnr, regs);
+			#endif
 #else
 			WARN_ONCE(true, "Unexpected SGI received!\n");
 #endif
@@ -305,6 +347,20 @@ static asmlinkage void __exception_irq_entry gic_handle_irq(struct pt_regs *regs
 		}
 	} while (irqnr != ICC_IAR1_EL1_SPURIOUS);
 }
+
+#ifdef CONFIG_P660_2P
+static u32 irq_to_dieid(unsigned long irq)
+{
+	return (u32)(irq >> 7);
+}
+
+static u32 cpu_to_dieid(u32 cpu)
+{
+	u64 mpidr = cpu_logical_map(cpu);
+
+	return (u32)(0xff & (mpidr >> 16));
+}
+#endif
 
 static void __init gic_dist_init(struct gic_chip_data *gic_data)
 {
@@ -326,9 +382,26 @@ static void __init gic_dist_init(struct gic_chip_data *gic_data)
 	 * Set all global interrupts to the boot CPU only. ARE must be
 	 * enabled.
 	 */
+#ifdef CONFIG_P660_2P
+{
+	u32 cpu, die_id;
+
+	die_id = gic_data->sid;
+	for (cpu = 0; cpu < nr_cpu_ids; cpu++)
+		if ((die_id == cpu_to_dieid(cpu)) && cpu_possible(cpu))
+			break;
+
+	if (cpu >= nr_cpu_ids)
+		cpu = smp_processor_id();
+	affinity = gic_mpidr_to_affinity(cpu_logical_map(cpu));
+	for (i = (128 * die_id) + 32; i < (128 * (die_id + 1)); i++)
+		writeq_relaxed(affinity, base + GICD_IROUTER + i * 8);
+}
+#else
 	affinity = gic_mpidr_to_affinity(cpu_logical_map(smp_processor_id()));
 	for (i = 32; i < gic_data->irq_nr; i++)
 		writeq_relaxed(affinity, base + GICD_IROUTER + i * 8);
+#endif
 }
 
 static int gic_populate_rdist(void)
@@ -503,6 +576,13 @@ out:
 static void gic_send_sgi(u64 cluster_id, u16 tlist, unsigned int irq)
 {
 	u64 val;
+#ifdef CONFIG_P660_2P
+	u64 aff2, aff1, aff0;
+	void *gicd_base;
+	u32 cpu, cpu_lo;
+	u32 setr, i;
+	unsigned long flags;
+#endif
 
 	val = (MPIDR_AFFINITY_LEVEL(cluster_id, 3) << 48	|
 	       MPIDR_AFFINITY_LEVEL(cluster_id, 2) << 32	|
@@ -511,7 +591,45 @@ static void gic_send_sgi(u64 cluster_id, u16 tlist, unsigned int irq)
 	       tlist);
 
 	pr_debug("CPU%d: ICC_SGI1R_EL1 %llx\n", smp_processor_id(), val);
+#ifndef CONFIG_P660_2P
 	gic_write_sgi1r(val);
+#else
+	aff2 = MPIDR_AFFINITY_LEVEL(cluster_id, 2);
+	aff1 = MPIDR_AFFINITY_LEVEL(cluster_id, 1);
+
+	spin_lock_irqsave(&g_gbl_lock, flags);
+
+	for (aff0 = 0; aff0 < 4; aff0++)
+		if (tlist & (1 << aff0)) {
+			cpu_lo = (aff1 * 4) + aff0;
+			cpu = ((aff2 >> 1) * 16) + cpu_lo;
+
+			gicd_base = gic_get_dist_base(128 * aff2);
+
+			setr  = 0;
+			setr |= (0x1 << 23);	/* nsecure=1 */
+			setr |= (0x1 << 22);	/* grpmod=1 */
+			setr |= (0x14 << 17);	/* priority=0xa0 */
+			setr |= (irq << 7);	/* irq */
+			setr |= (aff2 << 4);	/* dieid */
+			setr |= (cpu_lo << 0);	/* aff1+aff0 */
+
+			for (i = 0; i < 8; i++) {
+				if (i == irq)
+					continue;
+
+				if (g_irq_cnt[cpu][i])
+					g_irq_try[cpu][i] = 1;
+			}
+
+			g_irq_cnt[cpu][irq]++;
+
+			writel_relaxed(setr, gicd_base + 0x2000 + (cpu_lo * 4));
+			dsb(sy);
+		}
+
+	spin_unlock_irqrestore(&g_gbl_lock, flags);
+#endif
 }
 
 static void gic_raise_softirq(const struct cpumask *mask, unsigned int irq)
@@ -556,6 +674,36 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 	if (gic_irq_in_rdist(d))
 		return -EINVAL;
 
+#ifdef CONFIG_P660_2P
+{
+	u32 i, dieid, local_die_cpu = cpu;
+	struct cpumask cpumask_allowed;
+
+	dieid = irq_to_dieid(d->hwirq);
+	cpumask_and(&cpumask_allowed, mask_val, cpu_online_mask);
+	for (i = 0; i < nr_cpu_ids; i++) {
+		if ((dieid != cpu_to_dieid(i)) || !cpu_online(i))
+			continue;
+
+		if (cpumask_test_cpu(i, &cpumask_allowed)) {
+			cpu = i;
+			break;
+		}
+
+		local_die_cpu = i;
+	}
+
+	if (i >= nr_cpu_ids) {
+		#if 0
+		pr_info("Try bind %lld to local die failed, cpumask=0x%llx, forced\n",
+				(u64)d->hwirq, (u64)mask_val->bits[0]);
+		dump_stack();
+		#endif
+		cpu = local_die_cpu;
+	}
+}
+#endif
+
 	/* If interrupt was enabled, disable it first */
 	enabled = gic_peek_irq(d, GICD_ISENABLER);
 	if (enabled)
@@ -575,8 +723,58 @@ static int gic_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 	else
 		gic_do_wait_for_rwp(base);
 
+#ifdef CONFIG_P660_2P
+	return IRQ_SET_MASK_OK_NOCOPY;
+#else
 	return IRQ_SET_MASK_OK;
+#endif
 }
+
+#ifdef CONFIG_P660_2P
+static void bind_local_affinity(unsigned int irq, unsigned long hwirq)
+{
+	u32 cpu;
+	unsigned long flags;
+	struct irq_desc *desc;
+	struct cpumask cpumask_allowed;
+
+	desc = irq_to_desc(irq);
+	if (!desc)
+		return;
+
+#ifdef CONFIG_COPYCAT_NUMA
+{
+	u64 boot_dieid;
+	int to_node[] = {0, 1, 3, 2};
+
+	boot_dieid = 0xff & (cpu_logical_map(0) >> 16);
+
+	/* TC boot */
+	if (boot_dieid == 2) {
+		to_node[0] = 1;
+		to_node[1] = 0;
+	}
+
+	desc->irq_data.node = to_node[hwirq >> 8];
+}
+#endif
+
+	cpumask_clear(&cpumask_allowed);
+	for (cpu = 0; cpu < nr_cpu_ids; cpu++)
+		if (cpu_to_dieid(cpu) == irq_to_dieid(hwirq))
+			cpumask_set_cpu(cpu, &cpumask_allowed);
+
+	raw_spin_lock_irqsave(&desc->lock, flags);
+	if (!desc->irq_data.affinity) {
+		raw_spin_unlock_irqrestore(&desc->lock, flags);
+		return;
+	}
+
+	cpumask_copy(desc->irq_data.affinity, &cpumask_allowed);
+	irq_do_set_affinity(&desc->irq_data, &cpumask_allowed, 0);
+	raw_spin_unlock_irqrestore(&desc->lock, flags);
+}
+#endif
 #else
 #define gic_set_affinity	NULL
 #define gic_smp_init()		do { } while(0)
@@ -645,6 +843,9 @@ static int gic_irq_domain_map(struct irq_domain *d, unsigned int irq,
 		irq_domain_set_info(d, irq, hw, &gic_chip, d->host_data,
 				    handle_fasteoi_irq, NULL, NULL);
 		set_irq_flags(irq, IRQF_VALID | IRQF_PROBE);
+		#ifdef CONFIG_P660_2P
+		bind_local_affinity(irq, hw);
+		#endif
 	}
 	/* LPIs */
 	if (hw >= 8192 && hw < GIC_ID_NR) {
