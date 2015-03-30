@@ -530,6 +530,14 @@ int dw_pcie_host_init(struct pcie_port *pp)
 	pci_scan_child_bus(bus);
 	pci_assign_unassigned_bus_resources(bus);
 	pci_bus_add_devices(bus);
+
+	/* Configure PCI Express settings */
+	if (bus && !pci_has_flag(PCI_PROBE_ONLY)) {
+		struct pci_bus *child;
+
+		list_for_each_entry(child, &bus->children, node)
+			pcie_bus_configure_settings(child);
+	}
 #endif
 
 #ifdef CONFIG_ARM
