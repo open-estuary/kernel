@@ -17,77 +17,33 @@
 	model = "Hisilicon PhosphorV660 S01 Development Board";
 	compatible = "hisilicon,hip05-s01", "hisilicon,hisi-pv660";
 
-	memory@00000000 {
+	memory@0 {
 		device_type = "memory";
-		reg = <0x0 0x00000000 0x0 0x80000000>;
+		reg = <0x0 0x00000000 0x0 0x40000000>,
+		      <0x10 0x40000000 0xf 0xc0000000>,
+		      <0x20 0x00000000 0x10 0x00000000>;
 	};
 
-	/include/ "hisi_p660_xge_1p.dtsi"
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		P0_L3_Directory {
+			status = "ok";
+			reg = <0xf 0xfe000000 0x0 0x2000000>,
+			      <0x1f 0xfe000000 0x0 0x2000000>;
+		};
+	};
 
 	chosen {
-		bootargs = "earlycon=uart8250,mmio32,0x80300000 console=ttyS0,115200 initrd=0x7000000,350M";
+		bootargs = "rdinit=/init earlycon=uart8250,mmio32,0x60300000 console=ttyS0,115200 initrd=0x7000000,350M";
+		#bootargs = "root=/dev/sda1 rw earlycon=uart8250,mmio32,0x60300000 console=ttyS0,115200 ";
 	};
 
-	gpio_keys {
-		compatible = "gpio-keys";
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		pwrbutton {
-			label = "Power Button";
-			gpios = <&porta 8 1>;
-			linux,input-type = <0x16>;
-			linux,code = <116>;
-			debounce-interval = <0>;
-		};
-	};
-
-	gpio_leds {
-		compatible = "gpio-leds";
-		led@1 {
-			label = "Heartbeat";
-			gpios = <&porta 3 0>;
-			linux,default-trigger = "heartbeat";
-			default-state = "on";
-		};
-	};
 };
 
 &uart0 {
 	status = "okay";
 };
 
-&m3_i2c0 {
-	clock-frequency = <100000>;
-	status = "okay";
-
-	i2cswitch@70 {
-		compatible = "nxp,pca9545";
-		#address-cells = <1>;
-		#size-cells = <0>;
-		reg = <0x70>;
-
-		i2c@3 {
-			#address-cells = <1>;
-			#size-cells = <0>;
-			reg = <3>;
-
-			rtc: ds3231@68 {
-				compatible = "maxim,ds3231";
-				reg = <0x68>;
-			};
-		};
-	};
-};
-
-&pcie0 {
-	status = "okay";
-};
-
-&dsa_sas {
-	status = "okay";
-};
-
-&pcie_sas {
-	status = "okay";
-};
