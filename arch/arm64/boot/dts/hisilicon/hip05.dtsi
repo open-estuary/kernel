@@ -517,7 +517,7 @@
 		#global-interrupts = <1>;
 		interrupts = <71 1>,
 			     <71 1>;
-		smmu-cb-memtype = <0 1>, <1 2>;
+		smmu-cb-memtype = <0 1>, <1 3>;
 		smmu-bypass-vmid = <0xff>;
 	};
 

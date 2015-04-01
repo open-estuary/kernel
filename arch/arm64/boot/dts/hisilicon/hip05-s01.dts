@@ -12,6 +12,7 @@
 /dts-v1/;
 
 /include/ "hip05.dtsi"
+/include/ "hip05-2p1s-pcie.dtsi"
 
 / {
 	model = "Hisilicon PhosphorV660 S01 Development Board";
@@ -35,6 +36,8 @@
 			      <0x1f 0xfe000000 0x0 0x2000000>;
 		};
 	};
+
+	/include/ "hip05-2p1s-nic.dtsi"
 
 	chosen {
 		bootargs = "rdinit=/init earlycon=uart8250,mmio32,0x60300000 console=ttyS0,115200 initrd=0x7000000,350M";
