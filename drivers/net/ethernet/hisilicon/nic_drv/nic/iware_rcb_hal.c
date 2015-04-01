@@ -228,6 +228,375 @@ void rcb_print_pkt(u8 *packet, u32 length)
 	osal_printf("\n\r");
 }
 
+#if 1
+static bool rcb_alloc_mapped_page(struct nic_rx_ring *rx_ring,
+				    struct nic_rx_buffer *bi)
+{
+	struct page *page = bi->page;
+	dma_addr_t dma = bi->dma;
+
+	struct nic_ring_pair *ring = container_of(rx_ring, struct nic_ring_pair, rx_ring);
+
+	/* since we are recycling buffers we should seldom need to alloc */
+	if (likely(dma)) {
+		/*log_dbg(ring->dev, "resuse mapped page dma=0x%llx!\n", dma);*/
+		return true;
+	}
+
+	/* alloc new page for storage */
+	page = dev_alloc_pages(rcb_rx_pg_order(rx_ring));
+	if (unlikely(!page)) {
+		rx_ring->rx_stats.alloc_rx_page_failed++;
+		log_err(ring->dev, "__skb_alloc_pages fail\n");
+		return false;
+	}
+
+	/* map page for use */
+	dma = dma_map_page(ring->dev, page, 0,
+			   rcb_rx_pg_size(rx_ring), DMA_FROM_DEVICE);
+
+	/*
+	 * if mapping failed free memory back to system since
+	 * there isn't much point in holding memory we can't use
+	 */
+	if (dma_mapping_error(ring->dev, dma)) {
+		__free_pages(page, rcb_rx_pg_order(rx_ring));
+
+		rx_ring->rx_stats.alloc_rx_page_failed++;
+		log_err(ring->dev, "dma_mapping_error fail\n");
+		return false;
+	}
+
+	bi->dma = dma;
+	bi->page = page;
+	bi->page_offset = 0;
+
+	return true;
+}
+
+static bool rcb_add_rx_frag(struct nic_rx_ring *rx_ring,
+			      struct nic_rx_buffer *rx_buffer,
+			      struct rcb_rx_des *rx_desc,
+			      struct sk_buff *skb)
+{
+	struct page *page = rx_buffer->page;
+	unsigned int size = rx_desc->word3.bits.size;
+
+	unsigned int truesize = ALIGN(size, L1_CACHE_BYTES);
+	unsigned int last_offset = rcb_rx_pg_size(rx_ring) -
+				   rcb_rx_bufsz(rx_ring);
+
+	if ((size <= RCB_RX_HDR_SIZE) && !skb_is_nonlinear(skb)) {
+		unsigned char *va = (unsigned char *)page_address(page) +
+					rx_buffer->page_offset;
+
+		memcpy(__skb_put(skb, size), va, ALIGN(size, sizeof(long)));
+
+		/* we can reuse buffer as-is, just make sure it is local */
+		if (likely(page_to_nid(page) == numa_node_id()))
+			return true;
+
+		/* this page cannot be reused so discard it */
+		put_page(page);
+		return false;
+	}
+
+	skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags, page,
+			rx_buffer->page_offset, size, truesize);
+
+	/* avoid re-using remote pages */
+	if (unlikely(page_to_nid(page) != numa_node_id()))
+		return false;
+
+	/* move offset up to the next cache line */
+	rx_buffer->page_offset += truesize;
+
+	if (rx_buffer->page_offset > last_offset)
+		return false;
+
+	/* bump ref count on page before it is given to the stack */
+	get_page(page);
+
+	return true;
+}
+
+
+/**
+ * rcb_reuse_rx_page - page flip buffer and store it back on the ring
+ * @rx_ring: rx descriptor ring to store buffers on
+ * @old_buff: donor buffer to have page reused
+ *
+ * Synchronizes page for reuse by the adapter
+ **/
+static void rcb_reuse_rx_page(struct nic_rx_ring *rx_ring,
+				struct nic_rx_buffer *old_buff)
+{
+	struct nic_rx_buffer *new_buff;
+	u16 nta = rx_ring->next_to_alloc;
+	struct nic_ring_pair *ring = container_of(rx_ring, struct nic_ring_pair, rx_ring);
+
+	new_buff = &rx_ring->rx_buffer_info[nta];
+
+	/* update, and store next to alloc */
+	nta++;
+	rx_ring->next_to_alloc = (nta < rx_ring->count) ? nta : 0;
+
+	/* transfer page from old buffer to new buffer */
+	new_buff->page = old_buff->page;
+	new_buff->dma = old_buff->dma;
+	new_buff->page_offset = old_buff->page_offset;
+
+	/* sync the buffer for use by the device */
+	dma_sync_single_range_for_device(ring->dev, new_buff->dma,
+					 new_buff->page_offset,
+					 rcb_rx_bufsz(rx_ring),
+					 DMA_FROM_DEVICE);
+}
+
+static struct sk_buff *rcb_fetch_rx_buffer(struct nic_rx_ring *rx_ring,
+					     struct rcb_rx_des *rx_desc)
+{
+	struct nic_rx_buffer *rx_buffer;
+	struct sk_buff *skb;
+	struct page *page;
+	struct nic_ring_pair *ring = container_of(rx_ring, struct nic_ring_pair, rx_ring);
+	int cannot_cleanflag = (rx_ring->next_to_clean == rx_ring->next_to_alloc);
+
+	rx_buffer = &rx_ring->rx_buffer_info[rx_ring->next_to_clean];
+	page = rx_buffer->page;
+	prefetchw(page);
+
+	skb = rx_buffer->skb;
+
+	if (likely(!skb)) {
+		void *page_addr = (unsigned char *)page_address(page) +
+				  rx_buffer->page_offset;
+
+		/* prefetch first cache line of first page */
+		prefetch(page_addr);
+#if L1_CACHE_BYTES < 128
+		prefetch((unsigned char *)page_addr + L1_CACHE_BYTES);
+#endif
+
+		/* allocate a skb to store the frags */
+		skb = netdev_alloc_skb_ip_align(ring->netdev,
+						RCB_RX_HDR_SIZE);
+		if (unlikely(!skb)) {
+			rx_ring->rx_stats.alloc_rx_buff_failed++;
+			return NULL;
+		}
+
+		/*
+		 * we will be copying header into skb->data in
+		 * pskb_may_pull so it is in our interest to prefetch
+		 * it now to avoid a possible cache miss
+		 */
+		prefetchw(skb->data);
+
+		/*
+		 * Delay unmapping of the first packet. It carries the
+		 * header information, HW may still access the header
+		 * after the writeback.  Only unmap it when EOP is
+		 * reached
+		 */
+		if (likely(rx_desc->word2.bits.FE))
+			goto dma_sync;
+
+	} else {
+
+dma_sync:
+		/* we are reusing so sync this buffer for CPU use */
+		dma_sync_single_range_for_cpu(ring->dev,
+						  rx_buffer->dma,
+						  rx_buffer->page_offset,
+						  rcb_rx_bufsz(rx_ring),
+						  DMA_FROM_DEVICE);
+	}
+
+	/* pull page into skb */
+	if (rcb_add_rx_frag(rx_ring, rx_buffer, rx_desc, skb)) {
+		/* hand second half of page back to the ring */
+		rcb_reuse_rx_page(rx_ring, rx_buffer);
+		if (cannot_cleanflag) {
+			/* clear contents of buffer_info */
+			rx_buffer->skb = NULL;
+			return skb;
+		}
+	} else {
+		/* we are not reusing the buffer so unmap it */
+		dma_unmap_page(ring->dev, rx_buffer->dma,
+				   rcb_rx_pg_size(rx_ring),
+				   DMA_FROM_DEVICE);
+	}
+
+	/* clear contents of buffer_info */
+	rx_buffer->skb = NULL;
+	rx_buffer->dma = 0;
+	rx_buffer->page = NULL;
+
+	return skb;
+}
+
+/**
+ * rcb_get_headlen - determine size of header for RSC/LRO/GRO/FCOE
+ * @data: pointer to the start of the headers
+ * @max_len: total length of section to find headers in
+ *
+ * This function is meant to determine the length of headers that will
+ * be recognized by hardware for LRO, GRO, and RSC offloads.  The main
+ * motivation of doing this is to only perform one pull for IPv4 TCP
+ * packets so that we can do basic things like calculating the gso_size
+ * based on the average data per packet.
+ **/
+static unsigned int rcb_get_headlen(unsigned char *data,
+				      unsigned int max_len)
+{
+	union {
+		unsigned char *network;
+		/* l2 headers */
+		struct ethhdr *eth;
+		struct vlan_hdr *vlan;
+		/* l3 headers */
+		struct iphdr *ipv4;
+		struct ipv6hdr *ipv6;
+	} hdr;
+	__be16 protocol;
+	u8 nexthdr = 0;	/* default to not TCP */
+	u8 hlen;
+
+	/* this should never happen, but better safe than sorry */
+	if (max_len < ETH_HLEN)
+		return max_len;
+
+	/* initialize network frame pointer */
+	hdr.network = data;
+
+	/* set first protocol and move network header forward */
+	protocol = hdr.eth->h_proto;
+	hdr.network += ETH_HLEN;
+
+	/* handle any vlan tag if present */
+	if (protocol == htons(ETH_P_8021Q)) {
+		if ((typeof(max_len))(hdr.network - data) >
+						(max_len - VLAN_HLEN))
+			return max_len;
+
+		protocol = hdr.vlan->h_vlan_encapsulated_proto;
+		hdr.network += VLAN_HLEN;
+	}
+
+	/* handle L3 protocols */
+	if (protocol == htons(ETH_P_IP)) {
+		if ((typeof(max_len))(hdr.network - data) >
+						(max_len - sizeof(struct iphdr)))
+			return max_len;
+
+		/* access ihl as a u8 to avoid unaligned access on ia64 */
+		hlen = (hdr.network[0] & 0x0F) << 2;
+
+		/* verify hlen meets minimum size requirements */
+		if (hlen < sizeof(struct iphdr))
+			return hdr.network - data;
+
+		/* record next protocol if header is present */
+		if (!(hdr.ipv4->frag_off & htons(IP_OFFSET)))
+			nexthdr = hdr.ipv4->protocol;
+	} else if (protocol == htons(ETH_P_IPV6)) {
+		if ((typeof(max_len))(hdr.network - data) >
+						(max_len - sizeof(struct ipv6hdr)))
+			return max_len;
+
+		/* record next protocol */
+		nexthdr = hdr.ipv6->nexthdr;
+		hlen = sizeof(struct ipv6hdr);
+	} else {
+		return hdr.network - data;
+	}
+
+	/* relocate pointer to start of L4 header */
+	hdr.network += hlen;
+
+	/* finally sort out TCP/UDP */
+	if (nexthdr == IPPROTO_TCP) {
+		if ((typeof(max_len))(hdr.network - data) >
+						(max_len - sizeof(struct tcphdr)))
+			return max_len;
+
+		/* access doff as a u8 to avoid unaligned access on ia64 */
+		hlen = (hdr.network[12] & 0xF0) >> 2;
+
+		/* verify hlen meets minimum size requirements */
+		if (hlen < sizeof(struct tcphdr))
+			return hdr.network - data;
+
+		hdr.network += hlen;
+	} else if (nexthdr == IPPROTO_UDP) {
+		if ((typeof(max_len))(hdr.network - data) >
+						(max_len - sizeof(struct udphdr)))
+			return max_len;
+
+		hdr.network += sizeof(struct udphdr);
+	}
+
+	/*
+	 * If everything has gone correctly hdr.network should be the
+	 * data section of the packet and will be the end of the header.
+	 * If not then it probably represents the end of the last recognized
+	 * header.
+	 */
+	if ((typeof(max_len))(hdr.network - data) < max_len)
+		return hdr.network - data;
+	else
+		return max_len;
+}
+
+
+/**
+ * ixgbe_pull_tail - ixgbe specific version of skb_pull_tail
+ * @rx_ring: rx descriptor ring packet is being transacted on
+ * @skb: pointer to current skb being adjusted
+ *
+ * This function is an ixgbe specific version of __pskb_pull_tail.  The
+ * main difference between this version and the original function is that
+ * this function can make several assumptions about the state of things
+ * that allow for significant optimizations versus the standard function.
+ * As a result we can do things like drop a frag and maintain an accurate
+ * truesize for the skb.
+ */
+static void rcb_pull_tail(struct nic_rx_ring *rx_ring,
+			    struct sk_buff *skb)
+{
+	struct skb_frag_struct *frag = &skb_shinfo(skb)->frags[0];
+	unsigned char *va;
+	unsigned int pull_len;
+
+	/*
+	 * it is valid to use page_address instead of kmap since we are
+	 * working with pages allocated out of the lomem pool per
+	 * alloc_page(GFP_ATOMIC)
+	 */
+	va = skb_frag_address(frag);
+
+	/*
+	 * we need the header to contain the greater of either ETH_HLEN or
+	 * 60 bytes if the skb->len is less than 60 for skb_pad.
+	 */
+	pull_len = rcb_get_headlen(va, RCB_RX_HDR_SIZE);
+
+	/* align pull length to size of long to optimize memcpy performance */
+	skb_copy_to_linear_data(skb, va, ALIGN(pull_len, sizeof(long)));
+
+	/* update all of the pointers */
+	skb_frag_size_sub(frag, pull_len);
+	frag->page_offset += pull_len;
+	skb->data_len -= pull_len;
+	skb->tail += pull_len;
+}
+
+
+#endif
+
+
 /**
  *rcb_rx_ring_init - init rcb rx ring
  *@ring: rcb ring
@@ -244,8 +613,6 @@ static int rcb_rx_ring_init(struct nic_ring_pair *ring)
 	struct nic_rx_ring *rx_ring = &ring->rx_ring;
 	struct rcb_device *rcb_dev = &ring->rcb_dev;
 	struct nic_rx_buffer *rx_bi = NULL;
-	struct sk_buff *skb = NULL;
-	struct net_device *netdev = ring->netdev;
 
 	ring_id = ring->rcb_dev.index;
 	log_dbg(ring->dev, "ring_id = %d\n", ring_id);
@@ -273,20 +640,18 @@ static int rcb_rx_ring_init(struct nic_ring_pair *ring)
 
 	rx_ring->next_to_clean = 0;
 	rx_ring->next_to_use = 0;
+	rx_ring->next_to_alloc = 0;
 	for (bd_idx = 0; bd_idx < rx_ring->count; bd_idx++) {
-		skb = netdev_alloc_skb(netdev, rcb_dev->buf_size);
-		if (NULL == skb) {
+		rx_bi = &rx_ring->rx_buffer_info[bd_idx];
+		if (!rcb_alloc_mapped_page(rx_ring, rx_bi)) {
 			log_err(ring->dev,
-				"netdev_alloc_skb fail! bd_idx = %d\n", bd_idx);
+				"rcb_alloc_mapped_page fail! bd_idx = %d\n", bd_idx);
 			ret = -EINVAL;
 			goto alloc_skb_fail;
 		}
-		rx_bi = &rx_ring->rx_buffer_info[bd_idx];
-		rx_bi->skb = skb;
-		rx_desc = RCB_RX_DESC(rx_ring, bd_idx);
-		rx_bi->dma = (dma_addr_t) virt_to_phys(skb->data);
-		rx_desc->addr = rx_bi->dma;
 
+		rx_desc = RCB_RX_DESC(rx_ring, bd_idx);
+		rx_desc->addr = rx_bi->dma;
 		rx_desc->word2.bits.VLD = 0;
 	}
 
@@ -417,13 +782,10 @@ static int rcb_tx_ring_init(struct nic_ring_pair *ring)
 	}
 	rcb_write_reg(rcb_dev, RCB_RING_TX_RING_BD_LEN_REG, bd_size_type);
 
-
-	/** Modified by CHJ,for hulk3.19  ge5  get big file calltrace */
 	log_dbg(ring->dev,"CHJ RCB_RING_TX_RING_BD_NUM_REG:%d\r\n",
 		rcb_dev->port_id_in_dsa);
 	rcb_write_reg(rcb_dev, RCB_RING_TX_RING_BD_NUM_REG,
 		      rcb_dev->port_id_in_dsa);
-
 	return 0;
 
 malloc_bd_fail:
@@ -629,7 +991,7 @@ netdev_tx_t rcb_pkt_send_hw(struct sk_buff *skb, struct nic_ring_pair *ring)
             dev_kfree_skb_any(skb);
             return NETDEV_TX_OK;
         }
- 
+
         /**change MUTIL_BD to SINGLE_BD*/
         dev_kfree_skb_any(skb);
         skb = new_skb;
@@ -663,18 +1025,26 @@ netdev_tx_t rcb_pkt_send_hw(struct sk_buff *skb, struct nic_ring_pair *ring)
         if (skb->ip_summed == CHECKSUM_PARTIAL) {
     		if (skb->protocol == ntohs(ETH_P_IP)) {
     			tx_desc[next_to_use].word3.bits.IP_offset = ETH_HLEN;
+	    		/* if have a HW VLAN tag*/
+				if (vlan_tx_tag_present(skb))
+					tx_desc[next_to_use].word3.bits.IP_offset += VLAN_HLEN;
     			tx_desc[next_to_use].word3.bits.L3CS = 1;
 
-	    			/* check for tcp/udp header */
-	    			tx_desc[next_to_use].word3.bits.L4CS = 1;
+    			/* check for tcp/udp header */
+    			tx_desc[next_to_use].word3.bits.L4CS = 1;
 
     		} else if (skb->protocol == ntohs(ETH_P_IPV6)) {
     			tx_desc[next_to_use].word3.bits.IP_offset = ETH_HLEN;
-    			tx_desc[next_to_use].word3.bits.L3CS = 1;
+	    		/* if have a HW VLAN tag*/
+				if (vlan_tx_tag_present(skb))
+					tx_desc[next_to_use].word3.bits.IP_offset += VLAN_HLEN;
 
-	    			/* check for tcp/udp header */
-	    			tx_desc[next_to_use].word3.bits.L4CS = 1;
-	    		}
+    			/*ipv6 has not l3 cs */
+    			tx_desc[next_to_use].word3.bits.L3CS = 0;
+
+    			/* check for tcp/udp header */
+    			tx_desc[next_to_use].word3.bits.L4CS = 1;
+    		}
 		}
 
 		log_dbg(ring->dev, "addr(%#llx) word2(%#x) word3(%#x)\r\n",
@@ -789,13 +1159,11 @@ static bool rcb_clean_tx_irq_hw(struct nic_ring_pair *ring)
  */
 static void rcb_alloc_rx_buffers(struct nic_ring_pair *ring, u32 cleand_count)
 {
-	struct sk_buff *skb = NULL;
 	struct rcb_device *rcb_dev = &ring->rcb_dev;
 	struct nic_rx_ring *rx_ring = &ring->rx_ring;
 	u32 ring_id = 0;
 	u32 alloc_count = 0;
 	u16 idx = rx_ring->next_to_use;
-	void *tmp_buffer = NULL;
 	struct rcb_rx_des *rx_desc = NULL;
 	struct nic_rx_buffer *rx_buffer = NULL;
 
@@ -808,29 +1176,15 @@ static void rcb_alloc_rx_buffers(struct nic_ring_pair *ring, u32 cleand_count)
 	idx -= rx_ring->count;
 
 	do {
-		skb = netdev_alloc_skb(ring->netdev, rcb_dev->buf_size);
-		if (unlikely(NULL == skb)) {
-			if ((rx_ring->rx_stats.alloc_rx_buff_failed %
-			     RCB_ERROR_PRINT_CYCLE) == 0)
-				log_err(ring->dev,
-					"netdev_alloc_skb_ip_align fail for skb!\n");
-
-			rx_ring->rx_stats.alloc_rx_buff_failed++;
+		if (!rcb_alloc_mapped_page(rx_ring, rx_buffer))
 			break;
-		}
 
-		rx_buffer->skb = skb;
-		tmp_buffer = skb->data;
+		/*
+		 * Refresh the desc even if buffer_addrs didn't change
+		 * because each write-back erases this info.
+		 */
+		rx_desc->addr = rx_buffer->dma + rx_buffer->page_offset;
 
-		tmp_buffer = (void *)virt_to_phys(tmp_buffer);
-#if 1
-		log_dbg(ring->dev,
-			"BD %d  new skb: vir addr=0x%llx phy addr=0x%llx, buf_size=0x%x\n",
-			(u16)(idx + rx_ring->count), (u64)skb->data,
-			(u64)tmp_buffer, rcb_dev->buf_size);
-#endif
-
-		rx_desc->addr = (u64)tmp_buffer;
 		rx_desc->word2.bits.VLD = 0;
 
 		rx_desc++;
@@ -852,6 +1206,7 @@ static void rcb_alloc_rx_buffers(struct nic_ring_pair *ring, u32 cleand_count)
 	idx += rx_ring->count;
 	if (rx_ring->next_to_use != idx) {
 		rx_ring->next_to_use = idx;
+		rx_ring->next_to_alloc = idx;
 		rcb_write_rx_ring_head(rcb_dev, alloc_count);
 	}
 
@@ -863,6 +1218,7 @@ static void rcb_alloc_rx_buffers(struct nic_ring_pair *ring, u32 cleand_count)
  *@budget:budget for recieve ring
  *rerurn status
  */
+
 int rcb_recv_hw(struct nic_ring_pair *ring, int budget)
 {
 	struct net_device *netdev = ring->netdev;
@@ -877,9 +1233,9 @@ int rcb_recv_hw(struct nic_ring_pair *ring, int budget)
 	u32 tmp_cnt = 0;
 	u16 ntc = rx_ring->next_to_clean;
 	u32 len = 0;
+	int get_bd_cnt = 0;
 
 	struct rcb_rx_des *rx_desc = NULL;
-	struct nic_rx_buffer *rx_buffer = NULL;
 
 	ring_id = ring->rcb_dev.index;
 	log_dbg(ring->dev, "ring_id = %d \r\n", ring_id);
@@ -890,31 +1246,53 @@ int rcb_recv_hw(struct nic_ring_pair *ring, int budget)
 	rmb();
 
 recv:
-	while ((recv_cnt < budget) && (recv_cnt < real_cnt)) {
+	while ((recv_cnt < budget) && (get_bd_cnt < real_cnt)) {
 #if 1
 		if (clean_count >= RCB_NOF_ALLOC_RX_BUFF_ONCE) {
 			rcb_alloc_rx_buffers(ring, clean_count);
 			clean_count = 0;
 		}
 #endif
+
 		rx_desc = RCB_RX_DESC(rx_ring, ntc);
 
-		rx_buffer = &rx_ring->rx_buffer_info[ntc];
+		skb = rcb_fetch_rx_buffer(rx_ring, rx_desc);
 
-		skb = rx_buffer->skb;
 		if (unlikely(NULL == skb)) {
 			(void)log_crit(ring->dev,
 				 "skb is NULL! next_to_clean = %d\r\n", ntc);
 			rx_ring->rx_stats.rx_buff_err++;
 
-            ntc++;
-            ntc = (ntc >= rx_ring->count) ? 0 : ntc;
-			recv_cnt++;
-			continue;
+			break;
 		}
 		clean_count++;
+		get_bd_cnt ++;
+
+		/*update rx_ring->next_to_clean***/
+		ntc++;
+		ntc = (ntc >= rx_ring->count) ? 0 : ntc;
+		rx_ring->next_to_clean = ntc;
+
+		(void)log_dbg(ring->dev,
+			"bdcnt%d,qid%d,rx BD No.%d: desc addr=0x%llx word2=%#x word3=%#x word4=%#x, budget%d,recv_cnt%d,real_cnt%d\n",
+			get_bd_cnt, ring->rcb_dev.queue_index, ntc, rx_desc->addr, rx_desc->word2.u_32,
+			rx_desc->word3.u_32, rx_desc->word4.u_32, budget, recv_cnt, real_cnt);
+
+		/*if non eop, continue add other frag**/
+		if (unlikely(0 == rx_desc->word2.bits.FE)) {
+			if (!rx_ring->rx_stats.non_eop_descs)
+				(void)log_crit(ring->dev,
+					 "rx BD No.%d: is non eop! desc addr=0x%llx word2=%#x word3=%#x word4=%#x\n",
+					 ntc, rx_desc->addr, rx_desc->word2.u_32,
+					 rx_desc->word3.u_32, rx_desc->word4.u_32);
+			/* place skb in next buffer to be received */
+			rx_ring->rx_buffer_info[ntc].skb = skb;
+			rx_ring->rx_stats.non_eop_descs++;
+			continue;
+		}
 
 		if (unlikely(0 == rx_desc->word2.bits.VLD)) {
+
 			(void)log_crit(ring->dev,
 				 "rx BD No.%d: invalid! desc addr=0x%llx word2=%#x word3=%#x word4=%#x\n",
 				 ntc, rx_desc->addr, rx_desc->word2.u_32,
@@ -923,10 +1301,6 @@ recv:
 			rx_ring->rx_stats.non_vld_descs++;
             /* free the invld bd*/
             dev_kfree_skb_any(skb);
-			/*updata other counter**/
-            ntc++;
-            ntc = (ntc >= rx_ring->count) ? 0 : ntc;
-			recv_cnt++;
 			continue;
 		}
 
@@ -946,20 +1320,34 @@ recv:
 
             /* free the invld bd*/
             dev_kfree_skb_any(skb);
-			/*updata other counter**/
-            ntc++;
-            ntc = (ntc >= rx_ring->count) ? 0 : ntc;
-			recv_cnt++;
 			continue;
 		}
-		prefetchw(skb->data);
+		/*prefetchw(skb->data);*/
+
+		/* place header in linear portion of buffer */
+		if (skb_is_nonlinear(skb))
+			rcb_pull_tail(rx_ring, skb);
+
+		/* if skb_pad returns an error the skb was freed */
+		if (unlikely(skb->len < 60)) {
+			int pad_len = 60 - skb->len;
+
+			if (skb_pad(skb, pad_len)) {
+				(void)log_crit(ring->dev,
+					 "rx BD No.%d: skb_pad err! desc addr=0x%llx word2=%#x word3=%#x word4=%#x\n",
+					 ntc, rx_desc->addr, rx_desc->word2.u_32,
+					 rx_desc->word3.u_32, rx_desc->word4.u_32);
+				continue;
+			}
+			(void)__skb_put(skb, pad_len);
+		}
 
 		rx_ring->rx_pkts++;
 		rx_ring->rx_bytes += len;
 
 		log_dbg(ring->dev, "len = %d \r\n", len);
 
-		(void)skb_put(skb, len);
+		/*(void)skb_put(skb, len);*/
 		skb->ip_summed = CHECKSUM_UNNECESSARY;
 
 		skb_record_rx_queue(skb, rcb_dev->queue_index);
@@ -968,9 +1356,8 @@ recv:
 
 		/* netdev->last_rx = jiffies; TBD*/
 
-		ntc++;
-		ntc = (ntc >= rx_ring->count) ? 0 : ntc;
 		recv_cnt++;
+
 	}
 
 	if (clean_count > 0) {
@@ -990,7 +1377,6 @@ recv:
 		}
 	}
 
-	rx_ring->next_to_clean = ntc;
 	return recv_cnt;
 }
 
@@ -1015,9 +1401,9 @@ int rcb_recv_hw_ex(struct nic_ring_pair *ring, int budget,
 	u32 tmp_cnt = 0;
 	u16 ntc = rx_ring->next_to_clean;
 	u32 len = 0;
+	int get_bd_cnt = 0;
 	u32 rx_process_ok_cnt = 0;
 	struct rcb_rx_des *rx_desc = NULL;
-	struct nic_rx_buffer *rx_buffer = NULL;
 
 	ring_id = ring->rcb_dev.index;
 	log_dbg(ring->dev, "ring_id = %d \r\n", ring_id);
@@ -1028,29 +1414,50 @@ int rcb_recv_hw_ex(struct nic_ring_pair *ring, int budget,
 	rmb();
 
 recv:
-	while ((recv_cnt < budget) && (recv_cnt < real_cnt)) {
+	while ((recv_cnt < budget) && (get_bd_cnt < real_cnt)) {
 #if 1
 		if (clean_count >= RCB_NOF_ALLOC_RX_BUFF_ONCE) {
 			rcb_alloc_rx_buffers(ring, clean_count);
 			clean_count = 0;
 		}
 #endif
+
 		rx_desc = RCB_RX_DESC(rx_ring, ntc);
 
-		rx_buffer = &rx_ring->rx_buffer_info[ntc];
+		skb = rcb_fetch_rx_buffer(rx_ring, rx_desc);
 
-		skb = rx_buffer->skb;
 		if (unlikely(NULL == skb)) {
 			(void)log_crit(ring->dev,
 				 "skb is NULL! next_to_clean = %d\r\n", ntc);
 			rx_ring->rx_stats.rx_buff_err++;
 
-			ntc++;
-			ntc = (ntc >= rx_ring->count) ? 0 : ntc;
-			recv_cnt++;
-			continue;
+			break;
 		}
 		clean_count++;
+		get_bd_cnt ++;
+
+		/*update rx_ring->next_to_clean***/
+		ntc++;
+		ntc = (ntc >= rx_ring->count) ? 0 : ntc;
+		rx_ring->next_to_clean = ntc;
+
+		(void)log_dbg(ring->dev,
+			"bdcnt%d,qid%d,rx BD No.%d: desc addr=0x%llx word2=%#x word3=%#x word4=%#x, budget%d,recv_cnt%d,real_cnt%d\n",
+			get_bd_cnt, ring->rcb_dev.queue_index, ntc, rx_desc->addr, rx_desc->word2.u_32,
+			rx_desc->word3.u_32, rx_desc->word4.u_32, budget, recv_cnt, real_cnt);
+
+		/*if non eop, continue add other frag**/
+		if (unlikely(0 == rx_desc->word2.bits.FE)) {
+			if (!rx_ring->rx_stats.non_eop_descs)
+				(void)log_crit(ring->dev,
+					 "rx BD No.%d: is non eop! desc addr=0x%llx word2=%#x word3=%#x word4=%#x\n",
+					 ntc, rx_desc->addr, rx_desc->word2.u_32,
+					 rx_desc->word3.u_32, rx_desc->word4.u_32);
+			/* place skb in next buffer to be received */
+			rx_ring->rx_buffer_info[ntc].skb = skb;
+			rx_ring->rx_stats.non_eop_descs++;
+			continue;
+		}
 
 		if (unlikely(0 == rx_desc->word2.bits.VLD)) {
 			(void)log_crit(ring->dev,
@@ -1061,10 +1468,6 @@ recv:
 			rx_ring->rx_stats.non_vld_descs++;
 			/* free the invld bd*/
 			dev_kfree_skb_any(skb);
-			/*updata other counter**/
-			ntc++;
-			ntc = (ntc >= rx_ring->count) ? 0 : ntc;
-			recv_cnt++;
 			continue;
 		}
 
@@ -1084,25 +1487,37 @@ recv:
 
 			/* free the invld bd*/
 			dev_kfree_skb_any(skb);
-			/*updata other counter**/
-			ntc++;
-			ntc = (ntc >= rx_ring->count) ? 0 : ntc;
-			recv_cnt++;
 			continue;
-	        }
-		prefetchw(skb->data);
+		}
+
+		/* place header in linear portion of buffer */
+		if (skb_is_nonlinear(skb))
+			rcb_pull_tail(rx_ring, skb);
+
+		/* if skb_pad returns an error the skb was freed */
+		if (unlikely(skb->len < 60)) {
+			int pad_len = 60 - skb->len;
+
+			if (skb_pad(skb, pad_len)) {
+				(void)log_crit(ring->dev,
+					 "rx BD No.%d: skb_pad err! desc addr=0x%llx word2=%#x word3=%#x word4=%#x\n",
+					 ntc, rx_desc->addr, rx_desc->word2.u_32,
+					 rx_desc->word3.u_32, rx_desc->word4.u_32);
+				continue;
+			}
+			(void)__skb_put(skb, pad_len);
+		}
 
 		rx_ring->rx_pkts++;
 		rx_ring->rx_bytes += len;
 
 		log_dbg(ring->dev, "len = %d \r\n", len);
 
-		(void)skb_put(skb, len);
 	        if(!rx_process(&ring->rx_ring.napi, skb))
 			rx_process_ok_cnt++;
 
-	        ntc++;
-	        ntc = (ntc >= rx_ring->count) ? 0 : ntc;
+		/* netdev->last_rx = jiffies; TBD*/
+
 		recv_cnt++;
 	}
 
@@ -1122,9 +1537,7 @@ recv:
 			goto recv;
 		}
 	}
-
-	rx_ring->next_to_clean = ntc;
-
+	log_info(ring->dev,"rx_process_ok_cnt = %d\n",rx_process_ok_cnt);
 	return rx_process_ok_cnt;
 }
 
@@ -1229,8 +1642,6 @@ static void rcb_uninit_hw(struct nic_ring_pair *ring)
 	u32 ring_id = ring->rcb_dev.index;
 
 	log_dbg(ring->dev, "ring_id = %d\n", ring_id);
-
-	
 
 	(void)rcb_tx_ring_uninit(ring);
 	rcb_rx_ring_uninit(ring);

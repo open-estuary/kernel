@@ -36,13 +36,13 @@
 ** @detail add for dsaf debug , for three are no
 ** ic_disable_msi(int virq) and int ic_enable_msi(int hwirq, int *virq)
 ** in kernel hulk3.19
-**  
+**
 ****************************************/
 #define DSAF_NONE_IRQ      0
 
 /****************************************/
 
-#define DSAF_MOD_VERSION "iWareV2R2C00B961"
+#define DSAF_MOD_VERSION "iWareV2R2C00B981SP1"
 
 #define DSAF_MOD_NAME "DSAF"
 #define DSAF_DRV_NAME "Hi-DSAF"

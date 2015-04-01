@@ -67,10 +67,10 @@ extern const struct ethtool_ops g_nic_ethtools;
 #define LED_PCR				 (17)
 
 
-#define NIC_LB_TEST_PKT_NUM_PER_CYCLE  64
+#define NIC_LB_TEST_PKT_NUM_PER_CYCLE  1
 
 #define NIC_LB_TEST_RING_ID 0
-#define NIC_LB_TEST_FRAME_SIZE 1024
+#define NIC_LB_TEST_FRAME_SIZE 128
 
 /* nic loopback test err  */
 enum nic_lb_err{

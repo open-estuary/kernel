@@ -500,6 +500,8 @@ static int mac_probe(struct platform_device *pdev)
 		mac_dev->cpld_led_value = cpld_reg_read(mac_dev->cpld_vaddr);
 		mac_dev->link_features |= MAC_LINK_CPLD;
 		mac_dev->cpld_led_enable = CPLD_LED_ENABLE;
+		mac_dev->txpkt_for_led = 0;
+		mac_dev->rxpkt_for_led = 0;
 	}
 	ret = of_property_read_u32_array(np,
 		"sfp-ctl-addr", spf_ctl_addr_tmp, SPF_CTL_ADDR_NUM);

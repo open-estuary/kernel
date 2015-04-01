@@ -54,6 +54,7 @@
 #define MDIO_MAX_PHY_REG_ADDR	   (0xFFFF)
 
 #define MDIO_TIMEOUT				(1000000)
+#define MDIO_DELAY_NS				(0)
 
 #ifndef MDIO_DEVAD_NONE
 #define MDIO_DEVAD_NONE		 (-1)
@@ -77,6 +78,19 @@ static inline u32 mdio_read_reg(struct mdio_device *mdio_drv, u32 reg)
 }
 
 #define MDIO_READ_REG(a, reg) mdio_read_reg((a), (reg))
+
+#define MDIO_SC_CLK_EN	0x338
+#define MDIO_SC_CLK_DIS	0x33C
+#define MDIO_SC_RESET_REQ	0xA38
+#define MDIO_SC_RESET_DREQ	0xA3C
+#define MDIO_SC_CTRL	0x2010
+#define MDIO_SC_CLK_ST	0x531C
+#define MDIO_SC_RESET_ST	0x5A1C
+
+#define mdio_sc_reg_write(addr, data)\
+    writel((data), (__iomem unsigned int *)(addr))
+#define mdio_sc_reg_read(addr)\
+    (readl((__iomem unsigned int *)(addr)))
 
 enum phy_loop_mode {
 	PHY_LOOP_MODE_OFF = 0,	/*no loopback */

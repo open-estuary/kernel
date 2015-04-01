@@ -113,10 +113,38 @@ struct tagGmacDev {
 
 #define MII_CTRL_RAN			(1 << 9)
 
+
+/* ge phy reg */
+#define  COPPER_CONTROL_REG 	0
+#define  PHY_LOOP_BACK 		(1<<14)
+#define  PHY_AN_ENABLE 		(1<<12)
+#define  PHY_AN_RESTART 	(1<<8)
+
+/* xge phy reg */
+#define XGE_PHY_LINE_LB 1
+#define XGE_PHY_HOST_LB 0
+#define XGE_PHY_NEAR_LB 1
+#define XGE_PHY_FAR_LB  0
+
+
+
+#define RX_CSR(lane,reg)       	(((0x4080+(reg)*0x0002+(lane)*0x0200))*2)
+#define HILINK3_TO_HILINK4_OFFSET 0x80000ULL
+
+enum serdes_for_mac{
+	MAC_HILINK3, 	/* mac4-7 */
+	MAC_HILINK4,	/* mac0-3 */
+	MAC_HILINK_MAX
+};
+
+
 struct mac_stats_string {
 	char desc[64];
 	unsigned long offset;
 };
-
+#if 0
+extern int phy_loopback_set(u32 slice,u32 line_host,
+				u32 near_far,u32 enable_ctl);
+#endif
 #endif /* _IWARE_MAC_HAL_H */
 

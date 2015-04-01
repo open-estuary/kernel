@@ -1788,7 +1788,8 @@ void dsaf_comm_init(u32 dsaf_id, enum dsaf_mode dsaf_mode)
 	dsaf_ppe_qid_cfg(dsaf_id, QUEUE_PER_TX_PPE_ENGINE);
 
 	/* in non switch mode, set all port to access mode */
-	dsaf_sw_port_type_cfg(dsaf_id, DSAF_SW_PORT_TYPE_ACCESS);
+	dsaf_sw_port_type_cfg(dsaf_id, DSAF_SW_PORT_TYPE_NON_VLAN);
+	/*dsaf_sw_port_type_cfg(dsaf_id, DSAF_SW_PORT_TYPE_ACCESS);*/
 
 	/* dsaf_port_def_vlan_cfg(dsaf_id, 0); TBD */
 

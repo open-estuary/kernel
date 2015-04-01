@@ -28,6 +28,7 @@
 #include <linux/interrupt.h>
 #include <linux/timer.h>
 #include <linux/workqueue.h>
+#include <linux/if_vlan.h>
 
 /*#include "hrd_module.h"
 #include "hrd_typedef.h"
@@ -38,7 +39,7 @@
 
 struct nic_device;
 
-#define NIC_MOD_VERSION "iWareV2R2C00B961"
+#define NIC_MOD_VERSION "iWareV2R2C00B981SP1"
 
 #define NIC_MAX_RING_PAIR_NUM 16
 #define NIC_MAX_RX_QUEUES 16
@@ -85,6 +86,8 @@ enum nic_state {
 struct nic_ops {
 	int (*change_mtu)(struct nic_device *nic_dev, int new_mtu);
 	int (*set_mac_address)(struct nic_device *nic_dev, char *mac_addr);
+	void (*set_multicast_one)(struct nic_device *dev, const u8 *mac);
+	void (*set_promiscuous_mode)(struct nic_device *dev);
 };
 
 struct eeprom_addr {

@@ -151,8 +151,22 @@ static int mdio_read(struct mii_bus *bus, int phy_id, int regnum)
  */
 static int mdio_reset(struct mii_bus *bus)
 {
-	/* TBD */
-	return 0;
+	int ret = 0;
+	struct mdio_device *mdio_dev = NULL;
+
+	mdio_dev = (struct mdio_device *)bus->priv;
+
+	mutex_lock(&mdio_dev->mdio_lock);
+	ret = mdio_dev->ops.reset(mdio_dev);
+	mutex_unlock(&mdio_dev->mdio_lock);
+	log_info(&bus->dev, "reset mdio bus=%#llx!\n",(u64)bus);
+	if (ret) {
+		log_err(&bus->dev,
+			"mdio reset fail, mdio_idx=%d!\n",mdio_dev->gidx);
+		return ret;
+	}
+
+	return ret;
 }
 
 /**
@@ -184,6 +198,7 @@ static int mdio_probe(struct platform_device *pdev)
 	struct device_node *np = NULL;
 	struct mdio_device *mdio_dev = NULL;
 	void __iomem *map;
+	void __iomem *sys_map = NULL;
 	struct mii_bus *new_bus;
 	u64 phy_addr = 0;
 	u64 tmp_addr = 0;
@@ -234,15 +249,19 @@ static int mdio_probe(struct platform_device *pdev)
 		goto alloc_mdiobus_fail;
 	}
 	map = (void __iomem *)ioremap(phy_addr, size);
-	/* g = <0x0 0x603c0000 0x0 0x10000>;
-	   map = (void __iomem *)ioremap(0x603c0000, 0x10000);
-	   map = of_iomap(np, 0); */
 	if (!map) {
 		log_err(&pdev->dev, "of_iomap fail!\n");
 		ret = -ENOMEM;
 		goto iomap_fail;
 	}
-	
+	/*map sys ctl addr**/
+	tmp_addr = (u64) of_get_address(np, 1, &size, NULL);
+	if (tmp_addr) {
+		phy_addr = of_translate_address(np, (const void *)tmp_addr);
+		if (OF_BAD_ADDR != phy_addr)
+			sys_map = (void __iomem *)ioremap(phy_addr, size);
+	}
+
 	chip_id = mdio_get_chip_id(pdev);
 	if(chip_id < 0) {
 		ret = -EINVAL;
@@ -250,8 +269,9 @@ static int mdio_probe(struct platform_device *pdev)
 	}
 	else
 		mdio_dev->chip_id = chip_id;
-	
+
 	mdio_dev->vbase = map;
+	mdio_dev->sys_vbase = sys_map;
 	mdio_dev->index = 0;	/* Multi-chip mode TBD */
 	mdio_dev->gidx = mdio_dev->chip_id;
 	mdio_dev->dev = &pdev->dev;

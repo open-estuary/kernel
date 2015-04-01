@@ -270,6 +270,50 @@ static int mac_port_config_bc_en(struct mac_device *mac_dev,
 	return 0;
 }
 
+
+
+/**
+ *mac_set_multi - set multi mac address
+ *@mac_dev: mac device
+ */
+static int  mac_set_multi(struct mac_device *mac_dev,
+			u32 port_num, const u8 addr[MAC_NUM_OCTETS_PER_ADDR], u8 en)
+{
+	int ret = 0;
+	struct dsaf_device *dsaf_dev = mac_dev->dsaf_dev;
+	struct dsaf_drv_mac_single_dest_entry mac_entry;
+
+	if ((NULL != dsaf_dev)
+		&& (NULL != dsaf_dev->add_mac_mc_port)
+		&& (NULL != addr)) {
+		memcpy(mac_entry.addr, addr, sizeof(mac_entry.addr));
+		mac_entry.in_vlan_id = 0;/*vlan_id;*/
+		mac_entry.in_port_num = mac_dev->mac_id;
+		mac_entry.port_num = port_num;
+
+		if (DISABLE == en) {
+			ret = dsaf_dev->del_mac_mc_port(dsaf_dev, &mac_entry);
+			if (ret) {
+				log_err(mac_dev->dev,
+					"del_mac_mc_port faild,mac%d dsaf%d ret = %#x!\n",
+					mac_dev->mac_id, mac_dev->chip_id, ret);
+				return ret;
+			}
+		} else {
+			ret = dsaf_dev->add_mac_mc_port(dsaf_dev, &mac_entry);
+			if (ret) {
+				log_err(mac_dev->dev,
+					"add_mac_mc_port faild,mac%d dsaf%d ret = %#x!\n",
+					mac_dev->mac_id, mac_dev->chip_id, ret);
+				return ret;
+			}
+		}
+	}
+
+	return 0;
+}
+
+
 static int mac_reset(struct mac_device *mac_dev)
 {
 	int ret;
@@ -469,15 +513,6 @@ static int mac_change_promisc(struct mac_device *mac_dev)
 
 	mac_dev->promisc = promisc;
 
-	return 0;
-}
-
-/**
- *mac_set_multi - set multi mac address
- *@mac_dev: mac device
- */
-static int  mac_set_multi(struct net_device *net_dev)
-{
 	return 0;
 }
 
@@ -1220,10 +1255,211 @@ static int mac_set_an_mode(struct mac_device *mac_dev, u8 enable)
 	return 0;
 }
 
+
+int mac_serdes_reg_write(struct mac_device *mac_dev,u8 macro_Id,
+	u32 reg_offset , u32 high_bit,u32 low_bit,u32 val )
+{
+	u32 reg_cfg_max_val;
+	u32 orign_reg_val;
+	u32 final_val;
+	u32 mask;
+	u32 add;
+	u64 reg_addr = 0;
+
+	const u64 macro_offset[MAC_HILINK_MAX] = {
+	    0ULL,
+	    HILINK3_TO_HILINK4_OFFSET,
+	};
+
+
+	if(macro_Id >= MAC_HILINK_MAX){
+		log_err(mac_dev->dev,"macro_Id(0x%x) is error!\n",macro_Id);
+		return -EINVAL;
+	}
+	if (!mac_dev->serdes_vaddr) {
+		log_err(mac_dev->dev,"serdes_addr is NULL!\n");
+		return -EINVAL;
+	}
+	reg_addr = (u64)mac_dev->serdes_vaddr + macro_offset[macro_Id] +
+		reg_offset;
+
+	if(high_bit < low_bit){
+		high_bit ^= low_bit;
+		low_bit  ^= high_bit;
+		high_bit ^= low_bit;
+	}
+	reg_cfg_max_val = (0x1 << (high_bit - low_bit+1)) -1;
+
+	if ( val > reg_cfg_max_val ){
+		log_err(mac_dev->dev,"val(0x%x) is error!\n",val);
+		return -EINVAL;
+	}
+
+	orign_reg_val  = serdes_reg_read(reg_addr);
+
+	mask =(~ (reg_cfg_max_val<< low_bit))& 0xffff;
+	orign_reg_val &= mask;
+	add = val << low_bit;
+	final_val      = orign_reg_val + add;
+
+	serdes_reg_write(reg_addr,final_val);
+
+	return 0;
+}
+
+int mac_config_serdes_loopback(struct mac_device *mac_dev,u8 en)
+{
+	u8 macro = 0;
+	u8 lane = 0;
+	int ret = 0;
+	const u8 lane_id[]={
+		0,	/* mac 0 -> lane 0 */
+		1,	/* mac 1 -> lane 1 */
+		2,	/* mac 2 -> lane 2 */
+		3,	/* mac 3 -> lane 3 */
+		2,	/* mac 4 -> lane 2 */
+		3,	/* mac 5 -> lane 3 */
+		0,	/* mac 6 -> lane 0 */
+		1 	/* mac 7 -> lane 1 */
+	};
+	macro   = mac_dev->mac_id <= 3 ? MAC_HILINK4 : MAC_HILINK3;
+	lane 	= lane_id[mac_dev->mac_id];
+
+	ret = mac_serdes_reg_write(mac_dev,macro,RX_CSR(lane,0),10,10,
+		(u32)(!!en));
+
+	msleep(100);
+
+	return ret;
+
+}
+
+int mac_config_ge_phy_loopback(struct mac_device *mac_dev,u8 en)
+{
+
+	u16 val = 0;
+
+	if (NULL == mac_dev->phy_dev) {
+		log_err(mac_dev->dev,
+		  "mac_led_opt mac_id=%d, phy_dev is null !\n",
+		  mac_dev->mac_id);
+		return -EINVAL;
+	}
+	if (NULL == mac_dev->phy_dev->bus) {
+		log_err(mac_dev->dev,
+		  "mac_phy_in_loop mac_id=%d,phy_dev->bus is null !\n",
+		  mac_dev->mac_id);
+		return -EINVAL;
+	}
+
+	if(en){
+
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, PHY_PAGE_REG, 2);
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, 21, 0x1046);/* speed : 1000M */
+
+		/* Force Master */
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+	    		mac_dev->phy_dev->addr, 9, 0x1F00);
+		/* Soft-reset */
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+	    		mac_dev->phy_dev->addr, 0, 0x9140);
+
+		/* If autoneg disabled, two soft-reset operations are required */
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+	    		mac_dev->phy_dev->addr, 0, 0x9140);
+
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+	    		mac_dev->phy_dev->addr, 22, 0xFA);
+
+		/* Default is 0x0400 */
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, 1, 0x418);
+
+		/* Force 1000M Link ¡§C Default is 0x0200 */
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, 7, 0x20C);
+
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, 22, 0);
+
+		/* Enable MAC loop-back */
+		val = (u16)mdiobus_read(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, COPPER_CONTROL_REG);
+		val |= PHY_LOOP_BACK;
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, COPPER_CONTROL_REG, val);
+
+		msleep(100);
+
+	}else{
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+	    		mac_dev->phy_dev->addr, 22, 0xFA);
+
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, 1, 0x400);
+
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, 7, 0x200);
+
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, 22, 0);
+
+
+		val = (u16)mdiobus_read(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, COPPER_CONTROL_REG);
+
+		val &= ~PHY_LOOP_BACK;
+
+		(void)mdiobus_write(mac_dev->phy_dev->bus,
+			mac_dev->phy_dev->addr, COPPER_CONTROL_REG, val);
+
+	}
+
+
+	return 0;
+}
+
+int mac_config_xge_phy_loopback(struct mac_device *mac_dev,u8 enable)
+{
+	/* TBD */
+	#if 0
+	u32 slice = 0;
+	u32 line_host = XGE_PHY_LINE_LB;
+	u32 near_far = XGE_PHY_NEAR_LB;
+	u32 enable_ctl = enable;
+
+	if(mac_dev->mac_id > 3){
+		log_err(mac_dev->dev,
+			"mac_config_xge_phy_loopback faild, mac%d dsaf%d\n",
+			mac_dev->mac_id, mac_dev->chip_id);
+		return -EINVAL;
+	}
+
+	slice = mac_dev->mac_id;
+
+	return phy_loopback_set(slice,line_host,near_far,enable_ctl);
+	#endif
+	return 0;
+}
+
+int mac_config_phy_loopback(struct mac_device *mac_dev,u8 en)
+{
+
+	if(MAC_PHY_INTERFACE_MODE_XGMII == mac_dev->phy_if)
+		return mac_config_xge_phy_loopback(mac_dev,en);
+	else if(mac_dev->link_features & MAC_LINK_PHY)
+		return mac_config_ge_phy_loopback(mac_dev,en);
+	else
+		return 0;
+}
+
 static int mac_config_loopback(struct mac_device *mac_dev,
 	enum mac_loop_mode loop_mode)
 {
-	int ret;
+	int ret = 0;
+	int temp_ret = 0;
 	struct mac_priv *priv = NULL;
 	struct mac_driver *mac_ctrl_drv = NULL;
 
@@ -1235,32 +1471,49 @@ static int mac_config_loopback(struct mac_device *mac_dev,
 	priv = mac_dev_priv(mac_dev);
 	mac_ctrl_drv = (struct mac_driver *)(priv->mac);
 
-	if (NULL == mac_ctrl_drv->mac_set_an_mode) {
-		log_err(mac_dev->dev,
-			"config_loopback faild, mac%d dsaf%d!\n",
-			mac_dev->mac_id, mac_dev->chip_id);
-		return -ENOTSUPP;
-	}
-
 	switch (loop_mode) {
 	case MAC_LOOP_NONE:
-		ret = mac_ctrl_drv->mac_config_loopback(priv->mac,
-			mac_dev->loop_mode, 0);
-		if (ret) {
+		temp_ret = mac_ctrl_drv->mac_config_loopback(priv->mac,
+			MAC_LOOP_NONE, DISABLE);
+		if (temp_ret) {
 			log_err(mac_dev->dev,
 				"config_loopback faild, mac%d dsaf%d ret = %#x!\n",
 				mac_dev->mac_id, mac_dev->chip_id, ret);
-			return ret;
+			ret = -EINVAL;
 		 }
-		break;
-	 default:
+
+		temp_ret = mac_config_serdes_loopback(mac_dev, DISABLE);
+		if (temp_ret) {
+			log_err(mac_dev->dev,
+				"mac_config_serdes_loopback(MAC_LOOP_NONE) faild"
+				"mac%d dsaf%d ret = %#x!\n",
+				mac_dev->mac_id, mac_dev->chip_id, ret);
+			ret = -EINVAL;
+		}
+
+		temp_ret = mac_config_phy_loopback(mac_dev, DISABLE);
+		if (temp_ret) {
+			log_err(mac_dev->dev,
+				"mac_config_phy_loopback(MAC_LOOP_NONE) faild"
+				"mac%d dsaf%d ret = %#x!\n",
+				mac_dev->mac_id, mac_dev->chip_id, temp_ret);
+			ret = -EINVAL;
+		}
+		return ret;
+
+	case MAC_INTERNALLOOP_SERDES:
+		return mac_config_serdes_loopback(mac_dev, ENABLE);
+	case MAC_INTERNALLOOP_PHY:
+		return mac_config_phy_loopback(mac_dev, ENABLE);
+	default:
 		mac_dev->loop_mode = loop_mode;
-		ret = mac_ctrl_drv->mac_config_loopback(priv->mac, loop_mode, 1);
+		ret = mac_ctrl_drv->mac_config_loopback(priv->mac, loop_mode,
+			ENABLE);
 		if (ret) {
 			log_err(mac_dev->dev,
 				"config_loopback faild,	mac%d dsaf%d ret = %#x!\n",
 				mac_dev->mac_id, mac_dev->chip_id, ret);
-		 return ret;
+			return ret;
 		}
 		break;
 	}
@@ -1689,7 +1942,7 @@ void mac_sfp_led_reset(struct mac_device *mac_dev)
  *@net_dev: net device
  * return mac's working mode
  */
-void mac_get_total_pkts(struct mac_device *mac_dev, int *tx_pkt,
+void mac_get_total_pkts(struct mac_device *mac_dev, int *tx_pkts,
 					int *rx_pkts)
 {
 	struct mac_priv *priv = NULL;
@@ -1708,7 +1961,11 @@ void mac_get_total_pkts(struct mac_device *mac_dev, int *tx_pkt,
 	mac_ctrl_drv = (struct mac_driver *)(priv->mac);
 
 	if (NULL != mac_ctrl_drv->get_total_txrx_pkts)
-		mac_ctrl_drv->get_total_txrx_pkts(mac_ctrl_drv, (u32 *)tx_pkt, (u32 *)rx_pkts);
+		mac_ctrl_drv->get_total_txrx_pkts(mac_ctrl_drv, (u32 *)tx_pkts, (u32 *)rx_pkts);
+	if(MAC_SPEED_1000 == mac_dev->max_speed) {
+		*tx_pkts += mac_dev->txpkt_for_led;
+		*rx_pkts += mac_dev->rxpkt_for_led;
+	}
 }
 
 /**
@@ -1820,13 +2077,13 @@ void mac_setup_gmac(struct mac_device *mac_dev)
 	mac_dev->get_ethtool_stats = mac_get_ethtool_stats;
 	mac_dev->get_dump_regs = mac_get_dump_regs;
 	mac_dev->get_mac_mode = mac_get_mode;
-	mac_dev->sfp_led_opt = NULL;
+	mac_dev->sfp_led_opt = mac_sfp_led_opt;
 	mac_dev->sfp_open = NULL;
 	mac_dev->sfp_close = NULL;
 	mac_dev->get_sfp_prsnt = NULL;
-	mac_dev->led_reset = NULL;
-	mac_dev->get_total_txrx_pkts = NULL;
-	mac_dev->led_set_id = NULL;
+	mac_dev->led_reset = mac_sfp_led_reset;
+	mac_dev->get_total_txrx_pkts = mac_get_total_pkts;
+	mac_dev->led_set_id = mac_led_set_id;
 	mac_dev->phy_set_led_id = phy_led_set;
 
 }

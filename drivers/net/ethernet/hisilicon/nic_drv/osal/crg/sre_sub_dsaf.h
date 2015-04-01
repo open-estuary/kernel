@@ -7759,6 +7759,9 @@ typedef union tagScHilink4MacroLos
 
 } SC_HILINK4_MACRO_LOS_U;
 
+#define ST_READ_CNT 3000
+#define NDELAY_TIME 20
+#define NIC_RESET_ERROR 1
 
 #endif
 #endif

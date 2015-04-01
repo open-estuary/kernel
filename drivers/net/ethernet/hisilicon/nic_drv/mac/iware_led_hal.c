@@ -399,6 +399,7 @@ int mac_do_i2c_xfer(int bus_num, char chip_addr, unsigned int sub_addr,
 
 	char sub_addr_buf[8] = { 0 };
 	char *tmp = NULL;
+	int find = 0;
 
 	struct i2c_client *client, *next;
 	struct i2c_board_info info;
@@ -412,13 +413,12 @@ int mac_do_i2c_xfer(int bus_num, char chip_addr, unsigned int sub_addr,
 			  i2c_adapter_depth(adap));
 	list_for_each_entry_safe(client, next, &adap->userspace_clients,
 				 detected) {
-		/*pr_info("mac_do_i2c_xfer : client->addr=0x%x\n", client->addr);*/
-		if ((typeof(chip_addr)) client->addr == chip_addr)
+		if ((typeof(chip_addr)) client->addr == chip_addr) {
+			find = 1;
 			break;
+		}
 	}
-	mutex_unlock(&adap->userspace_clients_lock);
-
-	if ((typeof(chip_addr)) client->addr != chip_addr) {
+	if (!find) {
 		memset(&info, 0, sizeof(struct i2c_board_info));
 		if (type)
 			strlcpy(info.type, type, I2C_NAME_SIZE);
@@ -426,16 +426,14 @@ int mac_do_i2c_xfer(int bus_num, char chip_addr, unsigned int sub_addr,
 			strlcpy(info.type, "eeprom_mac", I2C_NAME_SIZE);
 		info.addr = chip_addr;
 		client = i2c_new_device(adap, &info);
-		if (!client)
+		if (!client) {
+			mutex_unlock(&adap->userspace_clients_lock);
 			return -EINVAL;
+		}
 		/* Keep track of the added device */
-		mutex_lock(&adap->userspace_clients_lock);
 		list_add_tail(&client->detected, &adap->userspace_clients);
-		mutex_unlock(&adap->userspace_clients_lock);
-
-		/*pr_err(" create info.addr : 0x%02x info.type : %s\n", info.addr,
-		       info.type);*/
 	}
+	mutex_unlock(&adap->userspace_clients_lock);
 
 	if (1 == sub_addr_len)
 		sub_addr_buf[0] = (char)(sub_addr);
@@ -697,8 +695,8 @@ int mac_sfp_prsnt(struct mac_device *mac_dev)
 		pr_err("sfp_open mac dev is null\n");
 		return -1;
 	}
-	if ((mac_dev->mac_id >= 4)
-	|| (mac_dev->phy_if != MAC_PHY_INTERFACE_MODE_XGMII)) {
+
+	if ((!mac_dev->cpld_vaddr) || (!mac_dev->serdes_vaddr)) {
 		log_info(mac_dev->dev,
 			"mac_id%d, phy_if%d need not sfp!\n",
 			mac_dev->mac_id, mac_dev->phy_if);
@@ -755,8 +753,8 @@ int mac_sfp_open(struct mac_device *mac_dev)
 		pr_err("sfp_open mac dev is null\n");
 		return -1;
 	}
-	if ((mac_dev->mac_id >= 4)
-	|| (mac_dev->phy_if != MAC_PHY_INTERFACE_MODE_XGMII)) {
+
+	if ((!mac_dev->cpld_vaddr) || (!mac_dev->serdes_vaddr)) {
 		log_info(mac_dev->dev,
 			"mac_id%d, phy_if%d need not sfp!\n",
 			mac_dev->mac_id, mac_dev->phy_if);
@@ -815,8 +813,7 @@ int mac_sfp_close(struct mac_device *mac_dev)
 		pr_err("sfp_open mac dev is null\n");
 		return -1;
 	}
-	if ((mac_dev->mac_id >= 4)
-	|| (mac_dev->phy_if != MAC_PHY_INTERFACE_MODE_XGMII)) {
+	if ((!mac_dev->cpld_vaddr) || (!mac_dev->serdes_vaddr)) {
 		log_info(mac_dev->dev,
 			"mac_id%d, phy_if%d need not sfp!\n",
 			mac_dev->mac_id, mac_dev->phy_if);

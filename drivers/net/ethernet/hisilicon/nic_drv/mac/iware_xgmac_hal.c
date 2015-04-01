@@ -168,17 +168,9 @@ static inline u32 xgmac_read(u32 port, u32 offset)
 
 static inline u64 xgmac_mib_read(u32 port, u32 offset)
 {
-	u32 valueh;
-	u32 valuel;
 	u8 __iomem *reg_addr = ((u8 __iomem *)(g_xgmac_base_addr[port] + 0xC00));
-	u64 reg;
 
-	valuel = readl(reg_addr + offset);
-	valueh = readl(reg_addr + offset + 4);
-
-	reg = (((u64) valueh) << 32) + valuel;
-
-	return reg;
+	return readq(reg_addr + offset);
 }
 
 static inline void xgmac_write(u32 port, u32 offset, u32 value)
@@ -425,13 +417,18 @@ int xgmac_config_loopback(void *mac_drv,
 {
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
 
-	if (MAC_EXTERNALLOOP_MAC == loop_mode)
+
+	switch (loop_mode) {
+	case MAC_LOOP_NONE:
 		return 0;
-	else {
-		log_err(drv->dev, "xgmac_config_loopback faild, mac%d dsaf%d\n",
-			drv->mac_id, drv->chip_id);
+	default:
+		log_err(drv->dev,
+			"xgmac_config_loopback faild,mode%d mac%d dsaf%d\n",
+			loop_mode,drv->mac_id, drv->chip_id);
 		return -EINVAL;
+
 	}
+
 }
 
 /**

@@ -405,6 +405,7 @@ int ppe_init(struct platform_device *pdev, enum dsaf_mode dsaf_mode)
 	return 0;
 
 init_fail:
+	ppe_device = nic_dev->ppe_device;
 	for (fail_ppe_idx = 0; fail_ppe_idx < ppe_idx; fail_ppe_idx++) {
 		if (ppe_device->ops.uninit != NULL)
 			ppe_device->ops.uninit(ppe_device);

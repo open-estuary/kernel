@@ -48,7 +48,7 @@ P3AfVaAWzJC9l9NRIao+FQSxfxGkoi04M4KkdJLQRrUe5nRCza02ogcfT12E7Q==*/
 static int nic_drv_change_mtu(struct nic_device *nic_dev, int new_mtu)
 {
 	int ret;
-	int max_frame = new_mtu + ETH_HLEN + ETH_FCS_LEN;
+	int max_frame = new_mtu + ETH_HLEN + ETH_FCS_LEN + VLAN_HLEN;
 	struct mac_device *mac_dev = NULL;
 
 	log_dbg(&nic_dev->netdev->dev, "func begin\n");
@@ -58,6 +58,12 @@ static int nic_drv_change_mtu(struct nic_device *nic_dev, int new_mtu)
 		log_err(&nic_dev->netdev->dev,
 			"mac_dev or change_mtu func not found!\n");
 		return -ENODEV;
+	}
+	if (max_frame > 9600) {
+		log_err(&nic_dev->netdev->dev,
+			"new mtu %d (frame is %d) is too large!\n",
+			new_mtu, max_frame);
+		return -EINVAL;
 	}
 
 	ret = mac_dev->change_mtu(mac_dev, max_frame);
@@ -100,6 +106,29 @@ static int nic_drv_set_mac_address(struct nic_device *nic_dev,
 	return 0;
 }
 
+static void nic_drv_set_multicast_one(
+	struct nic_device *nic_dev, const u8 *mac_addr)
+{
+	int ret = 0;
+	struct mac_device *mac_dev = nic_dev->mac_dev;
+
+	log_info(&nic_dev->netdev->dev,
+		"nic_dev(=0x%p) set multicast MAC address %pM\n", nic_dev, mac_addr);
+
+	if (mac_dev && mac_dev->set_multi) {
+		ret = mac_dev->set_multi(mac_dev, mac_dev->mac_id, mac_addr, ENABLE);
+		if (ret)
+			log_err(&nic_dev->netdev->dev,
+				"mac add mul_mac:%pM port%d  fail, ret = %#x!\n",
+				mac_addr, mac_dev->mac_id, ret);
+		ret = mac_dev->set_multi(mac_dev, DSAF_BASE_INNER_PORT_NUM, mac_addr, ENABLE);
+		if (ret)
+			log_err(&nic_dev->netdev->dev,
+				"mac add mul_mac:%pM port%d  fail, ret = %#x!\n",
+				mac_addr, DSAF_BASE_INNER_PORT_NUM, ret);
+	}
+}
+
 /**
  * nic_set_ops - set nic ops
  * @ops: nic ops
@@ -108,4 +137,6 @@ void nic_set_ops(struct nic_ops *ops)
 {
 	ops->change_mtu = nic_drv_change_mtu;
 	ops->set_mac_address = nic_drv_set_mac_address;
+	ops->set_multicast_one = nic_drv_set_multicast_one;
+	ops->set_promiscuous_mode = NULL;
 }

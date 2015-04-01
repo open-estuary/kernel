@@ -208,6 +208,10 @@ int nic_set_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 		log_err(&dev->dev, "\n 10GE mode not surport setting!\n");
 		return -EINVAL;
 	}
+	if (mac_dev->phy_dev) {
+		(void) phy_ethtool_sset(mac_dev->phy_dev, cmd);
+		return 0;
+	}
 	if (NULL != mac_dev->set_an_mode) {
 		ret = mac_dev->set_an_mode(mac_dev, cmd->autoneg);
 		if (ret) {
@@ -236,8 +240,6 @@ int nic_set_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 
 
 	/* updata for phy info */
-	if (mac_dev->phy_dev)
-		(void) phy_ethtool_sset(mac_dev->phy_dev, cmd);
 
 	return 0;
 }
@@ -586,7 +588,7 @@ static int nic_setup_loopback_test(struct nic_device *nic_dev,
 		ret = -ENODEV;
 		goto ring_enable_fail;
 	}
-#if 0 /* TBD */
+
 	if (mac_dev->init_phy != NULL) {
 		ret = mac_dev->init_phy(netdev);
 		if (ret < 0) {
@@ -596,7 +598,8 @@ static int nic_setup_loopback_test(struct nic_device *nic_dev,
 			goto ring_enable_fail;
 		}
 	}
-#endif
+
+
 	if (mac_dev->queue_config_bc_en != NULL) {
 		ret = mac_dev->queue_config_bc_en(mac_dev, 0, ENABLE);
 		if (ret < 0) {
@@ -607,15 +610,15 @@ static int nic_setup_loopback_test(struct nic_device *nic_dev,
 		}
 	}
 
-
 	/* set loopback mode */
 	ret = nic_setup_loopback(nic_dev,loop_mode);
 	if (ret < 0) {
 		log_err(&netdev->dev,
-			"chip_id=%d nic_idx=%d nic_set_mac_address faild!\n",
-			nic_dev->chip_id, nic_dev->index);
+			"chip_id=%d nic_idx=%d nic_setup_loopback(0x%x) faild(%#x)!\n",
+			nic_dev->chip_id, nic_dev->index,loop_mode,ret);
 		goto set_loopback_fail;
 	}
+
 
 	ret = mac_dev->start(mac_dev);
 	if (ret < 0) {
@@ -623,15 +626,22 @@ static int nic_setup_loopback_test(struct nic_device *nic_dev,
 		goto mac_start_fail;
 	}
 
+
+	if (mac_dev->sfp_open) {
+	    ret = mac_dev->sfp_open(mac_dev);
+		    if (ret) {
+			    log_err(&netdev->dev,
+				    "mac open sfp fail, ret = %#x!\n", ret);
+			    goto mac_start_fail;
+		    }
+	    }
+
+
 	return 0;
+
 
 mac_start_fail:
 
-	ret = nic_setup_loopback_test(nic_dev,MAC_LOOP_NONE);
-	if (ret < 0)
-		log_err(&netdev->dev,"clear loopback fail, ret=%d!\n",ret);
-
-set_loopback_fail:
 	if (mac_dev->queue_config_bc_en != NULL) {
 		ret = mac_dev->queue_config_bc_en(mac_dev, 0, DISABLE);
 		if (ret < 0)
@@ -640,17 +650,22 @@ set_loopback_fail:
 				mac_dev->global_mac_id, ret);
 	}
 
+set_loopback_fail:
+
+		ret = nic_setup_loopback(nic_dev,MAC_LOOP_NONE);
+		if (ret < 0)
+			log_err(&netdev->dev,"clear loopback fail, ret=%d!\n",ret);
+
 ring_enable_fail:
 	for (ring_fail_idx = 0; ring_fail_idx < ring_idx; ring_fail_idx++){
 		ring = nic_dev->ring[ring_fail_idx];
 		rcb_disable_test_ring(ring);
 	}
 
+
 	return ret;
 
 }
-
-
 
 static void nic_create_lbtest_frame(struct net_device *netdev,
                                         struct sk_buff *skb,
@@ -661,19 +676,25 @@ static void nic_create_lbtest_frame(struct net_device *netdev,
 	memset(&skb->data[frame_size / 2], 0xAA, frame_size / 2 - 1);
 	memset(&skb->data[frame_size / 2 + 10], 0xBE, 1);
 	memset(&skb->data[frame_size / 2 + 12], 0xAF, 1);
+
 }
+
+
 int nic_check_lbtest_frame(struct sk_buff *skb)
 {
 	unsigned int frame_size = skb->len;
 
 	frame_size &= ~1;
-	if (*(skb->data + 3) == 0xFF) {
+	if (*(skb->data + 10) == 0xFF) {
 		if ((*(skb->data + frame_size / 2 + 10) == 0xBE) &&
 		    (*(skb->data + frame_size / 2 + 12) == 0xAF)) {
 			kfree_skb(skb);
 			return 0;
 		}
 	}
+
+	log_info(NULL,"frame_size = %d\n",frame_size);
+	/*dump_mem(skb->data, frame_size);*/
 
 	kfree_skb(skb);
 	return -EFAULT;
@@ -721,10 +742,7 @@ void nic_clean_tx_ring(struct nic_ring_pair *ring)
 static int nic_run_loopback_test(struct nic_device *nic_dev,
                                         enum mac_loop_mode loop_mode)
 {
-
 	struct nic_ring_pair *ring;
-	struct nic_tx_ring *tx_ring;
-	struct nic_rx_ring *rx_ring;
 	int i, j, lc, good_cnt, ret_val = 0;
 	unsigned int size ;
 	netdev_tx_t tx_ret_val;
@@ -733,8 +751,6 @@ static int nic_run_loopback_test(struct nic_device *nic_dev,
 	(void)loop_mode;
 
 	ring = nic_dev->ring[NIC_LB_TEST_RING_ID];
-	tx_ring = &(ring->tx_ring);
-	rx_ring = &(ring->rx_ring);
 	size = NIC_LB_TEST_FRAME_SIZE;
 
 	/* allocate test skb */
@@ -746,18 +762,8 @@ static int nic_run_loopback_test(struct nic_device *nic_dev,
 	nic_create_lbtest_frame(nic_dev->netdev,skb, size);
 	(void)skb_put(skb, size);
 
-	/*
-	* Calculate the loop count based on the largest descriptor ring
-	* The idea is to wrap the largest ring a number of times using 64
-	* send/receive pairs during each loop
-	*/
-
-	if (rx_ring->count <= tx_ring->count)
-		lc = ((tx_ring->count / NIC_LB_TEST_PKT_NUM_PER_CYCLE) * 2) + 1;
-	else
-		lc = ((rx_ring->count / NIC_LB_TEST_PKT_NUM_PER_CYCLE) * 2) + 1;
-
-	for (j = 0; j <= lc; j++) {
+	lc = 1;
+	for (j = 0; j < lc; j++) {
 		/* reset count of good packets */
 		good_cnt = 0;
 
@@ -776,8 +782,8 @@ static int nic_run_loopback_test(struct nic_device *nic_dev,
 			break;
 		}
 
-		/* allow 10 milliseconds for packets to go from Tx to Rx */
-		msleep(200);
+		/* allow 100 milliseconds for packets to go from Tx to Rx */
+		msleep(100);
 
 
 		good_cnt = nic_clean_all_rx_rings(nic_dev,size);
@@ -795,13 +801,83 @@ static int nic_run_loopback_test(struct nic_device *nic_dev,
 	return ret_val;
 }
 
-void nic_loopback_cleanup(struct nic_device *nic_dev)
+int nic_loopback_ring_cleanup(struct nic_device *nic_dev)
 {
 
-    	(void)nic_setup_loopback_test(nic_dev,MAC_LOOP_NONE);
+	int ring_id;
+	struct nic_ring_pair *ring = NULL;
+	struct rcb_device *rcb_dev = NULL;
 
-	nic_reset(nic_dev->netdev);
+	for (ring_id=0; ring_id<nic_dev->ring_pair_num; ring_id++) {
+		ring = nic_dev->ring[ring_id];
+		rcb_dev = &ring->rcb_dev;
+		rcb_dev->ops.disable(ring);
+	}
+	msleep(100);
 
+	for (ring_id=0; ring_id<nic_dev->ring_pair_num; ring_id++) {
+		ring = nic_dev->ring[ring_id];
+		rcb_dev = &ring->rcb_dev;
+
+		rcb_dev->ops.clean_tx_ring(ring);
+	}
+
+	return 0;
+
+}
+
+
+int nic_loopback_down(struct nic_device *nic_dev)
+{
+	int ret = 0;
+	struct mac_device *mac_dev = nic_dev->mac_dev;
+	struct net_device *netdev = nic_dev->netdev;
+
+
+	if(mac_dev->stop(mac_dev))
+		log_warn(&nic_dev->netdev->dev, "stop mac%d fail!\n", nic_dev->gidx);
+
+	usleep_range(10000, 20000);
+
+
+	(void)nic_loopback_ring_cleanup(nic_dev);
+
+
+	if (mac_dev->queue_config_bc_en != NULL) {
+		ret = mac_dev->queue_config_bc_en(mac_dev, 0, DISABLE);
+		if (ret < 0)
+			log_err(&netdev->dev,
+				"queue_config_bc_en fail, mac_id=%d, ret=%d!\n",
+				mac_dev->global_mac_id, ret);
+	}
+
+	return 0;
+
+}
+
+void nic_loopback_cleanup(struct nic_device *nic_dev)
+{
+	int ret = 0;
+
+	struct mac_device *mac_dev = nic_dev->mac_dev;
+	struct net_device *netdev = nic_dev->netdev;
+
+	(void)nic_setup_loopback(nic_dev,MAC_LOOP_NONE);
+
+	(void)nic_loopback_down(nic_dev);
+
+	if(NULL != mac_dev->led_reset
+		&& 0 != mac_dev->cpld_vaddr)
+		mac_dev->led_reset(mac_dev);
+
+	if (mac_dev->sfp_close) {
+        	ret = mac_dev->sfp_close(mac_dev);
+		if (ret)
+			log_err(&netdev->dev,
+				"mac close sfp fail, ret = %#x!\n", ret);
+	}
+
+	nic_reset(netdev);
 }
 /**
  * nic_loopback_test -  loopback test
@@ -841,29 +917,33 @@ void nic_self_test(struct net_device *dev, struct ethtool_test *eth_test,
 	data[0] = ENOTSUPP;
 	data[1] = ENOTSUPP;
 	data[2] = ENOTSUPP;
+
 	if (eth_test->flags == ETH_TEST_FL_OFFLINE) {
 
 		if (if_running)
 			(void)dev_close(dev);
 
-		/* XGE not support */
+		/* XGE not supported */
 		if(nic_dev->mac_dev->phy_if != MAC_PHY_INTERFACE_MODE_XGMII){
 			if (nic_loopback_test(nic_dev, MAC_INTERNALLOOP_MAC,
 						&data[0]) != 0) {
 		    		eth_test->flags |= ETH_TEST_FL_FAILED;
 			}
 		}
-#if 0 /* TBD */
+
 		if (nic_loopback_test(nic_dev, MAC_INTERNALLOOP_SERDES,
 						&data[1]) != 0) {
 			eth_test->flags |= ETH_TEST_FL_FAILED;
 		}
 
-		if (nic_loopback_test(nic_dev, MAC_INTERNALLOOP_PHY,
-						&data[2]) != 0) {
-			eth_test->flags |= ETH_TEST_FL_FAILED;
+		/* XGE not supported */
+		if(nic_dev->mac_dev->link_features & MAC_LINK_PHY){
+
+			if (nic_loopback_test(nic_dev, MAC_INTERNALLOOP_PHY,
+							&data[2]) != 0) {
+				eth_test->flags |= ETH_TEST_FL_FAILED;
+			}
 		}
-#endif
 
 		nic_reset(nic_dev->netdev);
 		clear_bit(NIC_STATE_TESTING, &nic_dev->state);
@@ -874,7 +954,7 @@ void nic_self_test(struct net_device *dev, struct ethtool_test *eth_test,
 	}
 	/* Online tests aren't run; pass by default */
 
-	(void)msleep_interruptible(1000);
+	(void)msleep_interruptible(4 * 1000);
 }
 
 /**
@@ -1048,10 +1128,9 @@ int nic_set_phys_id(struct net_device *dev, enum ethtool_phys_id_state state)
 
 	switch (state) {
 	case ETHTOOL_ID_ACTIVE:
-		if(0 != mac_dev->cpld_vaddr) {
-			mac_dev->cpld_led_value = cpld_reg_read(mac_dev->cpld_vaddr);
-			return 2;
-		} else if(NULL != mac_dev->phy_dev && MAC_SPEED_10000 != mac_dev->max_speed ) {
+		if((mac_dev->link_features & MAC_LINK_PHY)
+			&& (NULL != mac_dev->phy_dev)) {
+
 			(void) mdiobus_write(mac_dev->phy_dev->bus, mac_dev->phy_dev->addr,
 			 	PHY_PAGE_REG, PHY_PAGE_LED);
 			mac_dev->phy_led_value = (u16)mdiobus_read(mac_dev->phy_dev->bus,
@@ -1059,36 +1138,42 @@ int nic_set_phys_id(struct net_device *dev, enum ethtool_phys_id_state state)
 			(void) mdiobus_write(mac_dev->phy_dev->bus,
            			mac_dev->phy_dev->addr, PHY_PAGE_REG, PHY_PAGE_COPPER);
 			return 2;
+		} else if(NULL != mac_dev->cpld_vaddr){
+			mac_dev->cpld_led_value = cpld_reg_read(mac_dev->cpld_vaddr);
+			return 2;
 		} else {
-			osal_pr("set led fail!\n");
+			osal_pr("not surport ethtool -p!\n");
 			return 0;
 		}
 
 	case ETHTOOL_ID_ON:
-		if(NULL != mac_dev->led_set_id)
-			mac_dev->led_set_id(mac_dev, NIC_LED_ON);
-		if(NULL != mac_dev->phy_set_led_id)
+		if((mac_dev->link_features & MAC_LINK_PHY)
+			&& (NULL != mac_dev->phy_dev))
 			(void) mac_dev->phy_set_led_id(mac_dev, LD_FORCE_ON);
+		else if(NULL != mac_dev->cpld_vaddr)
+			mac_dev->led_set_id(mac_dev, NIC_LED_ON);
 		break;
 
 	case ETHTOOL_ID_OFF:
-		if(NULL != mac_dev->led_set_id)
-			mac_dev->led_set_id(mac_dev, NIC_LED_OFF);
-		if(NULL != mac_dev->phy_set_led_id)
+		if((mac_dev->link_features & MAC_LINK_PHY)
+			&& (NULL != mac_dev->phy_dev))
 			(void) mac_dev->phy_set_led_id(mac_dev, LD_FORCE_OFF);
+		else if(NULL != mac_dev->cpld_vaddr)
+			mac_dev->led_set_id(mac_dev, NIC_LED_OFF);
 		break;
 
 	case ETHTOOL_ID_INACTIVE:
 		/* Restore LED settings */
-		if(NULL != mac_dev->cpld_vaddr) {
-		cpld_reg_write(mac_dev->cpld_vaddr, mac_dev->cpld_led_value);
-		} else if(NULL != mac_dev->phy_dev) {
+		if((mac_dev->link_features & MAC_LINK_PHY)
+			&& (NULL != mac_dev->phy_dev)) {
 			(void) mdiobus_write(mac_dev->phy_dev->bus, mac_dev->phy_dev->addr,
 			 	PHY_PAGE_REG, PHY_PAGE_LED);
 			(void) mdiobus_write(mac_dev->phy_dev->bus, mac_dev->phy_dev->addr,
 					LED_FCR, mac_dev->phy_led_value);
 			(void) mdiobus_write(mac_dev->phy_dev->bus,
 	   			mac_dev->phy_dev->addr, PHY_PAGE_REG, PHY_PAGE_COPPER);
+		} else if(NULL != mac_dev->cpld_vaddr) {
+			cpld_reg_write(mac_dev->cpld_vaddr, mac_dev->cpld_led_value);
 		}
 		break;
 	}

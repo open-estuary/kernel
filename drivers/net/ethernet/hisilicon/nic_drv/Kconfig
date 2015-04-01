@@ -3,7 +3,7 @@
 #
 
 config HI_NET_VENDOR_NIC
-	bool "Hisilicon VENDOR NIC"
+	tristate "Hisilicon VENDOR NIC"
 	default y
 	---help---
 	  This open the Nic drivers.

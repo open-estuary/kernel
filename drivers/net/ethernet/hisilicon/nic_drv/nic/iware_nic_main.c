@@ -176,6 +176,33 @@ int nic_set_mac_address(struct net_device *netdev, void *p)
 }
 
 /**
+ * nic_set_multicast_list - set mutl mac address
+ * @netdev: net device。
+ * @p: mac address。
+ *
+ * return void
+ */
+void nic_set_multicast_list(struct net_device *dev)
+{
+	struct nic_device *nic_dev = NULL;
+	struct netdev_hw_addr *ha = NULL;
+
+	log_dbg(&dev->dev, "nic set multicast list begin\n");
+
+	nic_dev = netdev_priv(dev);
+	if (NULL == nic_dev) {
+		log_err(&dev->dev, "set multicast list get priv NULL!\n");
+		return;
+	}
+
+	if (nic_dev->ops.set_multicast_one) {
+		netdev_for_each_mc_addr(ha, dev)
+			nic_dev->ops.set_multicast_one(nic_dev, ha->addr);
+	}
+}
+
+
+/**
  * nic_start_xmit - send packet
  * @skb: skb info。
  * @netdev: net device。
@@ -951,6 +978,7 @@ void nic_reset(struct net_device *netdev)
 	clear_bit(NIC_STATE_RESETTING, &nic_dev->state);
 }
 
+EXPORT_SYMBOL(nic_reset);
 /**
  * nic_reinit - reset all sub module, reinit and enable it
  * @netdev: net device。
@@ -1124,6 +1152,8 @@ const struct net_device_ops g_nic_netdev_ops = {
 	.ndo_poll_controller = nic_poll_controller,
 #endif
 
+	.ndo_set_rx_mode	= nic_set_multicast_list,
+
 };
 
 /**
@@ -1264,6 +1294,11 @@ int nic_probe(struct platform_device *pdev)
 	nic_dev->gidx = dev_id + (NIC_MAX_NUM_PER_CHIP * chip_id) ;
     	netdev->dev_id = nic_dev->gidx;
 
+	if (!dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64ULL)))
+		log_dbg(&pdev->dev, "set mask to 64bit\n");
+	else
+		log_dbg(&pdev->dev, "set mask to 32bit\n");
+
 	ret = ppe_init(pdev, dsaf_mode);
 	if (ret) {
 		log_err(&pdev->dev, "ppe_init fail, nic_idx=%#x ret=%d!\r\n",
@@ -1295,18 +1330,7 @@ int nic_probe(struct platform_device *pdev)
 	set_bit(NIC_STATE_SERVICE_INITED, &nic_dev->state);
 	clear_bit(NIC_STATE_SERVICE_SCHED, &nic_dev->state);
 
-	/*ret = register_netdev(netdev);
-	if (ret) {
-		log_err(&pdev->dev,
-			"register_netdev fail, nic_idx=%#x ret=%d!\r\n", dev_id,
-			ret);
-		goto reg_netdev_fail;
-	}*/
 
-	if (!dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64ULL)))
-		log_dbg(&pdev->dev, "set mask to 64bit\n");
-	else
-		log_dbg(&pdev->dev, "set mask to 32bit\n");
 
 
 	mac_addr_temp = of_get_mac_address(pdev->dev.of_node);

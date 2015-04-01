@@ -2379,6 +2379,67 @@ sysfs_dsaf_fun0_define(voq_state, dsaf_voq_state_show, NULL);
 
 sysfs_dsaf_dev_fun0_define(dfx_all, dsaf_dfx, NULL);
 
+/*for tcam add or del**/
+/*
+echo 0x0180c2000002,0,2,0,1 > modify_tcam
+echo 0x0180c2000002,0,3,0,1 > modify_tcam
+echo 0x0180c2000002,0,2,127,1 > modify_tcam
+echo 0x0180c2000002,0,3,127,1 > modify_tcam
+
+*/
+void sysfs_dsaf_add_tcam(struct device *dev, const char *buf)
+/*int dsaf_modify_tcam(struct dsaf_device *dsaf_dev,
+	u64 mac_addr,  u32 vlan_id, u32 in_port_num, u32 out_port_num, u32 en)*/
+{
+	int ret = 0, i = 0;
+	u8 addr[MAC_NUM_OCTETS_PER_ADDR]
+		= {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+	struct dsaf_drv_mac_single_dest_entry mac_entry;
+	struct dsaf_device *dsaf_dev =
+		(struct dsaf_device *)dev_get_drvdata(dev);
+
+	u64 mac_addr;
+	u32 vlan_id;
+	u32 in_port_num;
+	u32 out_port_num;
+	u32 en;
+
+	sscanf(buf, "0x%llx,%u,%u,%u,%u", &mac_addr,
+		&vlan_id, &in_port_num, &out_port_num, &en);
+
+	for (i = 0; i < MAC_NUM_OCTETS_PER_ADDR; i++)
+		addr[MAC_NUM_OCTETS_PER_ADDR - 1 - i] = (u8)((mac_addr >> (8 * i)) & 0xff);
+
+	log_info(dsaf_dev->dev,
+		"dsaf_dev(=0x%p) set MAC address %pM, mac_addr=0x%llx\n",
+		dsaf_dev, addr, mac_addr);
+
+	if ((NULL != dsaf_dev) && (NULL != dsaf_dev->del_mac_mc_port)
+		&& (NULL != dsaf_dev->add_mac_mc_port)) {
+		memcpy(mac_entry.addr, addr, sizeof(mac_entry.addr));
+		mac_entry.in_vlan_id = vlan_id;
+		mac_entry.in_port_num = in_port_num;
+		mac_entry.port_num = out_port_num;
+
+		if (!en)
+			ret = dsaf_dev->del_mac_mc_port(dsaf_dev, &mac_entry);
+		else
+			ret = dsaf_dev->add_mac_mc_port(dsaf_dev, &mac_entry);
+
+		if (ret)
+			log_err(dsaf_dev->dev,
+				"dsaf_modify_tcam faild, ret = %#x!\n", ret);
+	}
+
+}
+void sysfs_dsaf_tcam(struct device *dev)
+{
+}
+/*g_sysfs_dsaf_tcam*/
+sysyfs_dsaf_file_attr_def(modify_tcam,
+	sysfs_dsaf_tcam, sysfs_dsaf_add_tcam);
+
+
 static struct attribute *g_dsaf_sys_attrs_list_top[] = {
 	&g_sysfs_dsaf_comm_state_show.attr,
 	&g_sysfs_dsaf_ge_xge_cfg_show.attr,
@@ -2386,6 +2447,7 @@ static struct attribute *g_dsaf_sys_attrs_list_top[] = {
 	&g_sysfs_dsaf_inode_state_show.attr,
 	&g_sysfs_dsaf_voq_state_show.attr,
 	&g_sysfs_dsaf_dfx.attr,
+	&g_sysfs_dsaf_tcam.attr,
 	NULL
 };
 

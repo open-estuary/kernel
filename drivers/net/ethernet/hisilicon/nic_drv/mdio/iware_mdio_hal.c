@@ -87,8 +87,8 @@ static int mdio_read_hw(struct mdio_device *mdio_dev, u8 phy_addr,
 		mdio_cmd_reg.bits.Mdio_Devad = reg;
 		mdio_cmd_reg.bits.Mdio_Start = 1;
 		MDIO_WRITE_REG(mdio_dev, MDIO_COMMAND_REG, mdio_cmd_reg.u32);
-		mdio_addr_reg.u32 = 0; 
-		
+		mdio_addr_reg.u32 = 0;
+
 		log_dbg(mdio_dev->dev, "is not c45!\n");
 	} else {
 
@@ -183,7 +183,7 @@ static int mdio_write_hw(struct mdio_device *mdio_dev, u8 phy_addr,
 		return HRD_COMMON_ERR_INPUT_INVALID;
 	}
 
-	
+
 	log_dbg(mdio_dev->dev, "mdio(%d) base is %p,write data=%d\n",
 		mdio_dev->gidx, mdio_dev->vbase, data);
 	log_dbg(mdio_dev->dev, "phy_addr=%d, is_c45=%d, devad=%d, regnum=%#x!\n",
@@ -269,6 +269,75 @@ static int mdio_write_hw(struct mdio_device *mdio_dev, u8 phy_addr,
 	return 0;
 }
 
+
+/**
+ *mdio_reset_hw - reset hw
+ *@mdio_dev: mdio device
+ *return status
+ */
+static int mdio_reset_hw(struct mdio_device *mdio_dev)
+{
+	u32 time_cnt = MDIO_TIMEOUT;
+	u32 reg_value = 0;
+
+	if (!mdio_dev->sys_vbase) {
+		log_err(mdio_dev->dev, "mdio sys ctl reg has not maped\n");
+		return HRD_COMMON_ERR_NULL_POINTER;
+	}
+
+	/*1. reset req, and read reset st check*/
+	mdio_sc_reg_write((u64)mdio_dev->sys_vbase + MDIO_SC_RESET_REQ, 0x1);
+	for (time_cnt = MDIO_TIMEOUT; time_cnt; time_cnt--) {
+		reg_value = mdio_sc_reg_read((u64)mdio_dev->sys_vbase + MDIO_SC_RESET_ST);
+		if (reg_value & 0x1)
+			break;
+	}
+	if (!(reg_value & 0x1)) {
+		log_err(mdio_dev->dev, "MDIO reset fail\n");
+		return HRD_COMMON_ERR_WRITE_FAIL;
+	}
+
+	/*2. dis clk, and read clk st check*/
+	mdio_sc_reg_write((u64)mdio_dev->sys_vbase + MDIO_SC_CLK_DIS, 0x1);
+	for (time_cnt = MDIO_TIMEOUT; time_cnt; time_cnt--) {
+		reg_value = mdio_sc_reg_read((u64)mdio_dev->sys_vbase + MDIO_SC_CLK_ST);
+		if (!(reg_value & 0x1))
+			break;
+	}
+	if (reg_value & 0x1) {
+		log_err(mdio_dev->dev, "MDIO dis clk fail\n");
+		return HRD_COMMON_ERR_WRITE_FAIL;
+	}
+
+	/*3. reset dreq, and read reset st check*/
+	mdio_sc_reg_write((u64)mdio_dev->sys_vbase + MDIO_SC_RESET_DREQ, 0x1);
+	for (time_cnt = MDIO_TIMEOUT; time_cnt; time_cnt--) {
+		reg_value = mdio_sc_reg_read((u64)mdio_dev->sys_vbase + MDIO_SC_RESET_ST);
+		if (!(reg_value & 0x1))
+			break;
+	}
+	if (reg_value & 0x1) {
+		log_err(mdio_dev->dev, "MDIO drop reset fail\n");
+		return HRD_COMMON_ERR_WRITE_FAIL;
+	}
+
+	/*4. en clk, and read clk st check*/
+	mdio_sc_reg_write((u64)mdio_dev->sys_vbase + MDIO_SC_CLK_EN, 0x1);
+	reg_value = mdio_sc_reg_read((u64)mdio_dev->sys_vbase + MDIO_SC_CLK_ST);
+	for (time_cnt = MDIO_TIMEOUT; time_cnt; time_cnt--) {
+		reg_value = mdio_sc_reg_read((u64)mdio_dev->sys_vbase + MDIO_SC_CLK_ST);
+		if (reg_value & 0x1)
+			break;
+	}
+	if (!(reg_value & 0x1)) {
+		log_err(mdio_dev->dev, "MDIO en clk fail\n");
+		return HRD_COMMON_ERR_WRITE_FAIL;
+	}
+
+	return 0;
+}
+
+
 /**
  *mdio_set_ops - set mdio ops
  *@mdio_ops: mdio option
@@ -277,4 +346,5 @@ void mdio_set_ops(struct mdio_ops *ops)
 {
 	ops->write_phy_reg = mdio_write_hw;
 	ops->read_phy_reg = mdio_read_hw;
+	ops->reset = mdio_reset_hw;
 }

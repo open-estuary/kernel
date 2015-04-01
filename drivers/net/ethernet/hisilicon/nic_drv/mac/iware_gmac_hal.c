@@ -654,19 +654,30 @@ static int gmac_set_mac_addr(void *mac_drv, char *mac_addr)
 	return 0;
 
 }
+static int gmac_config_mac_in_loopback(void *mac_drv, u8 enable)
+{
+
+	union gmac_loop_reg unloopback;
+	struct mac_driver *drv = (struct mac_driver *)mac_drv;
+	unloopback.u32 =  gmac_reg_read((u64)(drv->vaddr) + GMAC_LOOP_REG);
+	unloopback.bits.cf2mi_lp_en = (enable & 1);
+	gmac_reg_write((u64)(drv->vaddr) + GMAC_LOOP_REG, unloopback.u32);
+	return 0;
+}
 
 static int gmac_config_loopback(void *mac_drv,
 				enum mac_loop_mode loop_mode, u8 enable)
 {
 	union gmac_line_loopback unlineloopback;
-	union gmac_loop_reg unloopback;
+
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
 
 	switch (loop_mode) {
+	case MAC_LOOP_NONE:
+		(void)gmac_config_mac_in_loopback(mac_drv, 0);
+		break;
 	case MAC_INTERNALLOOP_MAC:
-		unloopback.u32 =  gmac_reg_read((u64)(drv->vaddr) + GMAC_LOOP_REG);
-		unloopback.bits.cf2mi_lp_en = (enable & 1);
-		gmac_reg_write((u64)(drv->vaddr) + GMAC_LOOP_REG, unloopback.u32);
+		(void)gmac_config_mac_in_loopback(mac_drv, 1);
 		break;
 
 	case MAC_EXTERNALLOOP_MAC:
@@ -801,12 +812,17 @@ static int gmac_autoneg_stat(void *mac_drv, u32 *enable)
 static int gmac_get_link_status(void *mac_drv, u32 *link_stat)
 {
 	union gmac_an_neg_state an_state;
+	u32 neg_enable = 0;
 
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
 
 	an_state.u32 = gmac_reg_read((u64)(drv->vaddr) + GMAC_AN_NEG_STATE_REG);
 
-	*link_stat = an_state.bits.rx_sync_ok;
+	(void)gmac_autoneg_stat(mac_drv, &neg_enable);
+	if(neg_enable)
+		*link_stat = an_state.bits.an_done && an_state.bits.rx_sync_ok;
+	else
+		*link_stat = an_state.bits.rx_sync_ok;
 
     return 0;
 }
@@ -1122,6 +1138,20 @@ static int gmac_get_sset_count(void *mac_drv, u32 stringset)
 
 	return num;
 }
+static void gmac_get_total_pkts(void *mac_drv, u32 *tx_pkt, u32 *rx_pkt)
+{
+	u32 rx_pkt_num[3] = {0};
+	u32 tx_pkt_num[3] = {0};
+	struct mac_driver *drv = (struct mac_driver *)mac_drv;
+	tx_pkt_num[0] = gmac_reg_read((u64)drv->vaddr + GMAC_TX_UC_PKTS_REG);
+	tx_pkt_num[1] = gmac_reg_read((u64)drv->vaddr + GMAC_TX_MC_PKTS_REG);
+	tx_pkt_num[2] = gmac_reg_read((u64)drv->vaddr + GMAC_TX_BC_PKTS_REG);
+	rx_pkt_num[0] = gmac_reg_read((u64)drv->vaddr + GMAC_RX_UC_PKTS_REG);
+	rx_pkt_num[1] = gmac_reg_read((u64)drv->vaddr + GMAC_RX_MC_PKTS_REG);
+	rx_pkt_num[2] = gmac_reg_read((u64)drv->vaddr + GMAC_RX_BC_PKTS_REG);
+	*tx_pkt = tx_pkt_num[0] + tx_pkt_num[1] + tx_pkt_num[2];
+	*rx_pkt = rx_pkt_num[0] + rx_pkt_num[1] + rx_pkt_num[2];
+}
 
 
 void *gmac_config(struct mac_params *mac_param)
@@ -1171,6 +1201,7 @@ void *gmac_config(struct mac_params *mac_param)
 	mac_drv->get_strings = gmac_get_strings;
 	mac_drv->mac_ioctl = NULL;
 	mac_drv->update_stats = gmac_update_stats;
+	mac_drv->get_total_txrx_pkts = gmac_get_total_pkts;
 
 	return (void *)mac_drv;
 }

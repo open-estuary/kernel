@@ -34,7 +34,7 @@
 
 struct dsaf_device;
 
-#define HILINK_MOD_VERSION "iWareV2R2C00B961"
+#define HILINK_MOD_VERSION "iWareV2R2C00B981SP1"
 
 #define MAC_GMAC_SUPPORTED \
 	(SUPPORTED_10baseT_Half \
@@ -472,7 +472,8 @@ struct mac_device {
 	int (*change_promisc)(struct mac_device *mac_dev);
 	int (*change_addr)(struct mac_device *mac_dev, char *addr);
 	int (*get_addr)(struct mac_device *mac_dev, char *addr);
-	int (*set_multi)(struct net_device *net_dev);
+	int (*set_multi)(struct mac_device *mac_dev,
+			u32 queue, const u8 addr[MAC_NUM_OCTETS_PER_ADDR], u8 en);
 	int (*uninit)(struct mac_device *mac_dev);
 	int (*ptp_enable)(struct mac_device *mac_dev);
 	int (*ptp_disable)(struct mac_device *mac_dev);

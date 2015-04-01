@@ -160,6 +160,7 @@ struct nic_rx_queue_stats {
 	u64 alloc_rx_page_failed;
 	u64 alloc_rx_buff_failed;
 	u64 csum_err;
+	u64 non_eop_descs;
 };
 
 struct nic_tx_queue_stats {
@@ -214,6 +215,7 @@ struct nic_rx_ring {
 	u32 numa_node;
 	u16 next_to_use;
 	u16 next_to_clean;
+	u16 next_to_alloc;
 
 	u64 rx_pkts;
 	u64 rx_bytes;
@@ -282,6 +284,23 @@ struct rcb_common_dev {
 	u8 comm_index;
 
 };
+
+/*
+ * FCoE requires that all Rx buffers be over 2200 bytes in length.  Since
+ * this is twice the size of a half page we need to double the page order
+ * for FCoE enabled Rx queues.
+ */
+static inline unsigned int rcb_rx_bufsz(struct nic_rx_ring *rx_ring)
+{
+	return container_of(rx_ring, struct nic_ring_pair, rx_ring)->rcb_dev.buf_size;
+	/*return 4096;*/
+}
+static inline unsigned int rcb_rx_pg_order(struct nic_rx_ring *rx_ring)
+{
+	return 0;
+}
+#define rcb_rx_pg_size(_ring) (PAGE_SIZE << rcb_rx_pg_order(_ring))
+#define RCB_RX_HDR_SIZE 256
 
 extern int rcb_commom_init_commit(void);
 extern int rcb_init(struct platform_device *pdev, enum dsaf_mode dsaf_mode);

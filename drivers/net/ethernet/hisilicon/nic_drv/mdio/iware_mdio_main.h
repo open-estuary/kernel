@@ -31,7 +31,7 @@
 #include <linux/mutex.h>
 #include <linux/spinlock_types.h>
 
-#define MDIO_MOD_VERSION "iWareV2R2C00B960"
+#define MDIO_MOD_VERSION "iWareV2R2C00B981"
 #define MDIO_DRV_NAME "Hi-MDIO"
 
 #define DSAF_MAX_CHIP_NUM 2
@@ -46,11 +46,13 @@ struct mdio_ops {
 		u8 is_c45, u8 page, u16 reg, u16 data);
 	int (*read_phy_reg)(struct mdio_device *mdio_dev, u8 phy_addr,
 		u8 is_c45, u8 page, u16 reg, u16 *data);
+	int (*reset)(struct mdio_device *mdio_dev);
 };
 
 struct mdio_device {
 	struct device *dev;
 	void *vbase;		/* mdio reg base address */
+	void *sys_vbase;		/* mdio reg base address */
 	u8 phy_class[PHY_MAX_ADDR];
 	u8 index;
 	u8 chip_id;

@@ -133,28 +133,91 @@ UINT32 HRD_Dsaf_XbarSrst(UINT32 ulDsafIndex,UINT32 ulEn)
 {
     SC_XBAR_RESET_REQ_U o_sc_xbar_reset_req;
     SC_XBAR_RESET_DREQ_U o_sc_xbar_reset_dreq;
+    SC_XBAR_RESET_ST_U o_sc_xbar_reset_st;
 
+    SC_DSAF_CLK_DIS_U o_sc_xbar_close_clk;
+    SC_DSAF_CLK_EN_U o_sc_xbar_open_clk;
+    SC_DSAF_CLK_ST_U o_sc_xbar_st_clk;
     UINT32 ulAddr = 0;
+    UINT32 ulAddr_qrset = 0;
+    UINT32 ulAddr_clk = 0;
+    UINT32 clk_mask = 0x57F;
+    UINT32 i = 0;
 
     ulAddr = HRD_Dsaf_GetAddressByIndex(ulDsafIndex);
 
     osal_printf("%d,%s:%x\r\n",__LINE__,__FUNCTION__,ulAddr);
-    memset(&o_sc_xbar_reset_req,0,sizeof(SC_XBAR_RESET_REQ_U));
-    memset(&o_sc_xbar_reset_dreq,0,sizeof(SC_XBAR_RESET_DREQ_U));
 
+    o_sc_xbar_reset_req.u32 = 0;
+    o_sc_xbar_reset_dreq.u32 = 0;
+    o_sc_xbar_reset_st.u32 = 0;
+
+    o_sc_xbar_close_clk.u32 = 0;
+    o_sc_xbar_open_clk.u32 = 0;
+    o_sc_xbar_st_clk.u32 = 0;
     if(0 == ulEn)
     {
-         ulAddr += (DSAF_SUB_SC_XBAR_RESET_REQ_REG - HRD_DSAF0_ADDRESS);
+         //ulAddr_qrset = ulAddr + (DSAF_SUB_SC_XBAR_RESET_REQ_REG - HRD_DSAF0_ADDRESS);
          o_sc_xbar_reset_req.bits.xbar_srst_req = 1;
-         DSAF_SUB_WRITE_REG(ulAddr,0,o_sc_xbar_reset_req.u32);
+         //DSAF_SUB_WRITE_REG(ulAddr_qrset,0,o_sc_xbar_reset_req.u32);
+	 DSAF_SUB_WRITE_REG(DSAF_SUB_SC_XBAR_RESET_REQ_REG,0,o_sc_xbar_reset_req.u32);
+	 i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "XBAR reset over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		ulAddr_qrset = ulAddr + DSAF_SUB_SC_XBAR_RESET_ST_REG - HRD_DSAF0_ADDRESS;
+		o_sc_xbar_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_XBAR_RESET_ST_REG,0);
+	} while(1 != (0x1 &o_sc_xbar_reset_st.u32));
     }
     else
     {
-        ulAddr += (DSAF_SUB_SC_XBAR_RESET_DREQ_REG - HRD_DSAF0_ADDRESS);
+    	ulAddr_clk = ulAddr + DSAF_SUB_SC_DSAF_CLK_DIS_REG - HRD_DSAF0_ADDRESS;
+	o_sc_xbar_close_clk.u32 = clk_mask;
+	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_DSAF_CLK_DIS_REG,0,o_sc_xbar_close_clk.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "close Xbar clock over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		ulAddr_clk = ulAddr + DSAF_SUB_SC_DSAF_CLK_ST_REG - HRD_DSAF0_ADDRESS;
+		o_sc_xbar_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_DSAF_CLK_ST_REG,0);
+	} while(0 != (clk_mask &o_sc_xbar_st_clk.u32));
+        ulAddr_qrset = ulAddr + (DSAF_SUB_SC_XBAR_RESET_DREQ_REG - HRD_DSAF0_ADDRESS);
         o_sc_xbar_reset_dreq.bits.xbar_srst_dreq = 1;
-        DSAF_SUB_WRITE_REG(ulAddr,0,o_sc_xbar_reset_dreq.u32);
+        DSAF_SUB_WRITE_REG(DSAF_SUB_SC_XBAR_RESET_DREQ_REG,0,o_sc_xbar_reset_dreq.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "XBAR dreset over time!\n");
+				    return NIC_RESET_ERROR;
     }
-
+		i++;
+		ndelay(NDELAY_TIME);
+		ulAddr_clk = ulAddr + DSAF_SUB_SC_XBAR_RESET_ST_REG - HRD_DSAF0_ADDRESS;
+		o_sc_xbar_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_XBAR_RESET_ST_REG,0);
+	} while(0 != (0x1 &o_sc_xbar_reset_st.u32));
+	ulAddr_clk = ulAddr + DSAF_SUB_SC_DSAF_CLK_EN_REG - HRD_DSAF0_ADDRESS;
+	o_sc_xbar_open_clk.u32 = clk_mask;
+	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_DSAF_CLK_EN_REG,0,o_sc_xbar_open_clk.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "open Xbar clock over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		ulAddr_clk = ulAddr + DSAF_SUB_SC_DSAF_CLK_ST_REG - HRD_DSAF0_ADDRESS;
+		o_sc_xbar_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_DSAF_CLK_ST_REG,0);
+	} while(0 == (clk_mask & o_sc_xbar_st_clk.u32));
+    }
     return OS_SUCCESS;
 }
 
@@ -178,26 +241,86 @@ UINT32 HRD_Dsaf_NtSrst(UINT32 ulDsafIndex,UINT32 ulEn)
 {
     SC_NT_RESET_REQ_U o_sc_nt_reset_req;
     SC_NT_RESET_DREQ_U o_sc_nt_reset_dreq;
+    SC_NT_RESET_ST_U o_sc_nt_reset_st;
+    SC_NT_CLK_EN_U o_sc_nt_open_clk;
+    SC_NT_CLK_DIS_U o_sc_nt_close_clk;
+    SC_NT_CLK_ST_U o_sc_nt_st_clk;
     UINT32 ulAddr = 0;
+    UINT32 ulAddr_qrset = 0;
+    UINT32 ulAddr_clk = 0;
+    UINT32 i = 0;
 
     ulAddr = HRD_Dsaf_GetAddressByIndex(ulDsafIndex);
 
-    memset(&o_sc_nt_reset_req,0,sizeof(SC_NT_RESET_REQ_U));
-    memset(&o_sc_nt_reset_dreq,0,sizeof(SC_NT_RESET_DREQ_U));
+    o_sc_nt_reset_req.u32 = 0;
+    o_sc_nt_reset_dreq.u32 = 0;
+    o_sc_nt_reset_st.u32 = 0;
 
+    o_sc_nt_open_clk.u32 = 0;
+    o_sc_nt_close_clk.u32 = 0;
+    o_sc_nt_st_clk.u32 = 0;
     if(0 == ulEn)
     {
-         ulAddr += (DSAF_SUB_SC_NT_RESET_REQ_REG - HRD_DSAF0_ADDRESS);
+         ulAddr_qrset =ulAddr_qrset + (DSAF_SUB_SC_NT_RESET_REQ_REG - HRD_DSAF0_ADDRESS);
          o_sc_nt_reset_req.bits.nt_srst_req = 1;
-         DSAF_SUB_WRITE_REG(ulAddr,0,o_sc_nt_reset_req.u32);
+         DSAF_SUB_WRITE_REG(DSAF_SUB_SC_NT_RESET_REQ_REG,0,o_sc_nt_reset_req.u32);
+	 i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "NT reset over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		ulAddr_qrset = ulAddr + DSAF_SUB_SC_NT_RESET_ST_REG - HRD_DSAF0_ADDRESS;
+		o_sc_nt_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_NT_RESET_ST_REG,0);
+	} while(0x1 != (0x1 &o_sc_nt_reset_st.u32));
     }
     else
     {
-        ulAddr += (DSAF_SUB_SC_NT_RESET_DREQ_REG - HRD_DSAF0_ADDRESS);
+	ulAddr_clk = ulAddr + DSAF_SUB_SC_NT_CLK_DIS_REG - HRD_DSAF0_ADDRESS;
+	o_sc_nt_close_clk.bits.clk_nt_dsb = 1;
+	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_NT_CLK_DIS_REG,0,o_sc_nt_close_clk.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "close NT clock over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		ulAddr_clk = ulAddr + DSAF_SUB_SC_NT_CLK_ST_REG - HRD_DSAF0_ADDRESS;
+		o_sc_nt_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_NT_CLK_ST_REG,0);
+	} while(0 != (0x1 & o_sc_nt_st_clk.u32));
+        ulAddr_qrset =  ulAddr + (DSAF_SUB_SC_NT_RESET_DREQ_REG - HRD_DSAF0_ADDRESS);
         o_sc_nt_reset_dreq.bits.nt_srst_dreq = 1;
-        DSAF_SUB_WRITE_REG(ulAddr,0,o_sc_nt_reset_dreq.u32);
+        DSAF_SUB_WRITE_REG(DSAF_SUB_SC_NT_RESET_DREQ_REG,0,o_sc_nt_reset_dreq.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "NT dreset over time!\n");
+				    return NIC_RESET_ERROR;
     }
-
+		i++;
+		ndelay(NDELAY_TIME);
+		ulAddr_qrset = ulAddr + DSAF_SUB_SC_NT_RESET_ST_REG - HRD_DSAF0_ADDRESS;
+		o_sc_nt_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_NT_RESET_ST_REG,0);
+	} while(0 != (0x1 &o_sc_nt_reset_st.u32));
+	ulAddr_clk = ulAddr + DSAF_SUB_SC_NT_CLK_EN_REG - HRD_DSAF0_ADDRESS;
+	o_sc_nt_open_clk.bits.clk_nt_enb = 1;
+	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_NT_CLK_EN_REG,0,o_sc_nt_open_clk.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "open NT clock over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		ulAddr_clk = ulAddr + DSAF_SUB_SC_NT_CLK_ST_REG - HRD_DSAF0_ADDRESS;
+		o_sc_nt_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_NT_CLK_ST_REG,0);
+	} while(1 != (0x1 & o_sc_nt_st_clk.u32));
+    }
     return OS_SUCCESS;
 }
 
@@ -222,30 +345,89 @@ UINT32 HRD_Dsaf_XgeSrstByPort(UINT32 ulPort, UINT32 ulEn)
 {
     SC_XGE_RESET_REQ_U o_sc_xge_reset_req;
     SC_XGE_RESET_DREQ_U o_sc_xge_reset_dreq;
+    SC_XGE_RESET_ST_U o_sc_xge_reset_st;
+    UINT32 xge_reset_mask = 0x2082082 <<ulPort;
 
+    SC_XGE_CLK_DIS_U o_sc_xge_close_clk;
+    SC_XGE_CLK_EN_U o_sc_xge_open_clk;
+    SC_XGE_CLK_ST_U o_sc_xge_st_clk;
 
-    memset(&o_sc_xge_reset_req,0,sizeof(SC_XGE_RESET_REQ_U));
-    memset(&o_sc_xge_reset_dreq,0,sizeof(SC_XGE_RESET_DREQ_U));
+    UINT32 i = 0;
+    UINT32 xge_clk_mask = 0x82 << ulPort;
 
     if(ulPort >= PV660_XGE_NUM)
     {
         return OS_FAIL;
     }
+    o_sc_xge_reset_req.u32 = 0;
+    o_sc_xge_reset_dreq.u32 = 0;
+    o_sc_xge_reset_st.u32 = 0;
 
 
+    o_sc_xge_close_clk.u32 = 0;
+    o_sc_xge_open_clk.u32 = 0;
+    o_sc_xge_st_clk.u32 = 0;
     if(0 == ulEn)
     {
         o_sc_xge_reset_req.bits.xge_cfg_srst_req = 0x1;
-        o_sc_xge_reset_req.u32 |= 0x2082082 <<ulPort;
+        o_sc_xge_reset_req.u32 |= xge_reset_mask;
         DSAF_SUB_WRITE_REG(DSAF_SUB_SC_XGE_RESET_REQ_REG,0,o_sc_xge_reset_req.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "XGE reset over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		o_sc_xge_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_XGE_RESET_ST_REG,0);
+	} while(xge_reset_mask != (xge_reset_mask & o_sc_xge_reset_st.u32)
+		|| 0x1 !=(0x1 & o_sc_xge_reset_st.u32));
     }
     else
     {
+	o_sc_xge_close_clk.bits.clk_xge_cfg_dsb = 1;
+	o_sc_xge_close_clk.u32 |= xge_clk_mask;
+	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_XGE_CLK_DIS_REG,0,o_sc_xge_close_clk.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "close Xge clock over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		o_sc_xge_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_XGE_CLK_ST_REG, 0);
+	} while( 0 != (o_sc_xge_st_clk.u32 & xge_clk_mask)||
+		0 != (0x1 & o_sc_xge_st_clk.bits.clk_xge_cfg_st));
         o_sc_xge_reset_dreq.bits.xge_cfg_srst_dreq = 0x1;
         o_sc_xge_reset_dreq.u32 |= 0x2082082 <<ulPort;
         DSAF_SUB_WRITE_REG(DSAF_SUB_SC_XGE_RESET_DREQ_REG,0,o_sc_xge_reset_dreq.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "XGE dreset over time!\n");
+				    return NIC_RESET_ERROR;
     }
-
+		i++;
+		ndelay(NDELAY_TIME);
+		o_sc_xge_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_XGE_RESET_ST_REG,0);
+	} while(0 != (xge_reset_mask &o_sc_xge_reset_st.u32));
+	o_sc_xge_open_clk.bits.clk_xge_cfg_enb = 1;
+	o_sc_xge_open_clk.u32 |= xge_clk_mask;
+	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_XGE_CLK_EN_REG,0,o_sc_xge_open_clk.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "open Xge clock over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		o_sc_xge_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_XGE_CLK_ST_REG, 0);
+	} while( xge_clk_mask != (o_sc_xge_st_clk.u32 & xge_clk_mask)||
+		1 !=(0x1 &  o_sc_xge_st_clk.bits.clk_xge_cfg_st));
+    }
     return OS_SUCCESS;
 }
 
@@ -272,22 +454,47 @@ UINT32 HRD_Dsaf_GeSrstByPort(UINT32 ulPort, UINT32 ulEn)
     SC_GE_RESET_REQ1_U o_sc_ge_reset_req1;
     SC_GE_RESET_DREQ1_U o_sc_ge_reset_dreq1;
 
+    SC_GE_RESET_ST0_U o_sc_ge_reset_st0;
+    SC_GE_RESET_ST1_U o_sc_ge_reset_st1;
     /* for GE6/GE7 needed ppe rest , GE6/GE7 can vld, by lisheng***/
     SC_PPE_RESET_REQ_U o_sc_ppe_reset_req;
     SC_PPE_RESET_DREQ_U o_sc_ppe_reset_dreq;
+    SC_PPE_RESET_ST_U o_sc_ppe_reset_st;
 
+    SC_GE_CLK_DIS_U o_sc_ge_close_clk;
+    SC_GE_CLK_EN_U o_sc_ge_open_clk;
+    SC_GE_CLK_ST_U o_sc_ge_st_clk;
+    SC_PPE_CLK_DIS_U o_sc_ppe_close_clk;
+    SC_PPE_CLK_EN_U o_sc_ppe_open_clk;
+    SC_PPE_CLK_ST_U o_sc_ppe_st_clk;
+    UINT32 i = 0;
+    UINT32 ge_clk_mask = 0x1010101<<ulPort;
+    UINT32 ppe_clk_mask = (1 << ulPort);
+    UINT32 ge_reset_st05_0 = 0x1041041 <<ulPort;
+    UINT32 ge_reset_st05_1 = 0x1 <<ulPort;
+    UINT32 ge_reset_st67 = 0x15540 <<(ulPort-6);
+    UINT32 ppe_reset_st = (0x100 << (ulPort-6));
     if(ulPort >= PV660_GE_NUM)
     {
         return OS_FAIL;
     }
 
-    memset(&o_sc_ge_reset_req0,0,sizeof(SC_GE_RESET_REQ0_U));
-    memset(&o_sc_ge_reset_dreq0,0,sizeof(SC_GE_RESET_DREQ0_U));
-    memset(&o_sc_ge_reset_req1,0,sizeof(SC_GE_RESET_REQ1_U));
-    memset(&o_sc_ge_reset_dreq1,0,sizeof(SC_GE_RESET_DREQ1_U));
-    memset(&o_sc_ppe_reset_req,0,sizeof(SC_PPE_RESET_REQ_U));
-    memset(&o_sc_ppe_reset_dreq,0,sizeof(SC_PPE_RESET_DREQ_U));
+    o_sc_ge_reset_req0.u32 = 0;
+    o_sc_ge_reset_dreq0.u32 = 0;
+    o_sc_ge_reset_req1.u32 = 0;
+    o_sc_ge_reset_dreq1.u32 = 0;
+    o_sc_ppe_reset_req.u32 = 0;
+    o_sc_ppe_reset_dreq.u32 = 0;
 
+    o_sc_ge_reset_st0.u32 = 0;
+    o_sc_ge_reset_st1.u32 = 0;
+    o_sc_ppe_reset_st.u32 = 0;
+    o_sc_ge_close_clk.u32 = 0;
+    o_sc_ge_open_clk.u32 = 0;
+    o_sc_ge_st_clk.u32 = 0;
+    o_sc_ppe_close_clk.u32 = 0;
+    o_sc_ppe_open_clk.u32 = 0;
+    o_sc_ppe_st_clk.u32 = 0;
     if(ulPort < 6)
     {
         if(0 == ulEn)
@@ -298,15 +505,63 @@ UINT32 HRD_Dsaf_GeSrstByPort(UINT32 ulPort, UINT32 ulEn)
 
             o_sc_ge_reset_req0.u32 |= 0x1041041 <<ulPort;
             DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_RESET_REQ0_REG,0,o_sc_ge_reset_req0.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "GE reset over time!\n");
+					    return NIC_RESET_ERROR;
+        }
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ge_reset_st0.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_GE_RESET_ST0_REG,0);
+			o_sc_ge_reset_st1.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_GE_RESET_ST1_REG,0);
+		} while(ge_reset_st05_0 != (ge_reset_st05_0 &o_sc_ge_reset_st0.u32) ||
+		ge_reset_st05_1 != (ge_reset_st05_1& o_sc_ge_reset_st1.u32));
         }
         else
         {
+		o_sc_ge_close_clk.u32 |= ge_clk_mask;
+		DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_CLK_DIS_REG,0,o_sc_ge_close_clk.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "close GE clock over time!\n");
+					    return NIC_RESET_ERROR;
+			}
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ge_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_GE_CLK_ST_REG, 0);
+		} while(0 != (ge_clk_mask & o_sc_ge_st_clk.u32));
             /* 先解复位整体 */
             o_sc_ge_reset_dreq0.u32 |= 0x1041041 <<ulPort;
             DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_RESET_DREQ0_REG,0,o_sc_ge_reset_dreq0.u32);
 
             o_sc_ge_reset_dreq1.u32 |= 0x1 <<ulPort;
             DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_RESET_DREQ1_REG,0,o_sc_ge_reset_dreq1.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "GE dreset over time!\n");
+					    return NIC_RESET_ERROR;
+        }
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ge_reset_st0.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_GE_RESET_ST0_REG,0);
+			o_sc_ge_reset_st1.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_GE_RESET_ST1_REG,0);
+		} while(0 != (ge_reset_st05_0 &o_sc_ge_reset_st0.u32) ||
+		0 != (ge_reset_st05_1 & o_sc_ge_reset_st1.u32));
+		o_sc_ge_open_clk.u32 |= ge_clk_mask;
+		DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_CLK_EN_REG,0,o_sc_ge_open_clk.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "open GE clock over time!\n");
+					    return NIC_RESET_ERROR;
+			}
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ge_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_GE_CLK_ST_REG, 0);
+		} while(ge_clk_mask != (ge_clk_mask & o_sc_ge_st_clk.u32));
         }
     }
     else
@@ -316,33 +571,114 @@ UINT32 HRD_Dsaf_GeSrstByPort(UINT32 ulPort, UINT32 ulEn)
             /* 先复位fifo */
             o_sc_ge_reset_req1.u32 |= 0x15540 <<(ulPort-6);
             DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_RESET_REQ1_REG,0,o_sc_ge_reset_req1.u32);
-
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "GE reset over time!\n");
+					    return NIC_RESET_ERROR;
+			}
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ge_reset_st1.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_GE_RESET_ST1_REG,0);
+		} while(ge_reset_st67 != (ge_reset_st67 & o_sc_ge_reset_st1.u32));
             //o_sc_ge_reset_req0.u32 |= 0x1041041 <<ulPort;
             //DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_RESET_REQ0_REG,0,o_sc_ge_reset_req0.u32);
         }
         else
         {
             /* 先解复位整体 */
-            //o_sc_ge_reset_dreq0.u32 |= 0x1041041 <<ulPort;
-            //DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_RESET_DREQ0_REG,0,o_sc_ge_reset_dreq0.u32);
-
+		o_sc_ge_close_clk.u32 |= ge_clk_mask;
+		DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_CLK_DIS_REG,0,o_sc_ge_close_clk.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "close GE clock over time!\n");
+					    return NIC_RESET_ERROR;
+			}
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ge_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_GE_CLK_ST_REG, 0);
+		} while(0 != (ge_clk_mask & o_sc_ge_st_clk.u32));
             o_sc_ge_reset_dreq1.u32 |= 0x15540 <<(ulPort-6);
             DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_RESET_DREQ1_REG,0,o_sc_ge_reset_dreq1.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "GE dreset over time!\n");
+					    return NIC_RESET_ERROR;
         }
-
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ge_reset_st1.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_GE_RESET_ST1_REG,0);
+		} while(0 != (ge_reset_st67 & o_sc_ge_reset_st1.u32));
+		o_sc_ge_open_clk.u32 |= ge_clk_mask;
+		DSAF_SUB_WRITE_REG(DSAF_SUB_SC_GE_CLK_EN_REG,0,o_sc_ge_open_clk.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "open GE clock over time!\n");
+					    return NIC_RESET_ERROR;
+			}
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ge_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_GE_CLK_ST_REG, 0);
+		} while(ge_clk_mask != (ge_clk_mask & o_sc_ge_st_clk.u32));
+	}
         if(0 == ulEn)
         {
-            o_sc_ppe_reset_req.u32 |= (0x100 << (ulPort-6));
+		o_sc_ppe_reset_req.u32 |= ppe_reset_st;
             DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_RESET_REQ_REG,0,o_sc_ppe_reset_req.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "PPE reset over time!\n");
+					    return NIC_RESET_ERROR;
         }
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_RESET_ST_REG,0);
+		} while(ppe_reset_st != (ppe_reset_st & o_sc_ppe_reset_st.u32));
+	}
         else
         {
+		o_sc_ppe_close_clk.u32 |= ppe_clk_mask;
+		DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_CLK_DIS_REG,0,o_sc_ppe_close_clk.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "close PPE clock over time!\n");
+					    return NIC_RESET_ERROR;
+			}
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_CLK_ST_REG, 0);
+		} while(0 != (ppe_clk_mask & o_sc_ppe_st_clk.u32));
             o_sc_ppe_reset_dreq.u32 |= (0x100 << (ulPort-6));
             DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_RESET_DREQ_REG,0,o_sc_ppe_reset_dreq.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "PPE reset over time!\n");
+					    return NIC_RESET_ERROR;
         }
-
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_RESET_ST_REG,0);
+		} while(0 != (ppe_reset_st & o_sc_ppe_reset_st.u32));
+		o_sc_ppe_open_clk.u32 |= ppe_clk_mask;
+		DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_CLK_EN_REG,0,o_sc_ppe_open_clk.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "open PPE clock over time!\n");
+					    return NIC_RESET_ERROR;
+			}
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_CLK_ST_REG, 0);
+		} while(ppe_clk_mask != (ppe_clk_mask & o_sc_ppe_st_clk.u32));
     }
-
+    }
     return OS_SUCCESS;
 }
 
@@ -368,28 +704,82 @@ UINT32 HRD_Dsaf_PpeSrstByPort(UINT32 ulPort,UINT32 ulEn)
 {
     SC_PPE_RESET_REQ_U o_sc_ppe_reset_req;
     SC_PPE_RESET_DREQ_U o_sc_ppe_reset_dreq;
+    SC_PPE_RESET_ST_U o_sc_ppe_reset_st;
 
+    SC_PPE_CLK_DIS_U o_sc_ppe_close_clk;
+    SC_PPE_CLK_EN_U o_sc_ppe_open_clk;
+    SC_PPE_CLK_ST_U o_sc_ppe_st_clk;
 
+    UINT32 i = 0;
+    UINT32 ppe_clk_mask = (1 << ulPort);
+    UINT32 ppe_st_mask = (1 << ulPort);
     if(ulPort >= PV660_XGE_NUM)
     {
         return OS_FAIL;
     }
 
-    memset(&o_sc_ppe_reset_req,0,sizeof(SC_PPE_RESET_REQ_U));
-    memset(&o_sc_ppe_reset_dreq,0,sizeof(SC_PPE_RESET_DREQ_U));
+    o_sc_ppe_reset_st.u32 = 0;
+    o_sc_ppe_reset_req.u32 = 0;
+    o_sc_ppe_reset_dreq.u32 = 0;
 
+    o_sc_ppe_close_clk.u32 = 0;
+    o_sc_ppe_open_clk.u32 = 0;
+    o_sc_ppe_st_clk.u32 = 0;
 
     if(0 == ulEn)
     {
-        o_sc_ppe_reset_req.u32 |= (1 << ulPort);
+        o_sc_ppe_reset_req.u32 |= ppe_st_mask;
         DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_RESET_REQ_REG,0,o_sc_ppe_reset_req.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "PPE reset over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		o_sc_ppe_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_RESET_ST_REG,0);
+	} while(ppe_st_mask != (ppe_st_mask & o_sc_ppe_reset_st.u32));
     }
     else
     {
-        o_sc_ppe_reset_dreq.u32 |= (1 << ulPort);
+	o_sc_ppe_close_clk.u32 |= ppe_clk_mask;
+	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_CLK_DIS_REG,0,o_sc_ppe_close_clk.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "close PPE%d clock over time!\n", ulPort);
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		o_sc_ppe_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_CLK_ST_REG, 0);
+	} while(0 != (ppe_clk_mask & o_sc_ppe_st_clk.u32));
+        o_sc_ppe_reset_dreq.u32 |= ppe_st_mask;
         DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_RESET_DREQ_REG,0,o_sc_ppe_reset_dreq.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "PPE reset over time!\n");
+				    return NIC_RESET_ERROR;
     }
-
+		i++;
+		ndelay(NDELAY_TIME);
+		o_sc_ppe_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_RESET_ST_REG,0);
+	} while(0 != (ppe_st_mask & o_sc_ppe_st_clk.u32));
+	o_sc_ppe_open_clk.u32 |= ppe_clk_mask;
+	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_CLK_EN_REG,0,o_sc_ppe_open_clk.u32);
+	i = 0;
+	do {
+		if(i > ST_READ_CNT) {
+			dev_info(NULL, "open PPE clock over time!\n");
+				    return NIC_RESET_ERROR;
+		}
+		i++;
+		ndelay(NDELAY_TIME);
+		o_sc_ppe_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_CLK_ST_REG, 0);
+	} while(ppe_clk_mask != (ppe_clk_mask & o_sc_ppe_st_clk.u32));
+    }
     return OS_SUCCESS;
 }
 
@@ -651,18 +1041,71 @@ UINT32 HRD_Dsaf_PpeComSrst(UINT32 ulCommId, UINT32 ulEn)
         SC_RCB_PPE_COM_RESET_REQ_U o_sc_ppe_com_reset_req;
         SC_RCB_PPE_COM_RESET_DREQ_U o_sc_ppe_com_reset_dreq;
 
-        memset(&o_sc_ppe_com_reset_req,0,sizeof(SC_RCB_PPE_COM_RESET_REQ_U));
-        memset(&o_sc_ppe_com_reset_dreq,0,sizeof(SC_RCB_PPE_COM_RESET_DREQ_U));
+        SC_RCB_PPE_COM_RESET_ST_U o_sc_ppe_com_reset_st;
+	SC_RCB_PPE_COM_CLK_EN_U o_sc_ppe_com_open_clk;
+	SC_RCB_PPE_COM_CLK_DIS_U o_sc_ppe_com_close_clk;
+	SC_RCB_PPE_COM_CLK_ST_U o_sc_ppe_com_st_clk;
+	UINT32 i = 0;
 
+	o_sc_ppe_com_reset_req.u32 = 0;
+	o_sc_ppe_com_reset_dreq.u32 = 0;
+	o_sc_ppe_com_reset_st.u32 = 0;
+	o_sc_ppe_com_close_clk.u32 = 0;
+   	o_sc_ppe_com_open_clk.u32 = 0;
+   	o_sc_ppe_com_st_clk.u32 = 0;
         if(0 == ulEn)
         {
              o_sc_ppe_com_reset_req.bits.rcb_ppe_com_srst_req = 1;
              DSAF_SUB_WRITE_REG(DSAF_SUB_SC_RCB_PPE_COM_RESET_REQ_REG,0,o_sc_ppe_com_reset_req.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "PPE reset over time!\n");
+					    return NIC_RESET_ERROR;
+        }
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_com_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_RCB_PPE_COM_RESET_ST_REG,0);
+		} while(0x1 != (0x1 & o_sc_ppe_com_reset_st.u32));
         }
         else
         {
+		o_sc_ppe_com_close_clk.bits.clk_rcb_ppe_com_dsb = 1;
+            	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_RCB_PPE_COM_CLK_DIS_REG,0,o_sc_ppe_com_close_clk.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "close PPE com clock over time!\n");
+					    return NIC_RESET_ERROR;
+			}
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_com_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_RCB_PPE_COM_CLK_ST_REG, 0);
+		} while(0 != (0x1 & o_sc_ppe_com_st_clk.u32));
             o_sc_ppe_com_reset_dreq.bits.rcb_ppe_com_srst_dreq = 1;
             DSAF_SUB_WRITE_REG(DSAF_SUB_SC_RCB_PPE_COM_RESET_DREQ_REG,0,o_sc_ppe_com_reset_dreq.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "PPE dreset over time!\n");
+					    return NIC_RESET_ERROR;
+        }
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_com_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_RCB_PPE_COM_RESET_ST_REG,0);
+		} while(0 != (0x1 & o_sc_ppe_com_reset_st.u32));
+		o_sc_ppe_com_open_clk.bits.clk_rcb_ppe_com_enb = 1;
+            	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_RCB_PPE_COM_CLK_EN_REG,0,o_sc_ppe_com_open_clk.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "open PPE com clock over time!\n");
+					    return NIC_RESET_ERROR;
+			}
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_com_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_RCB_PPE_COM_CLK_ST_REG, 0);
+		} while(1 != (0x1 & o_sc_ppe_com_st_clk.u32));
         }
     }
     /**调试ppe comm 编号为 1 2*/
@@ -671,21 +1114,76 @@ UINT32 HRD_Dsaf_PpeComSrst(UINT32 ulCommId, UINT32 ulEn)
         SC_PPE_RESET_REQ_U o_sc_ppe_reset_req;
         SC_PPE_RESET_DREQ_U o_sc_ppe_reset_dreq;
 
-        memset(&o_sc_ppe_reset_req,0,sizeof(SC_PPE_RESET_REQ_U));
-        memset(&o_sc_ppe_reset_dreq,0,sizeof(SC_PPE_RESET_DREQ_U));
+	SC_PPE_RESET_ST_U o_sc_ppe_reset_st;
 
+	SC_PPE_CLK_DIS_U o_sc_ppe_close_clk;
+	SC_PPE_CLK_EN_U o_sc_ppe_open_clk;
+	SC_PPE_CLK_ST_U o_sc_ppe_st_clk;
+	UINT32 i = 0;
+	UINT32 ppe_reset_st = (0x100 << (ulCommId - 1));
+	UINT32 ppe_clk_st = (0x40 << (ulCommId - 1));
+
+	 o_sc_ppe_reset_st.u32 = 0;
+	 o_sc_ppe_reset_req.u32 = 0;
+	 o_sc_ppe_reset_dreq.u32 = 0;
+	 o_sc_ppe_close_clk.u32 = 0;
+	 o_sc_ppe_open_clk.u32 = 0;
+	 o_sc_ppe_st_clk.u32 = 0;
         if(0 == ulEn)
         {
-            o_sc_ppe_reset_req.u32 |= (0x100 << (ulCommId - 1));
+	    	o_sc_ppe_reset_req.u32 |= ppe_reset_st;
             DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_RESET_REQ_REG,0,o_sc_ppe_reset_req.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "PPE reset over time!\n");
+					    return NIC_RESET_ERROR;
         }
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_RESET_ST_REG,0);
+		} while(ppe_reset_st != (ppe_reset_st & o_sc_ppe_reset_st.u32));
+	}
         else
         {
+		o_sc_ppe_close_clk.u32 = ppe_clk_st;
+	    	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_CLK_DIS_REG,0,o_sc_ppe_close_clk.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "close PPE clock over time!\n");
+					    return NIC_RESET_ERROR;
+			}
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_CLK_ST_REG, 0);
+		} while(0 != (ppe_clk_st & o_sc_ppe_st_clk.u32));
             o_sc_ppe_reset_dreq.u32 |= (0x100 << (ulCommId - 1));
             DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_RESET_DREQ_REG,0,o_sc_ppe_reset_dreq.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "PPE reset over time!\n");
+					    return NIC_RESET_ERROR;
         }
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_reset_st.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_RESET_ST_REG,0);
+		} while(0 != (ppe_reset_st & o_sc_ppe_reset_st.u32));
+		o_sc_ppe_open_clk.u32 = ppe_clk_st;
+	    	DSAF_SUB_WRITE_REG(DSAF_SUB_SC_PPE_CLK_EN_REG,0,o_sc_ppe_open_clk.u32);
+		i = 0;
+		do {
+			if(i > ST_READ_CNT) {
+				dev_info(NULL, "open PPE clock over time!\n");
+					    return NIC_RESET_ERROR;
     }
-
+			i++;
+			ndelay(NDELAY_TIME);
+			o_sc_ppe_st_clk.u32 = DSAF_SUB_READ_REG(DSAF_SUB_SC_PPE_CLK_ST_REG, 0);
+		} while(ppe_clk_st != (ppe_clk_st & o_sc_ppe_st_clk.u32));
+	}
+    }
     return OS_SUCCESS;
 }
 
