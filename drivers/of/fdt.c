@@ -851,25 +851,79 @@ u64 __init dt_mem_next_cell(int s, const __be32 **cellp)
 }
 
 #ifdef CONFIG_COPYCAT_NUMA
-void __init early_init_dt_add_memory_arch_numa(u64 base, u64 size, int nid)
+
+#define MEM_NUMA_MAX_BLOCKS		32
+static int mem_numa_blks;
+static u64 mem_numa_info[2 * MEM_NUMA_MAX_BLOCKS];
+
+int __init early_init_dt_scan_mem_numa(unsigned long node, const char *uname,
+				     int depth, void *data)
 {
-	const u64 phys_offset = __pa(PAGE_OFFSET);
+	const __be32 *reg, *endp;
+	int l;
+	u32 i = 0;
 
-	base &= PAGE_MASK;
-	size &= PAGE_MASK;
-	if (base + size < phys_offset) {
-		pr_warn("Ignoring memory block 0x%llx - 0x%llx\n",
-			   base, base + size);
-		return;
-	}
-	if (base < phys_offset) {
-		pr_warn("Ignoring memory range 0x%llx - 0x%llx\n",
-			   base, phys_offset);
-		size -= phys_offset - base;
-		base = phys_offset;
+	if (depth != 1 || strcmp(uname, "memory-numa@0") != 0)
+		return 0;
+
+	reg = of_get_flat_dt_prop(node, "reg", &l);
+	if (reg == NULL)
+		return 0;
+
+	endp = reg + (l / sizeof(__be32));
+
+	while ((endp - reg) >= dt_root_addr_cells + dt_root_size_cells) {
+		int nid;
+		u64 base, size;
+
+		base = dt_mem_next_cell(dt_root_addr_cells, &reg);
+		size = dt_mem_next_cell(dt_root_size_cells, &reg);
+
+		if (size == 0)
+			continue;
+		pr_debug(" - %llx ,  %llx\n", (unsigned long long)base,
+		    (unsigned long long)size);
+
+		nid  = 0xff & base;
+		if (nid > 3)
+			pr_warn("bad nid=%d, 0x%llx\n", nid, base);
+		else
+			node_set_online(nid);
+
+		mem_numa_info[(2 * i) + 0] = base;
+		mem_numa_info[(2 * i) + 1] = size;
+
+		if (++i >= MEM_NUMA_MAX_BLOCKS) {
+			pr_warn("too many memory blocks in memory-numa@0\n");
+			break;
+		}
 	}
 
-	memblock_add_node(base, size, nid);
+	mem_numa_blks = i;
+
+	return 0;
+}
+
+void __init early_memblock_add_numa(u64 base, u64 size)
+{
+	int i, nid;
+	u64 m_base, m_size, blk_size;
+
+	for (i = 0; i < mem_numa_blks; i++) {
+		m_base = mem_numa_info[(2 * i) + 0];
+		m_size = mem_numa_info[(2 * i) + 1];
+
+		nid  = (int)(0xff & m_base);
+		m_base = (m_base >> 8) << 8;
+
+		if ((base >= m_base) && ((m_base + m_size) >= base)) {
+			blk_size = min(size, (m_base + m_size - base));
+			memblock_add_node(base, blk_size, nid);
+		} else if ((m_base >= base) && ((base + size) >= m_base)) {
+			blk_size = min(m_size, (base + size - m_base));
+			memblock_add_node(m_base, blk_size, nid);
+		}
+	}
 }
 #endif
 
@@ -905,26 +959,6 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 	pr_debug("memory scan node %s, reg size %d, data: %x %x %x %x,\n",
 	    uname, l, reg[0], reg[1], reg[2], reg[3]);
 
-#ifdef CONFIG_COPYCAT_NUMA
-	while ((endp - reg) >= dt_root_addr_cells + dt_root_size_cells) {
-		u64 base, size, nid;
-
-		base = dt_mem_next_cell(dt_root_addr_cells, &reg);
-		size = dt_mem_next_cell(dt_root_size_cells, &reg);
-
-		nid  = 0xff & base;
-		base = (base >> 8) << 8;
-
-		node_set_online(nid);
-
-		if (size == 0)
-			continue;
-		pr_debug(" - %llx ,  %llx\n", (unsigned long long)base,
-		    (unsigned long long)size);
-
-		early_init_dt_add_memory_arch_numa(base, size, nid);
-	}
-#else
 	while ((endp - reg) >= (dt_root_addr_cells + dt_root_size_cells)) {
 		u64 base, size;
 
@@ -938,7 +972,6 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 
 		early_init_dt_add_memory_arch(base, size);
 	}
-#endif
 
 	return 0;
 }
@@ -1021,7 +1054,12 @@ void __init __weak early_init_dt_add_memory_arch(u64 base, u64 size)
 		size -= phys_offset - base;
 		base = phys_offset;
 	}
+
+	#ifdef CONFIG_COPYCAT_NUMA
+	early_memblock_add_numa(base, size);
+	#else
 	memblock_add(base, size);
+	#endif
 }
 
 int __init __weak early_init_dt_reserve_memory_arch(phys_addr_t base,
@@ -1074,6 +1112,10 @@ void __init early_init_dt_scan_nodes(void)
 
 	/* Initialize {size,address}-cells info */
 	of_scan_flat_dt(early_init_dt_scan_root, NULL);
+
+	#ifdef CONFIG_COPYCAT_NUMA
+	of_scan_flat_dt(early_init_dt_scan_mem_numa, NULL);
+	#endif
 
 	/* Setup memory, calling early_init_dt_add_memory_arch */
 	of_scan_flat_dt(early_init_dt_scan_memory, NULL);
