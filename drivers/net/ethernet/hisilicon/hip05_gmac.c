@@ -1024,15 +1024,15 @@ static int hip05_dev_probe(struct platform_device *pdev)
 		}
 	}
 
-	ret = devm_request_irq(dev, priv->rx_irq, hip05_interrupt,
-			       0, pdev->name, ndev);
+	ret = request_irq(priv->rx_irq, hip05_interrupt,
+			  IRQF_SHARED, pdev->name, ndev);
 	if (ret) {
 		dev_err(dev, "devm_request_irq rx ailed\n");
 		goto out_phy_node;
 	}
 	disable_irq(priv->rx_irq);
-	ret = devm_request_irq(dev, priv->tx_irq, hip05_interrupt,
-			       0, pdev->name, ndev);
+	ret = request_irq(priv->tx_irq, hip05_interrupt,
+			  IRQF_SHARED, pdev->name, ndev);
 	if (ret) {
 		dev_err(dev, "devm_request_irq tx failed\n");
 		goto out_phy_node;
@@ -1100,6 +1100,11 @@ static int hip05_dev_remove(struct platform_device *pdev)
 
 	netif_napi_del(&priv->napi);
 	unregister_netdev(ndev);
+
+	free_irq(priv->tx_irq, ndev);
+	free_irq(priv->rx_irq, ndev);
+
+	mbi_free_irqs(&pdev->dev,  priv->tx_irq, 2);
 
 	hip05_free_ring(ndev, priv->dev);
 	of_node_put(priv->phy_node);
