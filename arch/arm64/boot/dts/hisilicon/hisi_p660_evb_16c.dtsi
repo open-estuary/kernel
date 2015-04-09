@@ -298,7 +298,11 @@
 		reg = <0x0 0x6d000000 0 0x10000>,	/* GICD */
 		      <0x0 0x6d100000 0 0x300000>,	/* GICR c */
 		      /*<0x0 0x4d100000 0 0x300000>,	GICR a */
-		      <0x0 0xfe000000 0 0x10000>;	/* GICC */
+		      <0x0 0xfe000000 0 0x10000>,	/* GICC */
+		      <0x0 0xfe010000 0 0x10000>,       /* GICH */
+		      <0x0 0xfe020000 0 0x10000>;       /* GICV */
+
+		interrupts = <1 9 0xff04>;
 
 		its_pc: interrupt-controller@6c000000 {
 			compatible = "arm,gic-v3-its";
