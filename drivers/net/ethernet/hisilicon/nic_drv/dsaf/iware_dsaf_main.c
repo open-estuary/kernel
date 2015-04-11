@@ -419,7 +419,6 @@ static void dsaf_irq_uninit(struct dsaf_device *dsaf_dev)
  */
 static int dsaf_probe(struct platform_device *pdev)
 {
-	s32 irq = -1;
 	int ret;
 	s32 dev_id = -1;
 	struct dsaf_device *dsaf_dev = NULL;

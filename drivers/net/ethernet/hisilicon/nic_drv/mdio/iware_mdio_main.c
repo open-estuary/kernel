@@ -379,5 +379,4 @@ module_exit(mdio_module_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Huawei Tech. Co., Ltd.");
 MODULE_DESCRIPTION("Hisilicon MDIO driver");
-/* MODULE_VERSION("V0.1"); */
-MODULE_VERSION(MDIO_MOD_VERSION "," __DATE__ "," __TIME__);
+MODULE_VERSION(MDIO_MOD_VERSION);

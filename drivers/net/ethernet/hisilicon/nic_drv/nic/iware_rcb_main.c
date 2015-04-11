@@ -786,7 +786,6 @@ request_rx_irq_fail:
 	ic_disable_msi(rcb_dev->virq[RCB_IRQ_IDX_RX]);
 #endif
 	rcb_dev->virq[RCB_IRQ_IDX_RX] = 0;
-enable_msi_rx_fail:
 	free_irq(rcb_dev->virq[RCB_IRQ_IDX_TX], ring);
 
 request_tx_irq_fail:
