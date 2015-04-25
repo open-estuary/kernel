@@ -241,12 +241,27 @@ static int mbigen_set_type(struct irq_data *d, unsigned int type)
 	return 0;
 }
 
+static int mbigen_set_affinity(struct irq_data *data,
+			       const struct cpumask *mask,
+			       bool force)
+{
+	struct mbi_msg msg;
+	int ret;
+
+	ret = irq_chip_set_affinity_parent(data, mask, force);
+	if (ret >= 0 && ret != IRQ_SET_MASK_OK_DONE)
+		mbigen_write_msg(data, &msg);
+
+	return ret;
+}
+
 static struct irq_chip mbigen_chip = {
 	.name			= "Hisilicon MBIGEN",
 	.irq_mask		= irq_chip_mask_parent,
 	.irq_unmask		= irq_chip_unmask_parent,
 	.irq_ack		= mbigen_ack_irq,
 	.irq_eoi		= irq_chip_eoi_parent,
+	.irq_set_affinity	= mbigen_set_affinity,
 	.irq_set_type		= mbigen_set_type,
 };
 
