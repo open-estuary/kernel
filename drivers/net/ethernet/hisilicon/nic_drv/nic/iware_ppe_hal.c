@@ -247,8 +247,12 @@ static int ppe_init_hw(struct ppe_device *ppe_dev)
 			"(5 + ppe_dev->comm_index + port) = %d\n",
 			(5 + ppe_dev->comm_index + port));
 		ret = HRD_Dsaf_PpeSrstByPort(5 + ppe_dev->comm_index + port, 1);
-	} else
+	} else {
+		ret = HRD_Dsaf_PpeSrstByPort(port, 0);
+		osal_mdelay(10);
 		ret = HRD_Dsaf_PpeSrstByPort(port, 1);
+	}
+
 
 	if (ret) {
 		log_err(&ppe_dev->netdev->dev,
