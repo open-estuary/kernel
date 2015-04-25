@@ -38,6 +38,7 @@
 
 		P0_L3_Directory {
 			status = "ok";
+			no-map;
 			reg = <0xf 0xfe000000 0x0 0x2000000>,
 			      <0x1f 0xfe000000 0x0 0x2000000>;
 		};
