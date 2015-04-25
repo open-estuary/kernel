@@ -19,6 +19,11 @@
 		serial0 = &uart0;
 	};
 
+	psci {
+		compatible = "arm,psci-0.2";
+		method = "smc";
+	};
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -161,256 +166,224 @@
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10000>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU1: cpu@10001 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10001>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU2: cpu@10002 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10002>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU3: cpu@10003 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10003>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU4: cpu@10100 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10100>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU5: cpu@10101 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10101>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU6: cpu@10102 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10102>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU7: cpu@10103 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10103>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU8: cpu@10200 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10200>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU9: cpu@10201 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10201>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU10: cpu@10202 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10202>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU11: cpu@10203 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10203>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU12: cpu@10300 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10300>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU13: cpu@10301 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10301>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU14: cpu@10302 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10302>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU15: cpu@10303 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x10303>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU16: cpu@20000 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20000>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU17: cpu@20001 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20001>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU18: cpu@20002 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20002>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU19: cpu@20003 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20003>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU20: cpu@20100 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20100>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU21: cpu@20101 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20101>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU22: cpu@20102 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20102>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU23: cpu@20103 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20103>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU24: cpu@20200 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20200>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU25: cpu@20201 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20201>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU26: cpu@20202 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20202>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU27: cpu@20203 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20203>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU28: cpu@20300 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20300>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU29: cpu@20301 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20301>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU30: cpu@20302 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20302>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 
 		CPU31: cpu@20303 {
 			device_type = "cpu";
 			compatible = "arm,armv8";
 			reg = <0x20303>;
-			enable-method = "spin-table";
-			cpu-release-addr = <0x0 0xfff8>;
+			enable-method = "psci";
 		};
 	};
 
@@ -608,6 +581,37 @@
 			status = "disabled";
 		};
 
+		usb0: ehci@a1000000 {
+			compatible = "generic-ehci";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0xa1000000 0x10000>;
+			interrupts = <20 4>;
+			dma-coherent;
+		};
+
+		usb1: ohci@a1010000 {
+			compatible = "generic-ohci";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0xa1010000 0x10000>;
+			interrupts = <19 4>;
+			dma-coherent;
+		};
+
+		m3_i2c1: i2c@a00f0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,designware-i2c";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0xa00f0000 0x10000>;
+			interrupts = <9 1>;
+			clocks = <&m3_clk>;
+			clock-frequency = <100000>;
+
+			rtc0: ds3231@68 {
+				compatible = "maxim,ds3231";
+				reg = <0x68>;
+			};
+		};
 	};
 
 };
