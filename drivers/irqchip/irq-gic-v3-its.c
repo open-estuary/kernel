@@ -800,7 +800,7 @@ static int its_alloc_tables(struct its_node *its)
 			size = PAGE_SIZE;
 
 		base = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO,
-						get_order(size / PAGE_SIZE));
+						get_order(size));
 		if (!base) {
 			err = -ENOMEM;
 			goto out_free;
