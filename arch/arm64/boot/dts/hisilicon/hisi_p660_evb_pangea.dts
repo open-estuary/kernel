@@ -258,7 +258,7 @@
 		      <0 0xc1000000 0 0x10000>;
 		dma-coherent;
 	};
-	
+
 	mdio {
 		compatible = "hisilicon, hip05-mdio";
 		reg = <0x0 0x803c0000 0x0 0x1000>;
@@ -306,7 +306,7 @@
 		reg = <0 0xc2080000 0 0x20000>,
 		      <0 0xc0000000 0 0x1000>;
 		interrupts = <15 1>, /* rx irq */
-		      		<14 1>; /* tx irq */
+			     <14 1>; /* tx irq */
 		phy-mode = "sgmii";
 		mac-address = [11 11 11 11 11 11];
 		phy-handle = <&phy0>;
@@ -451,7 +451,6 @@
 
 	chosen {
 		/* bootargs = "console=ttyS0,115200 earlycon=uart8250,mmio32,0x80300000 initrd=0x7000000,0x12c00000 root=/dev/nfs nfsroot=192.168.10.67:/opt/nfsroot/ rw ip=192.168.10.171 "; */
-	
 		bootargs = "rdinit=/init console=ttyS0,115200 earlycon=uart8250,mmio32,0x80300000 pci=pcie_bus_perf";
 		linux,initrd-start = <0x7000000>;
 		linux,initrd-end = <0x20000000>;
