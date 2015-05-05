@@ -202,43 +202,48 @@
 		smmu-bypass-vmid = <0xff>;
 	};
 
+	smmu_dsa {
+		compatible = "hisilicon,smmu-v1";
+		interrupt-parent = <&mbigen_m3>;
+		reg = <0x0 0xc0040000 0x0 0x1000>;
+		#global-interrupts = <1>;
+		interrupts = <69 4>,
+			     <69 4>;
+		smmu-cb-memtype = <0 1>;
+		smmu-bypass-vmid = <0xff>;
+	};
+
 	smmu_m3 {
 		compatible = "hisilicon,smmu-v1";
+		interrupt-parent = <&mbigen_m3>;
 		reg = <0x0 0xa0040000 0x0 0x1000>;
 		#global-interrupts = <1>;
-		interrupts = <2 13633 1>,
-			         <2 13633 1>;
+		interrupts = <65 1>,
+			     <65 1>;
 		smmu-cb-memtype = <0 1>;
 		smmu-bypass-vmid = <0xff>;
 	};
 
 	smmu_pcie {
 		compatible = "hisilicon,smmu-v1";
+		interrupt-parent = <&mbigen_m3>;
 		reg = <0x0 0xb0040000 0x0 0x1000>;
 		#global-interrupts = <1>;
-		interrupts = <2 13639 1>,
-			         <2 13639 1>;
+		interrupts = <71 1>,
+			     <71 1>;
 		smmu-cb-memtype = <0 1>,
 				  <1 2>;
 		smmu-bypass-vmid = <0xff>;
 	};
 
-	smmu_dsa {
-		compatible = "hisilicon,smmu-v1";
-		reg = <0x0 0xc0040000 0x0 0x1000>;
-		#global-interrupts = <1>;
-		interrupts = <2 13637 1>,
-			         <2 13637 1>;
-		smmu-cb-memtype = <0 1>;
-		smmu-bypass-vmid = <0xff>;
-	};
 
 	smmu_alg {
 		compatible = "hisilicon,smmu-v1";
+		interrupt-parent = <&mbigen_m3>;
 		reg = <0x0 0xd0040000 0x0 0x1000>;
 		#global-interrupts = <1>;
-		interrupts = <2 13635 1>,
-			         <2 13635 1>;
+		interrupts = <67 1>,
+			     <67 1>;
 		smmu-cb-memtype = <0 1>;
 		smmu-bypass-vmid = <0xff>;
 	};
