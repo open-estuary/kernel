@@ -348,13 +348,13 @@ static int hip05_alloc_ring(struct net_device *dev, struct device *d)
 	tx_ring->desc_count = priv->tx_desc_num;
 
 	tx_ring->desc = dma_alloc_coherent(d, desc_len * tx_ring->desc_count,
-					   &tx_ring->desc_phys, GFP_KERNEL);
+					   &tx_ring->desc_phys, GFP_ATOMIC);
 
 	if (!tx_ring->desc)
 		goto free_rx_ring;
 
 	rx_ring->desc = dma_alloc_coherent(d, desc_len * rx_ring->desc_count,
-					   &rx_ring->desc_phys, GFP_KERNEL);
+					   &rx_ring->desc_phys, GFP_ATOMIC);
 
 	if (!rx_ring->desc)
 		goto free_tx_desc;
