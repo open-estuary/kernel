@@ -532,7 +532,7 @@ int dw_pcie_host_init(struct pcie_port *pp)
 	pci_bus_add_devices(bus);
 
 	/* Configure PCI Express settings */
-	if (bus && !pci_has_flag(PCI_PROBE_ONLY)) {
+	if (!pci_has_flag(PCI_PROBE_ONLY)) {
 		struct pci_bus *child;
 
 		list_for_each_entry(child, &bus->children, node)
