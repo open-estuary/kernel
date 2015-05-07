@@ -113,6 +113,7 @@ struct nic_device {
 	u64 rsc_total_flush;
 	unsigned long state;
 #define NIC_FLAG_RESET (u32)(1 << 0)
+#define NIC_FLAG_STOP_STAT (u32)(1 << 1)
 	u32 flag;
 
 	int ring_pair_num;	/* current number of ring pair for device */

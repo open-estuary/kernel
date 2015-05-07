@@ -251,6 +251,8 @@ void nic_update_stats(struct net_device *netdev)
 	struct nic_device *nic_dev = netdev_priv(netdev);
 	struct dsaf_device *dsaf_dev = NULL;
 
+	if (nic_dev->flag & NIC_FLAG_STOP_STAT)
+		return;
 	for (idx=0; idx<nic_dev->max_q_per_vf; idx++) {
 		rcb_update_stats(nic_dev->ring[idx]);
 
@@ -259,32 +261,35 @@ void nic_update_stats(struct net_device *netdev)
 		rx_bytes += nic_dev->ring[idx]->rx_ring.rx_bytes;
 		rx_pkts += nic_dev->ring[idx]->rx_ring.rx_pkts;
 
-		tx_drop += nic_dev->ring[idx]->tx_ring.tx_err_cnt;
-		rx_err += nic_dev->ring[idx]->rx_ring.rx_stats.rx_buff_err
-			+ nic_dev->ring[idx]->rx_ring.rx_stats.non_vld_descs
-			+ nic_dev->ring[idx]->rx_ring.rx_stats.err_pkt_len
+		/* tx_drop += nic_dev->ring[idx]->tx_ring.tx_err_cnt; */
+		rx_err += nic_dev->ring[idx]->rx_ring.rx_stats.err_pkt_len
 			+ nic_dev->ring[idx]->rx_ring.rx_stats.csum_err;
 	}
 
 	ppe_update_stats(nic_dev->ppe_device);
-	rx_drop += nic_dev->ppe_device->hw_stats.rx_drop_no_bd
+	netdev->stats.rx_missed_errors
+		= nic_dev->ppe_device->hw_stats.rx_drop_no_bd
 		+ nic_dev->ppe_device->hw_stats.rx_drop_no_buf;
+	rx_err += nic_dev->ppe_device->hw_stats.rx_drop_no_bd
+		+ nic_dev->ppe_device->hw_stats.rx_drop_no_buf
+		+  nic_dev->ppe_device->hw_stats.rx_err_fifo_full;
 	tx_err = nic_dev->ppe_device->hw_stats.tx_err_checksum
 		+ nic_dev->ppe_device->hw_stats.tx_err_fifo_empty;
-	rx_err +=  nic_dev->ppe_device->hw_stats.rx_err_fifo_full;
 
 	dsaf_dev = nic_dev->mac_dev->dsaf_dev;
 	if (dsaf_dev != NULL) {
 		port = nic_dev->index;
 		dsaf_update_stats(dsaf_dev, port);
-		rx_drop += dsaf_dev->inode_hw_stats[port].bp_drop;
-		rx_drop += dsaf_dev->inode_hw_stats[port].pad_drop;
+		netdev->stats.rx_missed_errors
+			+= dsaf_dev->inode_hw_stats[port].bp_drop;
+		rx_err += dsaf_dev->inode_hw_stats[port].bp_drop;
+		rx_err += dsaf_dev->inode_hw_stats[port].pad_drop;
 		/*rx_drop += dsaf_dev->inode_hw_stats[port].sbm_drop;*/
-		rx_drop += dsaf_dev->inode_hw_stats[port].crc_false;
-		rx_drop += dsaf_dev->inode_hw_stats[port].rslt_drop;
-		rx_drop += dsaf_dev->inode_hw_stats[port].local_addr_false;
-		rx_drop += dsaf_dev->inode_hw_stats[port].vlan_drop;
-		rx_drop += dsaf_dev->inode_hw_stats[port].stp_drop;
+		rx_err += dsaf_dev->inode_hw_stats[port].crc_false;
+		/* rx_drop += dsaf_dev->inode_hw_stats[port].rslt_drop; */
+		/* rx_drop += dsaf_dev->inode_hw_stats[port].local_addr_false; */
+		/* rx_drop += dsaf_dev->inode_hw_stats[port].vlan_drop;
+		rx_drop += dsaf_dev->inode_hw_stats[port].stp_drop; */
 
 		port = port + DSAF_PPE_INODE_BASE;
 		dsaf_update_stats(dsaf_dev, port);
@@ -293,21 +298,16 @@ void nic_update_stats(struct net_device *netdev)
 		/*tx_drop += dsaf_dev->inode_hw_stats[port].sbm_drop;*/
 		tx_drop += dsaf_dev->inode_hw_stats[port].crc_false;
 		tx_drop += dsaf_dev->inode_hw_stats[port].rslt_drop;
-		tx_drop += dsaf_dev->inode_hw_stats[port].local_addr_false;
+		/* tx_drop += dsaf_dev->inode_hw_stats[port].local_addr_false; */
 		tx_drop += dsaf_dev->inode_hw_stats[port].vlan_drop;
 		tx_drop += dsaf_dev->inode_hw_stats[port].stp_drop;
 	}
 	mac_update_stats(nic_dev->mac_dev);
-	rx_err += nic_dev->mac_dev->hw_stats.rx_fragment_err
-		+ nic_dev->mac_dev->hw_stats.rx_jabber_err
-		+ nic_dev->mac_dev->hw_stats.rx_fcs_err
-		+ nic_dev->mac_dev->hw_stats.rx_data_err
+	rx_err += nic_dev->mac_dev->hw_stats.rx_fcs_err
 		+ nic_dev->mac_dev->hw_stats.rx_align_err
-		+ nic_dev->mac_dev->hw_stats.rx_long_err
 		+ nic_dev->mac_dev->hw_stats.rx_fifo_overrun_err
-		+ nic_dev->mac_dev->hw_stats.rx_len_err
-		+ nic_dev->mac_dev->hw_stats.rx_comma_err;
-	rx_drop += nic_dev->mac_dev->hw_stats.rx_filter_pkts;
+		+ nic_dev->mac_dev->hw_stats.rx_len_err;
+	/* rx_drop += nic_dev->mac_dev->hw_stats.rx_filter_pkts; */
 	tx_err += nic_dev->mac_dev->hw_stats.tx_bad_pkts
 		+ nic_dev->mac_dev->hw_stats.tx_fragment_err
 		+ nic_dev->mac_dev->hw_stats.tx_jabber_err
@@ -323,6 +323,11 @@ void nic_update_stats(struct net_device *netdev)
 	netdev->stats.tx_bytes = tx_bytes;
 	netdev->stats.tx_packets = tx_pkts;
 
+	netdev->stats.rx_crc_errors = nic_dev->mac_dev->hw_stats.rx_fcs_err;
+	netdev->stats.rx_frame_errors = nic_dev->mac_dev->hw_stats.rx_align_err;
+	netdev->stats.rx_fifo_errors
+		= nic_dev->mac_dev->hw_stats.rx_fifo_overrun_err;
+	netdev->stats.rx_length_errors = nic_dev->mac_dev->hw_stats.rx_len_err;
 	netdev->stats.multicast = nic_dev->mac_dev->hw_stats.rx_mc_pkts
 		+ nic_dev->ppe_device->hw_stats.rx_multicast;
 	netdev->stats.rx_errors = rx_err;
@@ -353,7 +358,7 @@ void nic_update_link_status(struct net_device *netdev)
 		(void)mac_dev->get_link_status(mac_dev, &link_status);
 
 		if (old_status != (u8)link_status) {
-		    	log_info(&netdev->dev,"NIC%d Link is %s\n",
+			log_info(&netdev->dev,"NIC%d Link is %s\n",
 				mac_dev->mac_id, link_status?"Up":"Down");
 		}
 
@@ -363,9 +368,9 @@ void nic_update_link_status(struct net_device *netdev)
 		if (old_status != (u8)link_status)
 			netif_tx_wake_all_queues(nic_dev->netdev);
 
-        	/* only continue if link was previously down */
-        	if (netif_carrier_ok(netdev))
-        		return;
+		/* only continue if link was previously down */
+		if (netif_carrier_ok(netdev))
+			return;
 
 		netif_carrier_on(netdev);
 
@@ -481,6 +486,8 @@ int nic_clean_stats(struct net_device *netdev, struct rtnl_link_stats64 *stats)
 		return -EINVAL;
 	}
 
+	nic_dev = netdev_priv(netdev);
+	nic_dev->flag &= ~NIC_FLAG_STOP_STAT;
 	nic_update_stats(netdev);
 
 	if (stats != NULL) {
@@ -512,7 +519,7 @@ int nic_clean_stats(struct net_device *netdev, struct rtnl_link_stats64 *stats)
 		stats->tx_compressed = netdev->stats.tx_compressed;
 	}
 
-	nic_dev = netdev_priv(netdev);
+	/*nic_dev = netdev_priv(netdev);*/
 
 	memset(&nic_dev->mac_dev->hw_stats, 0, sizeof(struct mac_hw_stats));
 	mac_clean_stats(nic_dev->mac_dev);
@@ -561,33 +568,29 @@ int nic_set_stats(struct net_device *netdev, struct rtnl_link_stats64 *storage)
 
 	nic_dev = netdev_priv(netdev);
 
+	nic_dev->flag |= NIC_FLAG_STOP_STAT;
 	nic_dev->ring[0]->tx_ring.tx_pkts = storage->tx_packets;
 	nic_dev->ring[0]->tx_ring.tx_bytes = storage->tx_bytes;
 	nic_dev->ring[0]->rx_ring.rx_pkts = storage->rx_packets;
 	nic_dev->ring[0]->rx_ring.rx_bytes = storage->rx_bytes;
-	nic_dev->ring[0]->tx_ring.tx_err_cnt = storage->tx_dropped;
-	nic_dev->ring[0]->rx_ring.rx_stats.csum_err = storage->rx_errors;
-	nic_dev->ppe_device->hw_stats.rx_multicast = storage->multicast;
-	nic_dev->ppe_device->hw_stats.rx_drop_no_bd = storage->rx_dropped;
-	nic_dev->ppe_device->hw_stats.tx_err_checksum = storage->tx_errors;
 
 	netdev->stats.rx_packets = storage->rx_packets;
 	netdev->stats.tx_packets = storage->tx_packets;
 	netdev->stats.rx_bytes = storage->rx_bytes;
 	netdev->stats.tx_bytes = storage->tx_bytes;
 	netdev->stats.rx_errors = storage->rx_errors;
-	netdev->stats.multicast = storage->multicast;
-	netdev->stats.rx_length_errors = storage->rx_length_errors;
-	netdev->stats.rx_crc_errors = storage->rx_crc_errors;
-	netdev->stats.rx_missed_errors = storage->rx_missed_errors;
 
 	netdev->stats.tx_errors = storage->tx_errors;
 	netdev->stats.rx_dropped = storage->rx_dropped;
 	netdev->stats.tx_dropped = storage->tx_dropped;
+	netdev->stats.multicast = storage->multicast;
 	netdev->stats.collisions = storage->collisions;
+	netdev->stats.rx_length_errors = storage->rx_length_errors;
 	netdev->stats.rx_over_errors = storage->rx_over_errors;
+	netdev->stats.rx_crc_errors = storage->rx_crc_errors;
 	netdev->stats.rx_frame_errors = storage->rx_frame_errors;
 	netdev->stats.rx_fifo_errors = storage->rx_fifo_errors;
+	netdev->stats.rx_missed_errors = storage->rx_missed_errors;
 	netdev->stats.tx_aborted_errors = storage->tx_aborted_errors;
 	netdev->stats.tx_carrier_errors = storage->tx_carrier_errors;
 	netdev->stats.tx_fifo_errors = storage->tx_fifo_errors;
@@ -775,7 +778,7 @@ int nic_up(struct net_device *netdev)
 
 	netif_tx_wake_all_queues(nic_dev->netdev);
 
-    	clear_bit(NIC_STATE_DOWN, &nic_dev->state);
+	clear_bit(NIC_STATE_DOWN, &nic_dev->state);
 
 	(void)mod_timer(&nic_dev->service_timer, jiffies);
 
@@ -927,7 +930,7 @@ int nic_stop(struct net_device *netdev)
 			mac_dev->led_reset(mac_dev);
 
 	if (mac_dev->sfp_close) {
-        	ret = mac_dev->sfp_close(mac_dev);
+		ret = mac_dev->sfp_close(mac_dev);
 		if (ret)
 			log_err(&netdev->dev,
 				"mac close sfp fail, ret = %#x!\n", ret);
@@ -1292,7 +1295,7 @@ int nic_probe(struct platform_device *pdev)
 	}
 	nic_dev->index = dev_id;
 	nic_dev->gidx = dev_id + (NIC_MAX_NUM_PER_CHIP * chip_id) ;
-    	netdev->dev_id = nic_dev->gidx;
+	netdev->dev_id = nic_dev->gidx;
 
 	if (!dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64ULL)))
 		log_dbg(&pdev->dev, "set mask to 64bit\n");

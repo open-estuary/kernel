@@ -944,7 +944,7 @@ netdev_tx_t rcb_pkt_send_hw(struct sk_buff *skb, struct nic_ring_pair *ring)
 	u32 idx;
 
 
-    	struct sk_buff *new_skb = NULL;
+	struct sk_buff *new_skb = NULL;
 
 	tx_ring = &ring->tx_ring;
 	ring_idx = ring->rcb_dev.index;
@@ -982,7 +982,7 @@ netdev_tx_t rcb_pkt_send_hw(struct sk_buff *skb, struct nic_ring_pair *ring)
 #if 1/*RCB_MUTIL_BD_SUPPORT */
     if (unlikely(buf_num > ring->max_buf_num)) {
 
- 		new_skb = skb_copy(skb, GFP_ATOMIC);
+		new_skb = skb_copy(skb, GFP_ATOMIC);
         //new_skb = netdev_alloc_skb(ring->netdev, skb->len);
         if (NULL == new_skb) {
             tx_ring->tx_err_cnt++;
@@ -1023,28 +1023,28 @@ netdev_tx_t rcb_pkt_send_hw(struct sk_buff *skb, struct nic_ring_pair *ring)
 		tx_desc[next_to_use].word3.bits.FE = 0;
 
         if (skb->ip_summed == CHECKSUM_PARTIAL) {
-    		if (skb->protocol == ntohs(ETH_P_IP)) {
-    			tx_desc[next_to_use].word3.bits.IP_offset = ETH_HLEN;
-	    		/* if have a HW VLAN tag*/
+		if (skb->protocol == ntohs(ETH_P_IP)) {
+			tx_desc[next_to_use].word3.bits.IP_offset = ETH_HLEN;
+			/* if have a HW VLAN tag*/
 				if (vlan_tx_tag_present(skb))
 					tx_desc[next_to_use].word3.bits.IP_offset += VLAN_HLEN;
-    			tx_desc[next_to_use].word3.bits.L3CS = 1;
+			tx_desc[next_to_use].word3.bits.L3CS = 1;
 
-    			/* check for tcp/udp header */
-    			tx_desc[next_to_use].word3.bits.L4CS = 1;
+			/* check for tcp/udp header */
+			tx_desc[next_to_use].word3.bits.L4CS = 1;
 
-    		} else if (skb->protocol == ntohs(ETH_P_IPV6)) {
-    			tx_desc[next_to_use].word3.bits.IP_offset = ETH_HLEN;
-	    		/* if have a HW VLAN tag*/
+		} else if (skb->protocol == ntohs(ETH_P_IPV6)) {
+			tx_desc[next_to_use].word3.bits.IP_offset = ETH_HLEN;
+			/* if have a HW VLAN tag*/
 				if (vlan_tx_tag_present(skb))
 					tx_desc[next_to_use].word3.bits.IP_offset += VLAN_HLEN;
 
-    			/*ipv6 has not l3 cs */
-    			tx_desc[next_to_use].word3.bits.L3CS = 0;
+			/*ipv6 has not l3 cs */
+			tx_desc[next_to_use].word3.bits.L3CS = 0;
 
-    			/* check for tcp/udp header */
-    			tx_desc[next_to_use].word3.bits.L4CS = 1;
-    		}
+			/* check for tcp/udp header */
+			tx_desc[next_to_use].word3.bits.L4CS = 1;
+		}
 		}
 
 		log_dbg(ring->dev, "addr(%#llx) word2(%#x) word3(%#x)\r\n",
@@ -1306,7 +1306,10 @@ recv:
 
 		len = rx_desc->word3.bits.pkt_len;
 		if (unlikely((0 == len) || (len > nic_dev->mtu)
-			     || (0 != rx_desc->word2.bits.DROP))) {
+			     || (0 != rx_desc->word2.bits.DROP)
+			     || (0 != rx_desc->word2.bits.L2E)
+			     || (0 != rx_desc->word2.bits.L3E)
+			     || (0 != rx_desc->word2.bits.L4E))) {
 			if ((rx_ring->rx_stats.err_pkt_len %
 			     RCB_ERROR_PRINT_CYCLE) == 0) {
 				(void)log_crit(ring->dev,
@@ -1473,7 +1476,10 @@ recv:
 
 		len = rx_desc->word3.bits.pkt_len;
 		if (unlikely((0 == len) || (len > nic_dev->mtu)
-			     || (0 != rx_desc->word2.bits.DROP))) {
+				 || (0 != rx_desc->word2.bits.DROP)
+			     || (0 != rx_desc->word2.bits.L2E)
+			     || (0 != rx_desc->word2.bits.L3E)
+			     || (0 != rx_desc->word2.bits.L4E))) {
 			if ((rx_ring->rx_stats.err_pkt_len %
 			     RCB_ERROR_PRINT_CYCLE) == 0) {
 				(void)log_crit(ring->dev,

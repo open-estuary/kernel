@@ -42,6 +42,7 @@ kLe484J2KJSpUtf6QncJkB3pc32W8uIChje8Oojj6DX1+tva7XJa/G4BrHY9P5TrsPtnXkp9
 #include <linux/of_platform.h>
 #include <linux/of_irq.h>
 //#include <linux/irqchip/hisi-msi-gen.h>
+#include <linux/moduleparam.h>
 
 #include "iware_error.h"
 #include "iware_log.h"
@@ -117,7 +118,7 @@ static int rcb_common_probe(struct platform_device *pdev)
 	if(chip_id < 0) {
 		return -EINVAL;
 	}
-	
+
 	ret = dsaf_get_work_mode(chip_id, &dsaf_mode);
 	if (ret != 0) {
 		log_err(&pdev->dev,
@@ -335,6 +336,14 @@ static void rcb_get_queue_mode(enum dsaf_mode dsaf_mode, u16 *max_vfn,
 	}
 }
 
+static int g_bd_num = 0;
+static int g_buf_size = 0;
+static int g_pkt_line = 0;
+static int g_over_time = 0;
+module_param(g_bd_num, int, S_IRUGO);
+module_param(g_buf_size, int, S_IRUGO);
+module_param(g_pkt_line, int, S_IRUGO);
+module_param(g_over_time, int, S_IRUGO);
 /**
  *rcb_get_info - get rcb information
  *@np:device node
@@ -360,6 +369,10 @@ static int rcb_get_info(struct device_node *np, struct nic_device *nic_dev,
 	u32 buf_size = 0;
 	struct device_node *np_common = NULL;
 
+	if (((u32)g_bd_num >= RCB_COMMON_MIN_DESC_CNT)
+	    && ((u32)g_bd_num <= RCB_COMMON_MAX_DESC_CNT))
+		desc_cnt = (u32)g_bd_num;
+	else {
 	ret = of_property_read_u32(np, "desc-num", &desc_cnt);
 	if (ret < 0) {
 		log_err(ring->dev,
@@ -373,9 +386,14 @@ static int rcb_get_info(struct device_node *np, struct nic_device *nic_dev,
 			desc_cnt);
 		return -EINVAL;
 	}
+	}
 	nic_dev->desc_cnt = (u16) desc_cnt;
 	nic_dev->coalesced_frames = RCB_MAX_COALESCED_FRAMES;
 	nic_dev->time_out = RCB_MAX_TIME_OUT;
+	if (((u32)g_pkt_line) && ((u32)g_pkt_line <= 0x3FF))
+		nic_dev->coalesced_frames = (u16)g_pkt_line;
+	if ((u32)g_over_time)
+		nic_dev->time_out = (u32)g_over_time;
 
 	np_common = of_get_parent(np);
 	if (np_common == NULL) {
@@ -432,11 +450,18 @@ static int rcb_get_info(struct device_node *np, struct nic_device *nic_dev,
 			"of_property_read_u32 irq-num fail, ret = %d!\r\n", ret);
 		return ret;
 	}
+	if ((512 == (u32)g_buf_size)
+		|| (1024 == (u32)g_buf_size)
+		|| (2048 == (u32)g_buf_size)
+		|| (4096 == (u32)g_buf_size))
+		buf_size = (u32)g_buf_size;
+	else {
 	ret = of_property_read_u32(np, "buf-size", &buf_size);
 	if (ret != 0) {
 		log_err(ring->dev,
 			"of_property_read_u32 buf-size fail, ret = %d!\r\n", ret);
 		return ret;
+		}
 	}
 	ring->rcb_dev.buf_size = (u16) buf_size;
 	ring->rcb_dev.base_irq = irq_info;
@@ -502,7 +527,7 @@ int rcb_init(struct platform_device *pdev, enum dsaf_mode dsaf_mode)
 
 	if (nic_dev->index >= DSAF_PPE_INODE_BASE)
 		port_idx = 0;
-	
+
 	new_ring->rcb_dev.port_id_in_dsa = port_idx;
 
 	ret = rcb_get_info(np, nic_dev, new_ring, dsaf_mode);
@@ -554,14 +579,14 @@ int rcb_init(struct platform_device *pdev, enum dsaf_mode dsaf_mode)
 			goto loop_alloc_err;
 		}
 
-#if 0		
+#if 0
 		new_ring->rcb_dev.base_irq =
 		    ring->rcb_dev.base_irq + RCB_IRQ_OFFSET;
 #endif
 		/** Added by CHJ. hulk3.19 no ic_enable_msi.*/
 		new_ring->rcb_dev.virq[RCB_IRQ_IDX_TX] = irq_of_parse_and_map(np, ring_id *2);
 		new_ring->rcb_dev.virq[RCB_IRQ_IDX_RX] = irq_of_parse_and_map(np, ring_id *2 + 1);
-		
+
 		ring = new_ring;
 	}
 
@@ -725,7 +750,7 @@ int rcb_irq_init(struct nic_ring_pair *ring)
 	int ret = 0;
 	struct rcb_device *rcb_dev = &ring->rcb_dev;
 	s32 irq_num = rcb_dev->base_irq;
-	
+
 /** Modified by CHJ. hulk3.19 no ic_enable_msi*/
 #if 0
 	ret = ic_enable_msi(irq_num, &rcb_dev->virq[RCB_IRQ_IDX_TX]);
@@ -735,9 +760,9 @@ int rcb_irq_init(struct nic_ring_pair *ring)
 		return ret;
 	}
 #endif
-	
+
 	memset(rcb_tx_irq_name[ring->rcb_dev.index], 0, RCB_IRQ_NAME_LEN);
-  
+
 	sprintf(rcb_tx_irq_name[ring->rcb_dev.index], "%sTx%d",
 		ring->netdev->name, ring->rcb_dev.index);
 
@@ -754,7 +779,7 @@ int rcb_irq_init(struct nic_ring_pair *ring)
 
 /** Modified by CHJ. hulk3.19 no ic_enable_msi*/
 #if 0
-	irq_num = irq_num + RCB_IRQ_TX_RX_OFFSET;	
+	irq_num = irq_num + RCB_IRQ_TX_RX_OFFSET;
 	ret = ic_enable_msi(irq_num, &rcb_dev->virq[RCB_IRQ_IDX_RX]);
 	if (ret != 0) {
 		log_err(ring->dev,
@@ -782,10 +807,11 @@ int rcb_irq_init(struct nic_ring_pair *ring)
 
 request_rx_irq_fail:
 /** Modified by CHJ. hulk3.19 no ic_enable_msi*/
-#if 0	
+#if 0
 	ic_disable_msi(rcb_dev->virq[RCB_IRQ_IDX_RX]);
 #endif
 	rcb_dev->virq[RCB_IRQ_IDX_RX] = 0;
+enable_msi_rx_fail:
 	free_irq(rcb_dev->virq[RCB_IRQ_IDX_TX], ring);
 
 request_tx_irq_fail:

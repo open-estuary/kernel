@@ -1697,11 +1697,13 @@ static int mac_get_link_status(struct mac_device *mac_dev,
 	int ret;
 	struct mac_priv *priv = NULL;
 	struct mac_driver *mac_ctrl_drv = NULL;
+	struct phy_device *phy_dev = NULL;
 
 	if (NULL == mac_dev) {
 		pr_err("mac_set_pause_enable faild, mac_dev is NULL!\n");
 		return -EINVAL;
 	}
+	phy_dev = mac_dev->phy_dev;
 
 	priv = mac_dev_priv(mac_dev);
 	if (NULL == priv) {
@@ -1721,9 +1723,9 @@ static int mac_get_link_status(struct mac_device *mac_dev,
 	}
 
     /* updata for phy info */
-	if (mac_dev->phy_dev) {
-		if (!genphy_update_link(mac_dev->phy_dev))
-		    *link_stat = *link_stat && mac_dev->phy_dev->link;
+	if (phy_dev) {
+		if (!genphy_update_link(phy_dev))
+		    *link_stat = *link_stat && phy_dev->link;
 	}
 
 	return 0;

@@ -69,6 +69,7 @@ int nic_get_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 	struct mac_info mac_info;
 	struct mac_device *mac_dev = NULL;
 	struct nic_device *nic_dev = NULL;
+	struct phy_device *phy_dev = NULL;
 	u32 link_stat = 0;
 	int ret;
 
@@ -82,6 +83,7 @@ int nic_get_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 		log_err(&dev->dev, "mac_dev is NULL!\n");
 		return -ENODEV;
 	}
+	phy_dev = mac_dev->phy_dev;
 
 
 	if (NULL != mac_dev->get_link_status) {
@@ -126,24 +128,24 @@ int nic_get_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 	}
 
 	/* updata from phy info */
-	if (mac_dev->phy_dev) {
-    	cmd->supported = mac_dev->phy_dev->supported;
+	if (phy_dev) {
+	cmd->supported = phy_dev->supported;
 
-    	cmd->advertising = mac_dev->phy_dev->advertising;
-    	cmd->lp_advertising = mac_dev->phy_dev->lp_advertising;
+	cmd->advertising = phy_dev->advertising;
+	cmd->lp_advertising = phy_dev->lp_advertising;
 
 			if(link_stat) {
-				ethtool_cmd_speed_set(cmd, mac_dev->phy_dev->speed);
-			    cmd->duplex = mac_dev->phy_dev->duplex;
+				ethtool_cmd_speed_set(cmd, phy_dev->speed);
+			    cmd->duplex = phy_dev->duplex;
 			} else {
 				ethtool_cmd_speed_set(cmd, (u32)SPEED_UNKNOWN);
 				cmd->duplex = DUPLEX_UNKNOWN;
 			}
 
-    	cmd->phy_address = mac_dev->phy_dev->addr;
-    	cmd->transceiver = phy_is_internal(mac_dev->phy_dev) ?
-    		XCVR_INTERNAL : XCVR_EXTERNAL;
-    	cmd->autoneg = mac_dev->phy_dev->autoneg;
+	cmd->phy_address = phy_dev->addr;
+	cmd->transceiver = phy_is_internal(phy_dev) ?
+		XCVR_INTERNAL : XCVR_EXTERNAL;
+	cmd->autoneg = phy_dev->autoneg;
     }
 
 	if (MAC_PHY_INTERFACE_MODE_SGMII == mac_dev->phy_if) {
@@ -188,6 +190,7 @@ int nic_set_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 	int ret;
 	struct mac_device *mac_dev = NULL;
 	struct nic_device *nic_dev = NULL;
+	struct phy_device *phy_dev = NULL;
 
 	nic_dev = netdev_priv(dev);
 	if (NULL == nic_dev) {
@@ -200,6 +203,7 @@ int nic_set_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 		return -EINVAL;
 	}
 
+	phy_dev = mac_dev->phy_dev;
 	if((MAC_SPEED_1000 == cmd->speed) && (false == cmd->duplex)) {
 		log_err(&dev->dev, "\n not surport 1000M half mode!\n");
 		return -EINVAL;
@@ -208,8 +212,8 @@ int nic_set_settings(struct net_device *dev, struct ethtool_cmd *cmd)
 		log_err(&dev->dev, "\n 10GE mode not surport setting!\n");
 		return -EINVAL;
 	}
-	if (mac_dev->phy_dev) {
-		(void) phy_ethtool_sset(mac_dev->phy_dev, cmd);
+	if (phy_dev) {
+		(void) phy_ethtool_sset(phy_dev, cmd);
 		return 0;
 	}
 	if (NULL != mac_dev->set_an_mode) {
@@ -266,11 +270,11 @@ void nic_get_drvinfo(struct net_device *dev, struct ethtool_drvinfo *drvinfo)
 	}
 
     if (strlen(NIC_MOD_VERSION) < 32) /* TBD */
-    	strncpy(drvinfo->version, NIC_MOD_VERSION,
-    		strlen(NIC_MOD_VERSION) + 1);
+	strncpy(drvinfo->version, NIC_MOD_VERSION,
+		strlen(NIC_MOD_VERSION) + 1);
     else if (strlen(NIC_MOD_VERSION) >= 32) {
-    	strncpy(drvinfo->version, NIC_MOD_VERSION, 31);
-    	drvinfo->version[31] = '\0';
+	strncpy(drvinfo->version, NIC_MOD_VERSION, 31);
+	drvinfo->version[31] = '\0';
     }
 
 	if (strlen(DRIVER_NAME) < 32)
@@ -871,7 +875,7 @@ void nic_loopback_cleanup(struct nic_device *nic_dev)
 		mac_dev->led_reset(mac_dev);
 
 	if (mac_dev->sfp_close) {
-        	ret = mac_dev->sfp_close(mac_dev);
+		ret = mac_dev->sfp_close(mac_dev);
 		if (ret)
 			log_err(&netdev->dev,
 				"mac close sfp fail, ret = %#x!\n", ret);
@@ -927,7 +931,7 @@ void nic_self_test(struct net_device *dev, struct ethtool_test *eth_test,
 		if(nic_dev->mac_dev->phy_if != MAC_PHY_INTERFACE_MODE_XGMII){
 			if (nic_loopback_test(nic_dev, MAC_INTERNALLOOP_MAC,
 						&data[0]) != 0) {
-		    		eth_test->flags |= ETH_TEST_FL_FAILED;
+				eth_test->flags |= ETH_TEST_FL_FAILED;
 			}
 		}
 
@@ -1028,7 +1032,7 @@ void nic_get_strings(struct net_device *dev, u32 stringset, u8 *data)
 
 	if ((NULL != mac_dev->get_sset_count)
 		&& (NULL != mac_dev->get_strings))
-    	mac_dev->get_strings(mac_dev, stringset, (u8*)p);
+	mac_dev->get_strings(mac_dev, stringset, (u8*)p);
 }
 
 /**
@@ -1052,9 +1056,9 @@ int nic_get_sset_count(struct net_device *dev, int sset)
 	u32 total_num = 0;
 	int i;
 
-    	if(ETH_SS_TEST == sset){
+	if(ETH_SS_TEST == sset){
 	        return (sizeof(nic_gstrings_test) / ETH_GSTRING_LEN);
-    	}
+	}
 	if((ETH_SS_PRIV_FLAGS == sset)||(ETH_SS_NTUPLE_FILTERS == sset)
 		||(ETH_SS_FEATURES == sset)){
 		return -ENOTSUPP;
@@ -1132,11 +1136,11 @@ int nic_set_phys_id(struct net_device *dev, enum ethtool_phys_id_state state)
 			&& (NULL != mac_dev->phy_dev)) {
 
 			(void) mdiobus_write(mac_dev->phy_dev->bus, mac_dev->phy_dev->addr,
-			 	PHY_PAGE_REG, PHY_PAGE_LED);
+				PHY_PAGE_REG, PHY_PAGE_LED);
 			mac_dev->phy_led_value = (u16)mdiobus_read(mac_dev->phy_dev->bus,
-			 	mac_dev->phy_dev->addr, LED_FCR);
+				mac_dev->phy_dev->addr, LED_FCR);
 			(void) mdiobus_write(mac_dev->phy_dev->bus,
-           			mac_dev->phy_dev->addr, PHY_PAGE_REG, PHY_PAGE_COPPER);
+				mac_dev->phy_dev->addr, PHY_PAGE_REG, PHY_PAGE_COPPER);
 			return 2;
 		} else if(NULL != mac_dev->cpld_vaddr){
 			mac_dev->cpld_led_value = cpld_reg_read(mac_dev->cpld_vaddr);
@@ -1167,11 +1171,11 @@ int nic_set_phys_id(struct net_device *dev, enum ethtool_phys_id_state state)
 		if((mac_dev->link_features & MAC_LINK_PHY)
 			&& (NULL != mac_dev->phy_dev)) {
 			(void) mdiobus_write(mac_dev->phy_dev->bus, mac_dev->phy_dev->addr,
-			 	PHY_PAGE_REG, PHY_PAGE_LED);
+				PHY_PAGE_REG, PHY_PAGE_LED);
 			(void) mdiobus_write(mac_dev->phy_dev->bus, mac_dev->phy_dev->addr,
 					LED_FCR, mac_dev->phy_led_value);
 			(void) mdiobus_write(mac_dev->phy_dev->bus,
-	   			mac_dev->phy_dev->addr, PHY_PAGE_REG, PHY_PAGE_COPPER);
+				mac_dev->phy_dev->addr, PHY_PAGE_REG, PHY_PAGE_COPPER);
 		} else if(NULL != mac_dev->cpld_vaddr) {
 			cpld_reg_write(mac_dev->cpld_vaddr, mac_dev->cpld_led_value);
 		}
