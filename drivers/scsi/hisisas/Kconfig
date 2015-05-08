@@ -1,0 +1,2 @@
+source "drivers/scsi/hisisas/sas/Kconfig"
+source "drivers/scsi/hisisas/chips/Kconfig"

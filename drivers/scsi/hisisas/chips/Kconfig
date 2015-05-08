@@ -1,0 +1,6 @@
+config SCSI_HISISAS_PV660
+	tristate "Hisilicon PV660 sas HBA driver support"
+	select SCSI_HISISAS_COMMON
+	default y
+	---help---
+	  This driver supports Hisilicon PV660 sas controller.

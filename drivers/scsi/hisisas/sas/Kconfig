@@ -1,0 +1,5 @@
+config SCSI_HISISAS_COMMON
+	tristate "Hisilicon sas/sata common driver support"
+	default y
+	---help---
+	  This driver supports sas/sata protocol related process for all Hisilicon sas controller.

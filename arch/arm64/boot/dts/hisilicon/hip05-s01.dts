@@ -13,6 +13,7 @@
 
 /include/ "hip05.dtsi"
 /include/ "hip05-2p1s-pcie.dtsi"
+/*/include/ "hip05-2p1s-sas.dtsi"*/
 
 / {
 	model = "Hisilicon PhosphorV660 S01 Development Board";
