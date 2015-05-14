@@ -49,6 +49,10 @@ kLe484J2KJSpUtf6QncJkB3pc32W8uIChje8Oojj6DX1+tva7XJa/G4BrHY9P5TrsPtnXkp9
 #include "iware_nic_main.h"
 #include "iware_rcb_main.h"
 
+int rcb_irq_init(struct nic_ring_pair *ring);
+void rcb_irq_uninit(struct nic_ring_pair *ring);
+
+
 static int rcb_common_probe(struct platform_device *pdev);
 static int rcb_common_remove(struct platform_device *pdev);
 
@@ -525,6 +529,8 @@ int rcb_init(struct platform_device *pdev, enum dsaf_mode dsaf_mode)
 	new_ring->rcb_dev.virq[RCB_IRQ_IDX_TX] = irq_of_parse_and_map(np, 0);
 	new_ring->rcb_dev.virq[RCB_IRQ_IDX_RX] = irq_of_parse_and_map(np, 1);
 
+	new_ring->rcb_dev.irq_init_flag = RCB_IRQ_NOT_INITED;
+
 	if (nic_dev->index >= DSAF_PPE_INODE_BASE)
 		port_idx = 0;
 
@@ -587,6 +593,8 @@ int rcb_init(struct platform_device *pdev, enum dsaf_mode dsaf_mode)
 		new_ring->rcb_dev.virq[RCB_IRQ_IDX_TX] = irq_of_parse_and_map(np, ring_id *2);
 		new_ring->rcb_dev.virq[RCB_IRQ_IDX_RX] = irq_of_parse_and_map(np, ring_id *2 + 1);
 
+		new_ring->rcb_dev.irq_init_flag = RCB_IRQ_NOT_INITED;
+
 		ring = new_ring;
 	}
 
@@ -609,6 +617,7 @@ int rcb_init(struct platform_device *pdev, enum dsaf_mode dsaf_mode)
 				       nic_rx_napi_poll, NIC_RX_CLEAN_MAX_NUM);
 			netif_napi_add(netdev, &ring->tx_ring.napi,
 				       nic_tx_napi_poll, 64);
+
 		}
 	}
 
@@ -664,6 +673,7 @@ void rcb_uninit(struct platform_device *pdev)
 	for (ring_id = 0; ring_id < (u32)nic_dev->ring_pair_num; ring_id++) {
 		ring = nic_dev->ring[ring_id];
 		if (ring != NULL) {
+			rcb_irq_uninit(ring);
 			rcb_dev = &ring->rcb_dev;
 			if (rcb_dev->ops.uninit != NULL)
 				rcb_dev->ops.uninit(ring);
@@ -742,9 +752,6 @@ irqreturn_t nic_rx_irq_handle(int irq, void *dev)
  *@ring:rcb ring
  *retuen status
  */
-
-char rcb_rx_irq_name[RCB_ALL_RING_NUM][RCB_IRQ_NAME_LEN];
-char rcb_tx_irq_name[RCB_ALL_RING_NUM][RCB_IRQ_NAME_LEN];
 int rcb_irq_init(struct nic_ring_pair *ring)
 {
 	int ret = 0;
@@ -760,22 +767,23 @@ int rcb_irq_init(struct nic_ring_pair *ring)
 		return ret;
 	}
 #endif
+	if (rcb_dev->irq_init_flag == RCB_IRQ_NOT_INITED) {
 
-	memset(rcb_tx_irq_name[ring->rcb_dev.index], 0, RCB_IRQ_NAME_LEN);
+		memset(ring->rcb_dev.irq_name[RCB_IRQ_IDX_TX], 0, RCB_IRQ_NAME_LEN);
 
-	sprintf(rcb_tx_irq_name[ring->rcb_dev.index], "%sTx%d",
-		ring->netdev->name, ring->rcb_dev.index);
+		sprintf(ring->rcb_dev.irq_name[RCB_IRQ_IDX_TX], "%sTx%d",
+			ring->netdev->name, ring->rcb_dev.index);
 
-	ret = request_irq(rcb_dev->virq[RCB_IRQ_IDX_TX], nic_tx_irq_handle,
-			  0, rcb_tx_irq_name[ring->rcb_dev.index], ring);
-	if (ret != 0) {
-		log_err(ring->dev,
-			"request_irq faild! irq=%d, virq=%d, ret=%d\n",
-			irq_num, rcb_dev->virq[RCB_IRQ_IDX_TX], ret);
-		goto request_tx_irq_fail;
-	}
-	log_dbg(ring->dev, "request_irq %d virq=%d success!\n",
-		irq_num, rcb_dev->virq[RCB_IRQ_IDX_TX]);
+		ret = request_irq(rcb_dev->virq[RCB_IRQ_IDX_TX], nic_tx_irq_handle,
+				  0, ring->rcb_dev.irq_name[RCB_IRQ_IDX_TX], ring);
+		if (ret != 0) {
+			log_err(ring->dev,
+				"request_irq faild! irq=%d, virq=%d, ret=%d\n",
+				irq_num, rcb_dev->virq[RCB_IRQ_IDX_TX], ret);
+			goto request_tx_irq_fail;
+		}
+		log_dbg(ring->dev, "request_irq %d virq=%d success!\n",
+			irq_num, rcb_dev->virq[RCB_IRQ_IDX_TX]);
 
 /** Modified by CHJ. hulk3.19 no ic_enable_msi*/
 #if 0
@@ -788,21 +796,23 @@ int rcb_irq_init(struct nic_ring_pair *ring)
 	}
 #endif
 
-	memset(rcb_rx_irq_name[ring->rcb_dev.index], 0, RCB_IRQ_NAME_LEN);
-	sprintf(rcb_rx_irq_name[ring->rcb_dev.index], "%sRx%d",
-		ring->netdev->name, ring->rcb_dev.index); /* TBD */
-	ret =
-	    request_irq(rcb_dev->virq[RCB_IRQ_IDX_RX], nic_rx_irq_handle, 0,
-			rcb_rx_irq_name[ring->rcb_dev.index], ring);
-	if (ret != 0) {
-		log_err(ring->dev,
-			"request_irq faild! irq=%d, virq=%d, ret=%d\n",
-			irq_num, rcb_dev->virq[RCB_IRQ_IDX_RX], ret);
-		goto request_rx_irq_fail;
-	}
-	log_dbg(ring->dev, "request_irq %d virq=%d success!\n",
-		irq_num, rcb_dev->virq[RCB_IRQ_IDX_RX]);
+		memset(ring->rcb_dev.irq_name[RCB_IRQ_IDX_RX], 0, RCB_IRQ_NAME_LEN);
+		sprintf(ring->rcb_dev.irq_name[RCB_IRQ_IDX_RX], "%sRx%d",
+			ring->netdev->name, ring->rcb_dev.index); /* TBD */
+		ret =
+		    request_irq(rcb_dev->virq[RCB_IRQ_IDX_RX], nic_rx_irq_handle, 0,
+				ring->rcb_dev.irq_name[RCB_IRQ_IDX_RX], ring);
+		if (ret != 0) {
+			log_err(ring->dev,
+				"request_irq faild! irq=%d, virq=%d, ret=%d\n",
+				irq_num, rcb_dev->virq[RCB_IRQ_IDX_RX], ret);
+			goto request_rx_irq_fail;
+		}
+		log_dbg(ring->dev, "request_irq %d virq=%d success!\n",
+			irq_num, rcb_dev->virq[RCB_IRQ_IDX_RX]);
 
+		rcb_dev->irq_init_flag = RCB_IRQ_INITED;
+	}
 	return 0;
 
 request_rx_irq_fail:
@@ -835,14 +845,16 @@ void rcb_irq_uninit(struct nic_ring_pair *ring)
 
 	log_dbg(ring->dev, "func begin\n");
 
-	free_irq(rcb_dev->virq[RCB_IRQ_IDX_TX], ring);
+	if (rcb_dev->virq[RCB_IRQ_IDX_TX])
+		free_irq(rcb_dev->virq[RCB_IRQ_IDX_TX], ring);
 /** Modified by CHJ. hulk3.19 no ic_enable_msi*/
 #if 0
 	ic_disable_msi(rcb_dev->virq[RCB_IRQ_IDX_TX]);
 #endif
 	//rcb_dev->virq[RCB_IRQ_IDX_TX] = 0;
 
-	free_irq(rcb_dev->virq[RCB_IRQ_IDX_RX], ring);
+	if (rcb_dev->virq[RCB_IRQ_IDX_RX])
+		free_irq(rcb_dev->virq[RCB_IRQ_IDX_RX], ring);
 /** Modified by CHJ. hulk3.19 no ic_enable_msi*/
 #if 0
 	ic_disable_msi(rcb_dev->virq[RCB_IRQ_IDX_RX]);
@@ -898,7 +910,7 @@ void rcb_ring_disable(struct nic_ring_pair *ring)
 	napi_disable(&ring->tx_ring.napi);
 	napi_disable(&ring->rx_ring.napi);
 
-	rcb_irq_uninit(ring);
+	/*rcb_irq_uninit(ring);*/
 	msleep(10);
 	rcb_dev->ops.clean_tx_ring(ring);
 }
@@ -932,7 +944,7 @@ void rcb_ring_disable_all(struct nic_device *nic_dev)
 		napi_disable(&ring->tx_ring.napi);
 		napi_disable(&ring->rx_ring.napi);
 
-		rcb_irq_uninit(ring);
+		/*rcb_irq_uninit(ring);*/
 
 		rcb_dev->ops.clean_tx_ring(ring);
 	}

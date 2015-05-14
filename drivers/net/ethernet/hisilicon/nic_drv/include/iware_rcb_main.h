@@ -68,6 +68,9 @@ struct nic_device;
 #define RCB_IRQ_NAME_LEN 12
 #define RCB_ALL_RING_NUM 96
 
+#define RCB_IRQ_NOT_INITED 0
+#define RCB_IRQ_INITED 1
+
 
 enum rcb_int_flag {
 	RCB_INT_FLAG_TX = 0x1,
@@ -143,6 +146,8 @@ struct rcb_device {
 
 	s32 base_irq;
 	int virq[RCB_IRQ_NUM_PER_QUEUE];
+	int irq_init_flag;
+	char irq_name[RCB_IRQ_NUM_PER_QUEUE][RCB_IRQ_NAME_LEN];
 
 	u8 queue_index;		/* needed for multiqueue queue management */
 	u8 max_buf_num;
