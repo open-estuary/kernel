@@ -1479,7 +1479,7 @@ static unsigned int pl011_tx_empty(struct uart_port *port)
 	    container_of(port, struct uart_amba_port, port);
 	unsigned int status = uap->vendor->regreadw(uap->port.membase
 								+ UART01x_FR);
-	return status & (UART01x_FR_BUSY|UART01x_FR_TXFF) ? 0 : TIOCSER_TEMT;
+	return status & UART011_FR_TXFE ? TIOCSER_TEMT : 0;
 }
 
 static unsigned int pl011_get_mctrl(struct uart_port *port)
@@ -2181,7 +2181,7 @@ pl011_console_write(struct console *co, const char *s, unsigned int count)
 	 */
 	do {
 		status = uap->vendor->regreadw(uap->port.membase + UART01x_FR);
-	} while (status & UART01x_FR_BUSY);
+	} while (!(status & UART011_FR_TXFE));
 	if (!uap->vendor->always_enabled)
 		uap->vendor->regwritew(old_cr, uap->port.membase + UART011_CR);
 
@@ -2351,7 +2351,7 @@ static void pl011_putc(struct uart_port *port, int c)
 	while (readl(port->membase + UART01x_FR) & UART01x_FR_TXFF)
 		barrier();
 	writel(c, port->membase + UART01x_DR);
-	while (readl(port->membase + UART01x_FR) & UART01x_FR_BUSY)
+	while (!(readl(port->membase + UART01x_FR) & UART011_FR_TXFE))
 		barrier();
 }
 
