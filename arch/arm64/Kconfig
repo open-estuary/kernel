@@ -474,8 +474,11 @@ config UP_LATE_INIT
        depends on !SMP
 
 config HZ
-	int
-	default 100
+	int "HZ (100,250,1000)"
+	range 100 1000
+	default 250
+	
+
 
 config ARCH_HAS_HOLES_MEMORYMODEL
 	def_bool y if SPARSEMEM
