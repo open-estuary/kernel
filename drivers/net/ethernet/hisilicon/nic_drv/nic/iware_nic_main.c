@@ -268,10 +268,10 @@ void nic_update_stats(struct net_device *netdev)
 
 	ppe_update_stats(nic_dev->ppe_device);
 	netdev->stats.rx_missed_errors
-		= nic_dev->ppe_device->hw_stats.rx_drop_no_bd
-		+ nic_dev->ppe_device->hw_stats.rx_drop_no_buf;
-	rx_err += nic_dev->ppe_device->hw_stats.rx_drop_no_bd
-		+ nic_dev->ppe_device->hw_stats.rx_drop_no_buf
+		/*= nic_dev->ppe_device->hw_stats.rx_drop_no_bd*/
+		= nic_dev->ppe_device->hw_stats.rx_drop_no_buf;
+	/*rx_err += nic_dev->ppe_device->hw_stats.rx_drop_no_bd*/
+	rx_err += nic_dev->ppe_device->hw_stats.rx_drop_no_buf
 		+  nic_dev->ppe_device->hw_stats.rx_err_fifo_full;
 	tx_err = nic_dev->ppe_device->hw_stats.tx_err_checksum
 		+ nic_dev->ppe_device->hw_stats.tx_err_fifo_empty;
