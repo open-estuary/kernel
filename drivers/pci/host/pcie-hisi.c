@@ -653,7 +653,7 @@ void hisi_pcie_msi_enable(struct device_node *np, struct hisi_pcie *hisi_pcie)
 	hisi_pcie->pp.domain = irq_domain;
 }
 
-static int __init hisi_pcie_probe(struct platform_device *pdev)
+static int hisi_pcie_probe(struct platform_device *pdev)
 {
 	struct hisi_pcie *hisi_pcie;
 	struct pcie_port *pp;
