@@ -177,7 +177,7 @@ static const struct vgic_ops vgic_v2_ops = {
 static struct vgic_params vgic_v2_params;
 
 /**
- * vgic_v2_probe - probe for a GICv2 compatible interrupt controller in DT
+ * vgic_v2_dt_probe - probe for a GICv2 compatible interrupt controller in DT
  * @node:	pointer to the DT node
  * @ops: 	address of a pointer to the GICv2 operations
  * @params:	address of a pointer to HW-specific parameters
@@ -186,9 +186,9 @@ static struct vgic_params vgic_v2_params;
  * in *ops and the HW parameters in *params. Returns an error code
  * otherwise.
  */
-int vgic_v2_probe(struct device_node *vgic_node,
-		  const struct vgic_ops **ops,
-		  const struct vgic_params **params)
+int vgic_v2_dt_probe(struct device_node *vgic_node,
+		     const struct vgic_ops **ops,
+		     const struct vgic_params **params)
 {
 	int ret;
 	struct resource vctrl_res;
