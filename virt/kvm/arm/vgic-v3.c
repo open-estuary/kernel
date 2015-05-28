@@ -222,7 +222,7 @@ static const struct vgic_ops vgic_v3_ops = {
 static struct vgic_params vgic_v3_params;
 
 /**
- * vgic_v3_probe - probe for a GICv3 compatible interrupt controller in DT
+ * vgic_v3_dt_probe - probe for a GICv3 compatible interrupt controller in DT
  * @node:	pointer to the DT node
  * @ops: 	address of a pointer to the GICv3 operations
  * @params:	address of a pointer to HW-specific parameters
@@ -231,9 +231,9 @@ static struct vgic_params vgic_v3_params;
  * in *ops and the HW parameters in *params. Returns an error code
  * otherwise.
  */
-int vgic_v3_probe(struct device_node *vgic_node,
-		  const struct vgic_ops **ops,
-		  const struct vgic_params **params)
+int vgic_v3_dt_probe(struct device_node *vgic_node,
+		     const struct vgic_ops **ops,
+		     const struct vgic_params **params)
 {
 	int ret = 0;
 	u32 gicv_idx;
