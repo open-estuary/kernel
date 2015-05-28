@@ -24,6 +24,7 @@
 #include <linux/irqreturn.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>
+#include <linux/acpi.h>
 #include <kvm/iodev.h>
 
 #define VGIC_NR_IRQS_LEGACY	256
@@ -354,10 +355,18 @@ bool kvm_vgic_map_is_active(struct kvm_vcpu *vcpu, struct irq_phys_map *map);
 int vgic_v2_dt_probe(struct device_node *vgic_node,
 		     const struct vgic_ops **ops,
 		     const struct vgic_params **params);
+#ifdef CONFIG_ACPI
+int vgic_v2_acpi_probe(struct acpi_madt_generic_interrupt *,
+		       const struct vgic_ops **ops,
+		       const struct vgic_params **params);
+#endif /* CONFIG_ACPI */
 #ifdef CONFIG_KVM_ARM_VGIC_V3
 int vgic_v3_dt_probe(struct device_node *vgic_node,
 		     const struct vgic_ops **ops,
 		     const struct vgic_params **params);
+int vgic_v3_acpi_probe(struct acpi_madt_generic_interrupt *,
+		       const struct vgic_ops **ops,
+		       const struct vgic_params **params);
 #else
 static inline int vgic_v3_dt_probe(struct device_node *vgic_node,
 				   const struct vgic_ops **ops,
@@ -365,6 +374,15 @@ static inline int vgic_v3_dt_probe(struct device_node *vgic_node,
 {
 	return -ENODEV;
 }
+
+#ifdef CONFIG_ACPI
+int vgic_v3_acpi_probe(struct acpi_madt_generic_interrupt *vgic_acpi,
+		       const struct vgic_ops **ops,
+		       const struct vgic_params **params)
+{
+	return -ENODEV;
+}
+#endif /* CONFIG_ACPI */
 #endif
 
 #endif

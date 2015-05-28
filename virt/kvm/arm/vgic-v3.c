@@ -23,6 +23,7 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
+#include <linux/acpi.h>
 
 #include <linux/irqchip/arm-gic-v3.h>
 
@@ -296,3 +297,12 @@ out:
 	of_node_put(vgic_node);
 	return ret;
 }
+
+#ifdef CONFIG_ACPI
+int vgic_v3_acpi_probe(struct acpi_madt_generic_interrupt *vgic_acpi,
+		       const struct vgic_ops **ops,
+		       const struct vgic_params **params)
+{
+	return -EINVAL;
+}
+#endif /* CONFIG_ACPI */
