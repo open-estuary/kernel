@@ -34,6 +34,7 @@
 #include <trace/events/kvm.h>
 #include <asm/kvm.h>
 #include <kvm/iodev.h>
+#include <linux/irqchip/arm-gic-v3.h>
 
 #define CREATE_TRACE_POINTS
 #include "trace.h"
@@ -2416,9 +2417,106 @@ static int kvm_vgic_dt_probe(void)
 }
 
 #ifdef CONFIG_ACPI
+u8 gic_version = ACPI_MADT_GIC_VERSION_NONE;
+phys_addr_t dist_phy_base;
+static struct acpi_madt_generic_interrupt *vgic_acpi;
+
+static void gic_get_acpi_header(struct acpi_subtable_header *header)
+{
+	vgic_acpi = (struct acpi_madt_generic_interrupt *)header;
+}
+
+static int gic_parse_distributor(struct acpi_subtable_header *header,
+				 const unsigned long end)
+{
+	struct acpi_madt_generic_distributor *dist;
+
+	dist = (struct acpi_madt_generic_distributor *)header;
+
+	if (BAD_MADT_ENTRY(dist, end))
+		return -EINVAL;
+
+	gic_version = dist->version;
+	dist_phy_base = dist->base_address;
+
+	return 0;
+}
+
+static int gic_match_redist(struct acpi_subtable_header *header,
+			    const unsigned long end)
+{
+	return 0;
+}
+
+static bool gic_redist_is_present(void)
+{
+	int count;
+
+	/* scan MADT table to find if we have redistributor entries */
+	count = acpi_table_parse_madt(ACPI_MADT_TYPE_GENERIC_REDISTRIBUTOR,
+				      gic_match_redist, 0);
+
+	return (count > 0) ? true : false;
+}
+
 static int kvm_vgic_acpi_probe(void)
 {
-	return -EINVAL;
+	u32 reg;
+	int count;
+	void __iomem *dist_base;
+	int ret;
+
+	/* MADT table */
+	ret = acpi_table_parse_madt(ACPI_MADT_TYPE_GENERIC_INTERRUPT,
+			(acpi_tbl_entry_handler)gic_get_acpi_header, 0);
+	if (!ret) {
+		pr_err("Failed to get MADT VGIC CPU entry\n");
+		return -ENODEV;
+	}
+
+	/* detect GIC version */
+	count = acpi_table_parse_madt(ACPI_MADT_TYPE_GENERIC_DISTRIBUTOR,
+				      gic_parse_distributor, 0);
+	if (count <= 0) {
+		pr_err("No valid GIC distributor entry exists\n");
+		return -ENODEV;
+	}
+	if (gic_version >= ACPI_MADT_GIC_VERSION_RESERVED) {
+		pr_err("Invalid GIC version %d in MADT\n", gic_version);
+		return -EINVAL;
+	}
+
+	/* falls back to manual hardware discovery under ACPI 5.1 */
+	if (gic_version == ACPI_MADT_GIC_VERSION_NONE) {
+		if (gic_redist_is_present()) {
+			dist_base = ioremap(dist_phy_base, SZ_64K);
+			if (!dist_base)
+				return -ENOMEM;
+
+			reg = readl_relaxed(dist_base + GICD_PIDR2) & GIC_PIDR2_ARCH_MASK;
+			if (reg == GIC_PIDR2_ARCH_GICv3)
+				gic_version = ACPI_MADT_GIC_VERSION_V3;
+			else
+				gic_version = ACPI_MADT_GIC_VERSION_V4;
+
+			iounmap(dist_base);
+		} else {
+			gic_version = ACPI_MADT_GIC_VERSION_V2;
+		}
+	}
+
+	switch (gic_version) {
+	case ACPI_MADT_GIC_VERSION_V2:
+		ret = vgic_v2_acpi_probe(vgic_acpi, &vgic_ops, &vgic);
+		break;
+	case ACPI_MADT_GIC_VERSION_V3:
+		ret = vgic_v3_acpi_probe(vgic_acpi, &vgic_ops, &vgic);
+		break;
+	default:
+		ret = -ENODEV;
+	}
+
+	return ret;
 }
 #endif /* CONFIG_ACPI */
 
