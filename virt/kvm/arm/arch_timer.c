@@ -21,6 +21,7 @@
 #include <linux/kvm.h>
 #include <linux/kvm_host.h>
 #include <linux/interrupt.h>
+#include <linux/acpi.h>
 
 #include <clocksource/arm_arch_timer.h>
 #include <asm/arch_timer.h>
@@ -381,9 +382,53 @@ static const struct of_device_id arch_timer_of_match[] = {
 	{},
 };
 
-int kvm_timer_hyp_init(void)
+static int kvm_timer_ppi_dt_parse(unsigned int *ppi)
 {
 	struct device_node *np;
+
+	np = of_find_matching_node(NULL, arch_timer_of_match);
+	if (!np)
+		return -ENODEV;
+
+	*ppi = irq_of_parse_and_map(np, 2);
+	if (*ppi == 0) {
+		of_node_put(np);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+#ifdef CONFIG_ACPI
+struct acpi_table_gtdt *gtdt_acpi;
+static void arch_timer_acpi_parse(struct acpi_table_header *table)
+{
+	gtdt_acpi = container_of(table, struct acpi_table_gtdt, header);
+}
+
+static int kvm_timer_ppi_acpi_parse(unsigned int *ppi)
+{
+	int gsi, trigger, polarity;
+
+	/* Get the interrupt number from the GTDT table */
+	acpi_table_parse(ACPI_SIG_GTDT,
+			 (acpi_tbl_table_handler)arch_timer_acpi_parse);
+
+	if (!gtdt_acpi->virtual_timer_interrupt)
+		return -EINVAL;
+
+	gsi = gtdt_acpi->virtual_timer_interrupt;
+	trigger = gtdt_acpi->virtual_timer_flags & ACPI_GTDT_INTERRUPT_MODE;
+	polarity = (gtdt_acpi->virtual_timer_flags &
+		       ACPI_GTDT_INTERRUPT_POLARITY) >> 1;
+	*ppi = acpi_register_gsi(NULL, gsi, trigger, polarity);
+
+	return 0;
+}
+#endif
+
+int kvm_timer_hyp_init(void)
+{
 	unsigned int ppi;
 	int err;
 
@@ -391,19 +436,20 @@ int kvm_timer_hyp_init(void)
 	if (!timecounter)
 		return -ENODEV;
 
-	np = of_find_matching_node(NULL, arch_timer_of_match);
-	if (!np) {
-		kvm_err("kvm_arch_timer: can't find DT node\n");
-		return -ENODEV;
+	/* PPI parsing: try DT first, then ACPI */
+	err = kvm_timer_ppi_dt_parse(&ppi);
+#ifdef CONFIG_ACPI
+	if (err && !acpi_disabled)
+		err = kvm_timer_ppi_acpi_parse(&ppi);
+#endif
+
+	if (err) {
+		kvm_err("kvm_arch_timer: can't find virtual timer info or "
+			"config virtual timer interrupt\n");
+		return err;
 	}
 
-	ppi = irq_of_parse_and_map(np, 2);
-	if (!ppi) {
-		kvm_err("kvm_arch_timer: no virtual timer interrupt\n");
-		err = -EINVAL;
-		goto out;
-	}
-
+	/* configure IRQ handler */
 	err = request_percpu_irq(ppi, kvm_arch_timer_handler,
 				 "kvm guest timer", kvm_get_running_vcpus());
 	if (err) {
@@ -426,14 +472,13 @@ int kvm_timer_hyp_init(void)
 		goto out_free;
 	}
 
-	kvm_info("%s IRQ%d\n", np->name, ppi);
+	kvm_info("timer IRQ%d\n", ppi);
 	on_each_cpu(kvm_timer_init_interrupt, NULL, 1);
 
 	goto out;
 out_free:
 	free_percpu_irq(ppi, kvm_get_running_vcpus());
 out:
-	of_node_put(np);
 	return err;
 }
 
