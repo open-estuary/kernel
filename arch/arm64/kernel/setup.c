@@ -44,6 +44,7 @@
 #include <linux/of_fdt.h>
 #include <linux/of_platform.h>
 #include <linux/efi.h>
+#include <linux/cpufreq.h>
 #include <linux/personality.h>
 
 #include <asm/fixmap.h>
@@ -529,6 +530,7 @@ static int c_show(struct seq_file *m, void *v)
 	for_each_online_cpu(i) {
 		struct cpuinfo_arm64 *cpuinfo = &per_cpu(cpu_data, i);
 		u32 midr = cpuinfo->reg_midr;
+		unsigned int cpu_freq = cpufreq_get(i);
 
 		/*
 		 * glibc reads /proc/cpuinfo to determine the number of
@@ -538,6 +540,11 @@ static int c_show(struct seq_file *m, void *v)
 #ifdef CONFIG_SMP
 		seq_printf(m, "processor\t: %d\n", i);
 #endif
+		/* TO FIX */
+		if (cpu_freq)
+			seq_printf(m, "cpu MHz\t\t: %u.%03u\n",
+				   cpu_freq / 1000,
+				   cpu_freq % 1000);
 
 		/*
 		 * Dump out the common processor features in a single line.
