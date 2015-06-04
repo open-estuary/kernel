@@ -48,6 +48,7 @@
 #include <linux/mm.h>
 
 pg_data_t pgdat_list[MAX_NUMNODES];
+EXPORT_SYMBOL(pgdat_list);
 
 /* use the per-pgdat data instead for discontigmem - mbligh */
 unsigned long max_mapnr;

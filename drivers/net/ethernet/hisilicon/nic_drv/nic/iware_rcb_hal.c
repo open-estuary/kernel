@@ -1273,7 +1273,7 @@ recv:
 		ntc = (ntc >= rx_ring->count) ? 0 : ntc;
 		rx_ring->next_to_clean = ntc;
 
-		(void)log_dbg(ring->dev,
+		log_dbg(ring->dev,
 			"bdcnt%d,qid%d,rx BD No.%d: desc addr=0x%llx word2=%#x word3=%#x word4=%#x, budget%d,recv_cnt%d,real_cnt%d\n",
 			get_bd_cnt, ring->rcb_dev.queue_index, ntc, rx_desc->addr, rx_desc->word2.u_32,
 			rx_desc->word3.u_32, rx_desc->word4.u_32, budget, recv_cnt, real_cnt);
@@ -1444,7 +1444,7 @@ recv:
 		ntc = (ntc >= rx_ring->count) ? 0 : ntc;
 		rx_ring->next_to_clean = ntc;
 
-		(void)log_dbg(ring->dev,
+		log_dbg(ring->dev,
 			"bdcnt%d,qid%d,rx BD No.%d: desc addr=0x%llx word2=%#x word3=%#x word4=%#x, budget%d,recv_cnt%d,real_cnt%d\n",
 			get_bd_cnt, ring->rcb_dev.queue_index, ntc, rx_desc->addr, rx_desc->word2.u_32,
 			rx_desc->word3.u_32, rx_desc->word4.u_32, budget, recv_cnt, real_cnt);
