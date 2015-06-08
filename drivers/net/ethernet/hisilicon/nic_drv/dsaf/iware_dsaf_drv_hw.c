@@ -488,7 +488,7 @@ static void dsaf_sbm_bp_wl_cfg(u32 dsaf_id)
 
 		o_sbm_bp_cfg2.u32 = dsaf_read(dsaf_id,
 			DSAF_SBM_BP_CFG_2_XGE_REG_0_REG + 0x80 * (u64)i);
- 		o_sbm_bp_cfg2.bits.sbm_cfg_set_buf_num = 104;
+		o_sbm_bp_cfg2.bits.sbm_cfg_set_buf_num = 104;
 		o_sbm_bp_cfg2.bits.sbm_cfg_reset_buf_num = 128;
 		dsaf_write(dsaf_id, o_sbm_bp_cfg2.u32,
 			DSAF_SBM_BP_CFG_2_XGE_REG_0_REG + 0x80 * (u64)i);
@@ -988,6 +988,7 @@ void dsaf_xge_int_handler(u32 dsaf_id, u32 dsaf_xge_chn)
 	p = &g_dsaf_int_xge_stat[dsaf_xge_chn];
 
 	dsaf_int_xge_sts_get(dsaf_id, dsaf_xge_chn, &int_sts);
+	osal_printf("dsaf xge int,int_sts=%#x\n", int_sts.u32);
 
 	dsaf_int_xge_msk_get(dsaf_id, dsaf_xge_chn, &int_msk);
 
@@ -1087,6 +1088,7 @@ void dsaf_ppe_int_handler(u32 dsaf_id, u32 dsaf_ppe_chn)
 
 	p = &g_dsaf_int_ppe_stat[dsaf_ppe_chn];
 	dsaf_int_ppe_sts_get(dsaf_id, dsaf_ppe_chn, &int_sts);
+	osal_printf("dsaf ppe int,int_sts=%#x\n", int_sts.u32);
 
 	dsaf_int_ppe_msk_get(dsaf_id, dsaf_ppe_chn, &int_msk);
 
@@ -1186,6 +1188,7 @@ void dsaf_rocee_int_handler(u32 dsaf_id, u32 dsaf_rocee_chn)
 
 	p = &g_dsaf_int_rocee_stat[dsaf_rocee_chn];
 	dsaf_int_rocee_sts_get(dsaf_id, dsaf_rocee_chn, &int_sts);
+	osal_printf("rocee ppe int,int_sts=%#x\n", int_sts.u32);
 
 	dsaf_int_rocee_msk_get(dsaf_id, dsaf_rocee_chn, &int_msk);
 
@@ -1274,6 +1277,7 @@ void dsaf_tbl_damis_int_handler(u32 dsaf_id)
 
 	p = &g_dsaf_int_tbl_stat[0];
 	dsaf_int_tbl_sts_get(dsaf_id, &int_sts);
+	osal_printf("dsaf tbl damis int,int_sts=%#x\n", int_sts.u32);
 
 	dsaf_int_tbl_msk_get(dsaf_id, &int_msk);
 
@@ -1382,6 +1386,7 @@ void dsaf_tbl_samis_int_handler(u32 dsaf_id)
 
 	p = &g_dsaf_int_tbl_stat[0];
 	dsaf_int_tbl_sts_get(dsaf_id, &int_sts);
+	osal_printf("dsaf tbl samis int,int_sts=%#x\n", int_sts.u32);
 
 	dsaf_int_tbl_msk_get(dsaf_id, &int_msk);
 
@@ -1417,6 +1422,7 @@ void dsaf_tbl_ecc_int_handler(u32 dsaf_id)
 
 	p = &g_dsaf_int_tbl_stat[0];
 	dsaf_int_tbl_sts_get(dsaf_id, &int_sts);
+	osal_printf("dsaf tbl ecc int,int_sts=%#x\n", int_sts.u32);
 
 	dsaf_int_tbl_msk_get(dsaf_id, &int_msk);
 
@@ -1765,6 +1771,9 @@ void dsaf_comm_init(u32 dsaf_id, enum dsaf_mode dsaf_mode)
 	/*common*/
 	u32 i = 0;
 	u32 mask_set = 0x0;
+	union dsaf_xge_int_msk int_msk_xge;
+	union dsaf_ppe_int_msk int_msk_ppe;
+	union dsaf_rocee_int_msk int_msk_rocee;
 
 	dsaf_en(dsaf_id, g_dsaf_cfg.dsaf_en);
 
@@ -1798,11 +1807,21 @@ void dsaf_comm_init(u32 dsaf_id, enum dsaf_mode dsaf_mode)
 	/*int statistic zero init*/
 	dsaf_int_stat_init();
 
+	/*shield 2bit ecc INT*/
+	int_msk_xge.u32 = 0;
+	int_msk_xge.bits.sbm_xge_sram_ecc_2bit_int_msk = 1;
+
+	int_msk_ppe.u32 = 0;
+	int_msk_ppe.bits.sbm_ppe_sram_ecc_2bit_int_msk = 1;
+
+	int_msk_rocee.u32 = 0;
+	int_msk_rocee.bits.sbm_rocee_sram_ecc_2bit_int_msk = 1;
+
 	/*open int*/
 	for (i = 0; i < DSAF_COMM_CHN; i++) {
-		dsaf_int_xge_msk_set(dsaf_id, i, mask_set);
-		dsaf_int_ppe_msk_set(dsaf_id, i, mask_set);
-		dsaf_int_rocee_msk_set(dsaf_id, i, mask_set);
+		dsaf_int_xge_msk_set(dsaf_id, i, int_msk_xge.u32);
+		dsaf_int_ppe_msk_set(dsaf_id, i, int_msk_ppe.u32);
+		dsaf_int_rocee_msk_set(dsaf_id, i, int_msk_rocee.u32);
 	}
 
 	mask_set = 0x3FFFFF;
@@ -1898,7 +1917,3 @@ void dsaf_voq_init(u32 dsaf_id)
 {
 	dsaf_voq_bp_all_thrd_cfg(dsaf_id);
 }
-
-
-
-
