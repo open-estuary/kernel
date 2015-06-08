@@ -58,6 +58,30 @@
 		};
 	};
 
+	smmu_pcie {
+		compatible = "arm,smmu-v3";
+		reg = <0x0 0xa0040000 0x0 0x20000>;
+		msi-parent = <&its>;
+		mbi = <0x40b0c 3 0 3>;
+		smmu-cb-memtype = <0x0 0x1>;
+	};
+
+	smmu_dsa {
+		compatible = "arm,smmu-v3";
+		reg = <0x0 0xc0040000 0x0 0x20000>;
+		msi-parent = <&its>;
+		mbi = <0x40b20 3 0 3>;
+		smmu-cb-memtype = <0x0 0x1>;
+	};
+
+	smmu_alg {
+		compatible = "arm,smmu-v3";
+		reg = <0x0 0xd0040000 0x0 0x20000>;
+		msi-parent = <&its>;
+		mbi = <0x40b1b 3 0 3>;
+		smmu-cb-memtype = <0x0 0x1>;
+	};
+
 	timer {
 		compatible = "arm,armv8-timer";
 		interrupts = <1 13 4>,
