@@ -724,6 +724,7 @@ int nic_up(struct net_device *netdev)
 		}
 	}
 
+
 	mac_dev = nic_dev->mac_dev;
 	if (NULL == mac_dev || NULL == mac_dev->start) {
 		log_err(&netdev->dev, "mac start fail, mac_dev = %p!\n",
@@ -1323,8 +1324,12 @@ int nic_probe(struct platform_device *pdev)
 	netdev->ethtool_ops = &g_nic_ethtools;
 	netdev->watchdog_timeo = NIC_TX_TIMEOUT;
 	netdev->features |=
-	    NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM;
+		NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM;
 	netdev->features |= NETIF_F_SG | NETIF_F_GSO | NETIF_F_GRO;
+
+	netdev->vlan_features |=
+		NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM | NETIF_F_RXCSUM;
+	netdev->vlan_features |= NETIF_F_SG | NETIF_F_GSO | NETIF_F_GRO;
 
 	setup_timer(&nic_dev->service_timer, nic_service_timer,
 		    (unsigned long)nic_dev);

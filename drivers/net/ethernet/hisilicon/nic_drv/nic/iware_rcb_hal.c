@@ -943,6 +943,7 @@ netdev_tx_t rcb_pkt_send_hw(struct sk_buff *skb, struct nic_ring_pair *ring)
 	/* struct sk_buff *tmp_skb; */
 	u32 idx;
 
+	__be16 protocol = skb->protocol;
 
 	struct sk_buff *new_skb = NULL;
 
@@ -998,7 +999,6 @@ netdev_tx_t rcb_pkt_send_hw(struct sk_buff *skb, struct nic_ring_pair *ring)
         buf_num = 1;
     }
 #endif
-
 	log_dbg(ring->dev, "next_to_use=%d tx_desc=%#llx buf_num=%d\n",
 		next_to_use, (u64) tx_desc, buf_num);
 
@@ -1023,29 +1023,29 @@ netdev_tx_t rcb_pkt_send_hw(struct sk_buff *skb, struct nic_ring_pair *ring)
 		tx_desc[next_to_use].word3.bits.FE = 0;
 
         if (skb->ip_summed == CHECKSUM_PARTIAL) {
+		tx_desc[next_to_use].word3.bits.IP_offset = ETH_HLEN;
+
+		/*if it is a SW VLAN check the next protocol*/
+		if (protocol == htons(ETH_P_8021Q)) {
+			tx_desc[next_to_use].word3.bits.IP_offset += VLAN_HLEN;
+			protocol = vlan_get_protocol(skb);
+			skb->protocol = protocol;
+		}
+
 		if (skb->protocol == ntohs(ETH_P_IP)) {
-			tx_desc[next_to_use].word3.bits.IP_offset = ETH_HLEN;
-			/* if have a HW VLAN tag*/
-				if (vlan_tx_tag_present(skb))
-					tx_desc[next_to_use].word3.bits.IP_offset += VLAN_HLEN;
 			tx_desc[next_to_use].word3.bits.L3CS = 1;
 
 			/* check for tcp/udp header */
 			tx_desc[next_to_use].word3.bits.L4CS = 1;
 
 		} else if (skb->protocol == ntohs(ETH_P_IPV6)) {
-			tx_desc[next_to_use].word3.bits.IP_offset = ETH_HLEN;
-			/* if have a HW VLAN tag*/
-				if (vlan_tx_tag_present(skb))
-					tx_desc[next_to_use].word3.bits.IP_offset += VLAN_HLEN;
-
 			/*ipv6 has not l3 cs */
 			tx_desc[next_to_use].word3.bits.L3CS = 0;
 
 			/* check for tcp/udp header */
 			tx_desc[next_to_use].word3.bits.L4CS = 1;
 		}
-		}
+	}
 
 		log_dbg(ring->dev, "addr(%#llx) word2(%#x) word3(%#x)\r\n",
 			tx_desc[next_to_use].addr, tx_desc[next_to_use].word2.u_32,
