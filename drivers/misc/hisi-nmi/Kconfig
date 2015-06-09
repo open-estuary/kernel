@@ -1,0 +1,10 @@
+menu "HISI NMI Feature Test Function"
+
+config HISI_NMI_DEMO
+	bool "HISI NMI Feature Demo"
+	default n
+	help
+	  Reg the NMI feature on the HISI PV660 board. To test this function,
+	  the CONFIG_HISI_AARCH64_NMI Should be Enabled.
+
+endmenu

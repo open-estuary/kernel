@@ -84,6 +84,7 @@ config ARM64
 	select SPARSE_IRQ
 	select SYSCTL_EXCEPTION_TRACE
 	select HAVE_CONTEXT_TRACKING
+	select HAVE_NMI_WATCHDOG if HISI_AARCH64_NMI || HISI_NMI_DEMO
 	help
 	  ARM 64-bit (AArch64) Linux support.
 
@@ -635,6 +636,12 @@ config CP15_BARRIER_EMULATION
 	  If unsure, say Y
 
 endif
+
+config HISI_AARCH64_NMI
+	bool "Enable NMI Feature on HISI PV660"
+	default n
+	help
+	  Enable the NMI Feature on HISI PV660 chip after cpu dead-locking
 
 endmenu
 
