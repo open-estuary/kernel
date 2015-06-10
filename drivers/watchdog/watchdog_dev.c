@@ -217,6 +217,38 @@ out_timeout:
 }
 
 /*
+ *	watchdog_set_pretimeout: set the watchdog timer pretimeout
+ *	@wdd: the watchdog device to set the timeout for
+ *	@pretimeout: pretimeout to set in seconds
+ */
+
+static int watchdog_set_pretimeout(struct watchdog_device *wdd,
+				   unsigned int pretimeout)
+{
+	int err;
+
+	if (!wdd->ops->set_pretimeout ||
+	    !(wdd->info->options & WDIOF_PRETIMEOUT))
+		return -EOPNOTSUPP;
+
+	if (watchdog_pretimeout_invalid(wdd, pretimeout))
+		return -EINVAL;
+
+	mutex_lock(&wdd->lock);
+
+	if (test_bit(WDOG_UNREGISTERED, &wdd->status)) {
+		err = -ENODEV;
+		goto out_pretimeout;
+	}
+
+	err = wdd->ops->set_pretimeout(wdd, pretimeout);
+
+out_pretimeout:
+	mutex_unlock(&wdd->lock);
+	return err;
+}
+
+/*
  *	watchdog_get_timeleft: wrapper to get the time left before a reboot
  *	@wdd: the watchdog device to get the remaining time from
  *	@timeleft: the time that's left
@@ -391,6 +423,29 @@ static long watchdog_ioctl(struct file *file, unsigned int cmd,
 		if (wdd->timeout == 0)
 			return -EOPNOTSUPP;
 		return put_user(wdd->timeout, p);
+	case WDIOC_SETPRETIMEOUT:
+		/* check if we support the pretimeout */
+		if (!(wdd->info->options & WDIOF_PRETIMEOUT))
+			return -EOPNOTSUPP;
+		if (get_user(val, p))
+			return -EFAULT;
+		err = watchdog_set_pretimeout(wdd, val);
+		if (err < 0)
+			return err;
+		/*
+		 * If the watchdog is active then we send a keepalive ping
+		 * to make sure that the watchdog keeps running (and if
+		 * possible that it takes the new pretimeout)
+		 */
+		err = watchdog_ping(wdd);
+		if (err < 0)
+			return err;
+		/* Fall */
+	case WDIOC_GETPRETIMEOUT:
+		/* check if we support the pretimeout */
+		if (wdd->info->options & WDIOF_PRETIMEOUT)
+			return put_user(wdd->pretimeout, p);
+		return -EOPNOTSUPP;
 	case WDIOC_GETTIMELEFT:
 		err = watchdog_get_timeleft(wdd, &val);
 		if (err)

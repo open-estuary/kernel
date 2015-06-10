@@ -25,6 +25,7 @@ struct watchdog_device;
  * @ping:	The routine that sends a keepalive ping to the watchdog device.
  * @status:	The routine that shows the status of the watchdog device.
  * @set_timeout:The routine for setting the watchdog devices timeout value (in seconds).
+ * @set_pretimeout:The routine for setting the watchdog devices pretimeout value (in seconds).
  * @get_timeleft:The routine that gets the time left before a reset (in seconds).
  * @ref:	The ref operation for dyn. allocated watchdog_device structs
  * @unref:	The unref operation for dyn. allocated watchdog_device structs
@@ -44,6 +45,7 @@ struct watchdog_ops {
 	int (*ping)(struct watchdog_device *);
 	unsigned int (*status)(struct watchdog_device *);
 	int (*set_timeout)(struct watchdog_device *, unsigned int);
+	int (*set_pretimeout)(struct watchdog_device *, unsigned int);
 	unsigned int (*get_timeleft)(struct watchdog_device *);
 	void (*ref)(struct watchdog_device *);
 	void (*unref)(struct watchdog_device *);
@@ -62,6 +64,9 @@ struct watchdog_ops {
  * @timeout:	The watchdog devices timeout value (in seconds).
  * @min_timeout:The watchdog devices minimum timeout value (in seconds).
  * @max_timeout:The watchdog devices maximum timeout value (in seconds).
+ * @pretimeout:	The watchdog devices pretimeout value.
+ * @min_pretimeout:The watchdog devices minimum pretimeout value.
+ * @max_pretimeout:The watchdog devices maximum pretimeout value.
  * @driver-data:Pointer to the drivers private data.
  * @lock:	Lock for watchdog core internal use only.
  * @status:	Field that contains the devices internal status bits.
@@ -88,6 +93,9 @@ struct watchdog_device {
 	unsigned int timeout;
 	unsigned int min_timeout;
 	unsigned int max_timeout;
+	unsigned int pretimeout;
+	unsigned int min_pretimeout;
+	unsigned int max_pretimeout;
 	void *driver_data;
 	struct mutex lock;
 	unsigned long status;
@@ -127,7 +135,21 @@ static inline bool watchdog_timeout_invalid(struct watchdog_device *wdd, unsigne
 	 *   than the maximum timeout.
 	 */
 	return t < wdd->min_timeout ||
-		(wdd->max_timeout && t > wdd->max_timeout);
+	       (wdd->max_timeout && t > wdd->max_timeout) ||
+	       (wdd->pretimeout && t <= wdd->pretimeout);
+}
+
+/*
+ * Use the following function to check if a pretimeout value is invalid.
+ * It can be "0", that means we don't use pretimeout.
+ * This function returns false, when pretimeout is 0.
+ */
+static inline bool watchdog_pretimeout_invalid(struct watchdog_device *wdd,
+					       unsigned int t)
+{
+	return t && (t < wdd->min_pretimeout ||
+		     (wdd->max_pretimeout && t > wdd->max_pretimeout) ||
+		     (wdd->timeout && t >= wdd->timeout));
 }
 
 /* Use the following functions to manipulate watchdog driver specific data */
@@ -142,8 +164,17 @@ static inline void *watchdog_get_drvdata(struct watchdog_device *wdd)
 }
 
 /* drivers/watchdog/watchdog_core.c */
-extern int watchdog_init_timeout(struct watchdog_device *wdd,
-				  unsigned int timeout_parm, struct device *dev);
+int watchdog_init_timeouts(struct watchdog_device *wdd,
+			   unsigned int pretimeout_parm,
+			   unsigned int timeout_parm,
+			   struct device *dev);
+static inline int watchdog_init_timeout(struct watchdog_device *wdd,
+					unsigned int timeout_parm,
+					struct device *dev)
+{
+	return watchdog_init_timeouts(wdd, 0, timeout_parm, dev);
+}
+
 extern int watchdog_register_device(struct watchdog_device *);
 extern void watchdog_unregister_device(struct watchdog_device *);
 

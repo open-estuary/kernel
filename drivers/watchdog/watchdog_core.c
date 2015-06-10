@@ -85,57 +85,126 @@ static void watchdog_deferred_registration_del(struct watchdog_device *wdd)
 static void watchdog_check_min_max_timeout(struct watchdog_device *wdd)
 {
 	/*
-	 * Check that we have valid min and max timeout values, if
-	 * not reset them both to 0 (=not used or unknown)
+	 * Check that we have valid min and max pretimeout and timeout values,
+	 * if not, reset them all to 0 (=not used or unknown)
 	 */
-	if (wdd->min_timeout > wdd->max_timeout) {
-		pr_info("Invalid min and max timeout values, resetting to 0!\n");
+	if (wdd->min_pretimeout > wdd->max_pretimeout ||
+	    wdd->min_timeout > wdd->max_timeout ||
+	    wdd->min_timeout < wdd->min_pretimeout ||
+	    wdd->max_timeout < wdd->max_pretimeout) {
+		pr_info("Invalid min or max timeouts, resetting to 0\n");
+		wdd->min_pretimeout = 0;
+		wdd->max_pretimeout = 0;
 		wdd->min_timeout = 0;
 		wdd->max_timeout = 0;
 	}
 }
 
 /**
- * watchdog_init_timeout() - initialize the timeout field
+ * watchdog_init_timeouts() - initialize the pretimeout and timeout field
+ * @pretimeout_parm: pretimeout module parameter
  * @timeout_parm: timeout module parameter
  * @dev: Device that stores the timeout-sec property
  *
- * Initialize the timeout field of the watchdog_device struct with either the
- * timeout module parameter (if it is valid value) or the timeout-sec property
- * (only if it is a valid value and the timeout_parm is out of bounds).
- * If none of them are valid then we keep the old value (which should normally
- * be the default timeout value.
+ * Initialize the pretimeout and timeout field of the watchdog_device struct
+ * with both the pretimeout and timeout module parameters (if they are valid) or
+ * the timeout-sec property (only if they are valid and the pretimeout_parm or
+ * timeout_parm is out of bounds). If one of them is invalid, then we keep
+ * the old value (which should normally be the default timeout value).
  *
  * A zero is returned on success and -EINVAL for failure.
  */
-int watchdog_init_timeout(struct watchdog_device *wdd,
-				unsigned int timeout_parm, struct device *dev)
+int watchdog_init_timeouts(struct watchdog_device *wdd,
+			   unsigned int pretimeout_parm,
+			   unsigned int timeout_parm,
+			   struct device *dev)
 {
-	unsigned int t = 0;
-	int ret = 0;
+	int ret = 0, length = 0;
+	u32 timeouts[2] = {0};
+	struct property *prop;
 
 	watchdog_check_min_max_timeout(wdd);
 
-	/* try to get the timeout module parameter first */
-	if (!watchdog_timeout_invalid(wdd, timeout_parm) && timeout_parm) {
-		wdd->timeout = timeout_parm;
+	/*
+	 * Backup the timeouts of wdd, and set them to the parameters,
+	 * because watchdog_pretimeout_invalid uses wdd->timeout to validate
+	 * the pretimeout_parm, and watchdog_timeout_invalid uses
+	 * wdd->pretimeout to validate timeout_parm.
+	 * if any of parameters is wrong, restore the default values before
+	 * return.
+	 */
+	timeouts[0] = wdd->timeout;
+	timeouts[1] = wdd->pretimeout;
+	wdd->timeout = timeout_parm;
+	wdd->pretimeout = pretimeout_parm;
+
+	/*
+	 * Try to get the pretimeout module parameter first.
+	 * Note: zero is a valid value for pretimeout.
+	 */
+	if (watchdog_pretimeout_invalid(wdd, pretimeout_parm))
+		ret = -EINVAL;
+
+	/*
+	 * Try to get the timeout module parameter,
+	 * if it's valid and pretimeout is valid(ret == 0),
+	 * assignment and return zero. Otherwise, try dtb.
+	 */
+	if (timeout_parm && !ret) {
+		if (!watchdog_timeout_invalid(wdd, timeout_parm))
+			return 0;
+		ret = -EINVAL;
+	}
+
+	/*
+	 * Either at least one of the module parameters is invalid,
+	 * or timeout_parm is 0. Try to get the timeout_sec property.
+	 */
+	if (!dev || !dev->of_node) {
+		wdd->timeout = timeouts[0];
+		wdd->pretimeout = timeouts[1];
 		return ret;
 	}
-	if (timeout_parm)
-		ret = -EINVAL;
 
-	/* try to get the timeout_sec property */
-	if (dev == NULL || dev->of_node == NULL)
-		return ret;
-	of_property_read_u32(dev->of_node, "timeout-sec", &t);
-	if (!watchdog_timeout_invalid(wdd, t) && t)
-		wdd->timeout = t;
-	else
-		ret = -EINVAL;
+	/*
+	 * Backup default values to *_parms,
+	 * timeouts[] will be used by of_property_read_u32_array.
+	 */
+	timeout_parm = timeouts[0];
+	pretimeout_parm = timeouts[1];
 
-	return ret;
+	prop = of_find_property(dev->of_node, "timeout-sec", &length);
+	if (prop && length > 0 && length <= sizeof(u32) * 2) {
+		of_property_read_u32_array(dev->of_node,
+					   "timeout-sec", timeouts,
+					   length / sizeof(u32));
+		wdd->timeout = timeouts[0];
+		wdd->pretimeout = timeouts[1];
+
+		if (length == sizeof(u32) * 2) {
+			if (watchdog_pretimeout_invalid(wdd, timeouts[1]))
+				goto error;
+			ret = 0;
+		} else {
+			ret = -EINVAL;
+		}
+
+		if (!watchdog_timeout_invalid(wdd, timeouts[0]) &&
+		    timeouts[0]) {
+			if (ret) /* Only one value in "timeout-sec" */
+				wdd->pretimeout = pretimeout_parm;
+			return 0;
+		}
+	}
+
+error:
+	/* restore default values */
+	wdd->timeout = timeout_parm;
+	wdd->pretimeout = pretimeout_parm;
+
+	return -EINVAL;
 }
-EXPORT_SYMBOL_GPL(watchdog_init_timeout);
+EXPORT_SYMBOL_GPL(watchdog_init_timeouts);
 
 static int __watchdog_register_device(struct watchdog_device *wdd)
 {
