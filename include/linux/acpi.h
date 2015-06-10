@@ -468,6 +468,23 @@ void acpi_walk_dep_device_list(acpi_handle handle);
 struct platform_device *acpi_create_platform_device(struct acpi_device *);
 #define ACPI_PTR(_ptr)	(_ptr)
 
+#ifdef CONFIG_ACPI_GTDT
+bool __init gtdt_timer_is_available(int type);
+
+struct arch_timer_data;
+int __init gtdt_arch_timer_data_init(struct acpi_table_header *table,
+				     struct arch_timer_data *data);
+struct arch_timer_mem_data;
+void __init *gtdt_gt_block(struct acpi_table_header *table, int index);
+u32 __init gtdt_gt_timer_count(struct acpi_gtdt_timer_block *gt_block);
+void __init *gtdt_gt_cntctlbase(struct acpi_gtdt_timer_block *gt_block);
+u32 __init gtdt_gt_frame_number(struct acpi_gtdt_timer_block *gt_block,
+				int index);
+int __init gtdt_gt_timer_data(struct acpi_gtdt_timer_block *gt_block,
+			      int index, bool virt,
+			      struct arch_timer_mem_data *data);
+#endif
+
 #else	/* !CONFIG_ACPI */
 
 #define acpi_disabled 1
