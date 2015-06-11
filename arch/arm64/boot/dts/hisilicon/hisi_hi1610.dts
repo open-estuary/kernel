@@ -51,7 +51,7 @@
 		      <0x0 0x6d100000 0x0 0x300000>,	/* GICR c*/
 		      <0x0 0xfe000000 0x0 0x10000>;	/* GICC */
 
-		its: mbi-controller@0xc6000000 {
+		its_dsa: interrupt-controller@0xc6000000 {
 			compatible = "arm,gic-v3-its";
 			msi-controller;
 			reg = <0x0 0xc6000000 0x0 0x1000000>;
@@ -61,24 +61,34 @@
 	smmu_pcie {
 		compatible = "arm,smmu-v3";
 		reg = <0x0 0xa0040000 0x0 0x20000>;
-		msi-parent = <&its>;
-		mbi = <0x40b0c 3 0 3>;
+		interrupt-parent  = <&mbigen_pcie>;
+		interrupts = 	<0x40b0c 3 0 7>,
+				<0x40b0c 3 1 7>,
+				<0x40b0c 3 2 7>;
+		interrupt-names = "EVENTQ", "GERROR", "PIRQ";
 		smmu-cb-memtype = <0x0 0x1>;
 	};
 
 	smmu_dsa {
 		compatible = "arm,smmu-v3";
 		reg = <0x0 0xc0040000 0x0 0x20000>;
-		msi-parent = <&its>;
-		mbi = <0x40b20 3 0 3>;
+		interrupt-parent  = <&mbigen_dsa>;
+		interrupts = 	<0x40b20 3 0 6>,
+				<0x40b20 3 1 6>,
+				<0x40b20 3 2 6>;
+		interrupt-names = "EVENTQ", "GERROR", "PIRQ";
 		smmu-cb-memtype = <0x0 0x1>;
 	};
+
 
 	smmu_alg {
 		compatible = "arm,smmu-v3";
 		reg = <0x0 0xd0040000 0x0 0x20000>;
-		msi-parent = <&its>;
-		mbi = <0x40b1b 3 0 3>;
+		interrupt-parent  = <&mbigen_alg>;
+		interrupts = 	<0x40b1b 3 0 6>,
+				<0x40b1b 3 1 6>,
+				<0x40b1b 3 2 6>;
+		interrupt-names = "EVENTQ", "GERROR", "PIRQ";
 		smmu-cb-memtype = <0x0 0x1>;
 	};
 
@@ -132,8 +142,10 @@
 		#size-cells = <0>;
 		reg = <0 0xc2080000 0 0x20000>,
 		      <0 0xc0000000 0 0x1000>;
-		msi-parent = <&its>;
-		mbi = <0x40b1c 9 0 2>;
+		interrupt-parent  = <&mbigen_dsa>;
+		interrupts = <0x40b1c 9 0 6>, /* rx irq */
+			     <0x40b1c 9 1 6>; /* tx irq */
+
 		phy-mode = "sgmii";
 		mac-address = [11 11 11 11 11 11];
 		phy-handle = <&phy25>;
@@ -167,6 +179,31 @@
 			clock-names = "apb_pclk";
 			reg-shift = <2>;
 		};
+
+		mbigen_dsa: interrupt-controller@c0070000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa>;
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			reg = <0xc0070000 0x10000>;
+		};
+
+		mbigen_pcie: interrupt-controller@a0070000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa>;
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			reg = <0xa0070000 0x10000>;
+		};
+
+		mbigen_alg: interrupt-controller@d0070000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa>;
+			interrupt-controller;
+			#interrupt-cells = <4>;
+			reg = <0xd0070000 0x10000>;
+		};
+
 	};
 
 	chosen {

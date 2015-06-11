@@ -217,6 +217,7 @@ config HAVE_MEMORYLESS_NODES
 
 config ARCH_Hi1610
 	def_bool ARCH_HISI
+	select HISI_MBIGEN
 	bool "Hisilicon Hi1610 SoC"
 	help
 	  This enables support for Hisilicon Hi1610 SoC
