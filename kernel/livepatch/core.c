@@ -308,6 +308,7 @@ static void notrace klp_ftrace_handler(unsigned long ip,
 {
 	struct klp_ops *ops;
 	struct klp_func *func;
+	unsigned long new_ip;
 
 	ops = container_of(fops, struct klp_ops, fops);
 
@@ -317,7 +318,8 @@ static void notrace klp_ftrace_handler(unsigned long ip,
 	if (WARN_ON_ONCE(!func))
 		goto unlock;
 
-	klp_arch_set_pc(regs, (unsigned long)func->new_func);
+	new_ip = ftrace_function_stub_ip((unsigned long)func->new_func);
+	klp_arch_set_pc(regs, new_ip);
 unlock:
 	rcu_read_unlock();
 }
@@ -326,6 +328,7 @@ static int klp_disable_func(struct klp_func *func)
 {
 	struct klp_ops *ops;
 	int ret;
+	unsigned long ip;
 
 	if (WARN_ON(func->state != KLP_ENABLED))
 		return -EINVAL;
@@ -345,7 +348,8 @@ static int klp_disable_func(struct klp_func *func)
 			return ret;
 		}
 
-		ret = ftrace_set_filter_ip(&ops->fops, func->old_addr, 1, 0);
+		ip = ftrace_function_stub_ip(func->old_addr);
+		ret = ftrace_set_filter_ip(&ops->fops, ip, 1, 0);
 		if (ret)
 			pr_warn("function unregister succeeded but failed to clear the filter\n");
 
@@ -365,6 +369,7 @@ static int klp_enable_func(struct klp_func *func)
 {
 	struct klp_ops *ops;
 	int ret;
+	unsigned long ip;
 
 	if (WARN_ON(!func->old_addr))
 		return -EINVAL;
@@ -388,7 +393,8 @@ static int klp_enable_func(struct klp_func *func)
 		INIT_LIST_HEAD(&ops->func_stack);
 		list_add_rcu(&func->stack_node, &ops->func_stack);
 
-		ret = ftrace_set_filter_ip(&ops->fops, func->old_addr, 0, 0);
+		ip = ftrace_function_stub_ip(func->old_addr);
+		ret = ftrace_set_filter_ip(&ops->fops, ip, 0, 0);
 		if (ret) {
 			pr_err("failed to set ftrace filter for function '%s' (%d)\n",
 			       func->old_name, ret);
@@ -399,7 +405,7 @@ static int klp_enable_func(struct klp_func *func)
 		if (ret) {
 			pr_err("failed to register ftrace handler for function '%s' (%d)\n",
 			       func->old_name, ret);
-			ftrace_set_filter_ip(&ops->fops, func->old_addr, 1, 0);
+			ftrace_set_filter_ip(&ops->fops, ip, 1, 0);
 			goto err;
 		}
 
