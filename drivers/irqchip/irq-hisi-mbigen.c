@@ -245,13 +245,9 @@ static int mbigen_set_affinity(struct irq_data *data,
 			       const struct cpumask *mask,
 			       bool force)
 {
-	struct mbi_msg msg;
 	int ret;
 
 	ret = irq_chip_set_affinity_parent(data, mask, force);
-	if (ret >= 0 && ret != IRQ_SET_MASK_OK_DONE)
-		mbigen_write_msg(data, &msg);
-
 	return ret;
 }
 
