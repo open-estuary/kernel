@@ -36,6 +36,7 @@
 #include <linux/completion.h>
 #include <linux/of.h>
 #include <linux/irq_work.h>
+#include <linux/kexec.h>
 
 #include <asm/alternative.h>
 #include <asm/atomic.h>
@@ -542,7 +543,7 @@ static DEFINE_RAW_SPINLOCK(stop_lock);
 /*
  * ipi_cpu_stop - handle IPI from smp_send_stop()
  */
-static void ipi_cpu_stop(unsigned int cpu)
+static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 {
 	if (system_state == SYSTEM_BOOTING ||
 	    system_state == SYSTEM_RUNNING) {
@@ -555,6 +556,13 @@ static void ipi_cpu_stop(unsigned int cpu)
 	set_cpu_online(cpu, false);
 
 	local_irq_disable();
+
+#ifdef CONFIG_KEXEC
+	if (in_crash_kexec) {
+		crash_save_cpu(regs, cpu);
+		flush_cache_all();
+	}
+#endif /* CONFIG_KEXEC */
 
 	while (1)
 		cpu_relax();
@@ -586,7 +594,7 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 
 	case IPI_CPU_STOP:
 		irq_enter();
-		ipi_cpu_stop(cpu);
+		ipi_cpu_stop(cpu, regs);
 		irq_exit();
 		break;
 
@@ -641,8 +649,8 @@ void smp_send_stop(void)
 		smp_cross_call(&mask, IPI_CPU_STOP);
 	}
 
-	/* Wait up to one second for other CPUs to stop */
-	timeout = USEC_PER_SEC;
+	/* Wait up to three second for other CPUs to stop */
+	timeout = USEC_PER_SEC * 3;
 	while (num_online_cpus() > 1 && timeout--)
 		udelay(1);
 

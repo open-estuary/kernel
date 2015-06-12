@@ -34,6 +34,8 @@
 #include <linux/dma-contiguous.h>
 #include <linux/efi.h>
 #include <linux/swiotlb.h>
+#include <linux/kexec.h>
+#include <linux/crash_dump.h>
 
 #include <asm/fixmap.h>
 #include <asm/memory.h>
@@ -66,6 +68,81 @@ static int __init early_initrd(char *p)
 early_param("initrd", early_initrd);
 #endif
 
+#ifdef CONFIG_KEXEC
+/*
+ * reserve_crashkernel() - reserves memory for crash kernel
+ *
+ * This function reserves memory area given in "crashkernel=" kernel command
+ * line parameter. The memory reserved is used by a dump capture kernel when
+ * primary kernel is crashing.
+ */
+static void __init reserve_crashkernel(phys_addr_t limit)
+{
+	unsigned long long crash_size = 0, crash_base = 0;
+	int ret;
+
+	ret = parse_crashkernel(boot_command_line, limit,
+				&crash_size, &crash_base);
+	if (ret)
+		return;
+
+	if (crash_base == 0) {
+		crash_base = memblock_alloc(crash_size, 1 << 20);
+		if (crash_base == 0) {
+			pr_warn("crashkernel allocation failed (size:%llx)\n",
+				crash_size);
+			return;
+		}
+	} else {
+		/* User specifies base address explicitly. Sanity check */
+		if (!memblock_is_region_memory(crash_base, crash_size) ||
+			memblock_is_region_reserved(crash_base, crash_size)) {
+			pr_warn("crashkernel= has wrong address or size\n");
+			return;
+		}
+
+		if (memblock_reserve(crash_base, crash_size)) {
+			pr_warn("crashkernel reservation failed - out of memory\n");
+			return;
+		}
+	}
+
+	pr_info("Reserving %lldMB of memory at %lldMB for crashkernel\n",
+		crash_size >> 20, crash_base >> 20);
+
+	crashk_res.start = crash_base;
+	crashk_res.end = crash_base + crash_size - 1;
+}
+#endif /* CONFIG_KEXEC */
+
+#ifdef CONFIG_CRASH_DUMP
+/*
+ * reserve_elfcorehdr() - reserves memory for elf core header
+ *
+ * This function reserves memory area given in "elfcorehdr=" kernel command
+ * line parameter. The memory reserved is used by a dump capture kernel to
+ * identify the memory used by primary kernel.
+ */
+static void __init reserve_elfcorehdr(void)
+{
+	if (!elfcorehdr_size)
+		return;
+
+	if (memblock_is_region_reserved(elfcorehdr_addr, elfcorehdr_size)) {
+		pr_warn("elfcorehdr reservation failed - memory is in use (0x%llx)\n",
+			elfcorehdr_addr);
+		return;
+	}
+
+	if (memblock_reserve(elfcorehdr_addr, elfcorehdr_size)) {
+		pr_warn("elfcorehdr reservation failed - out of memory\n");
+		return;
+	}
+
+	pr_info("Reserving %lldKB of memory at %lldMB for elfcorehdr\n",
+		elfcorehdr_size >> 10, elfcorehdr_addr >> 20);
+}
+#endif /* CONFIG_CRASH_DUMP */
 /*
  * Return the maximum physical address for ZONE_DMA (DMA_BIT_MASK(32)). It
  * currently assumes that for memory starting above 4G, 32-bit devices will
@@ -168,6 +245,13 @@ void __init arm64_memblock_init(void)
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start)
 		memblock_reserve(__virt_to_phys(initrd_start), initrd_end - initrd_start);
+#endif
+
+#ifdef CONFIG_KEXEC
+	reserve_crashkernel(memory_limit);
+#endif
+#ifdef CONFIG_CRASH_DUMP
+	reserve_elfcorehdr();
 #endif
 
 	early_init_fdt_scan_reserved_mem();
