@@ -44,6 +44,9 @@
 /* Number of mbigens supported in one chip */
 #define MG_NR			6
 
+/*compose the device id. This value should not be 0*/
+#define MBIGEN_DEVID(nid)  (((nid)+1) << 4)
+
 struct mbigen_node {
 	struct list_head	entry;
 	struct mbigen		*mbigen;
@@ -137,7 +140,7 @@ static void mbigen_free(struct mbigen *mbigen)
 }
 
 static struct mbigen *mbigen_get_device(struct mbigen_chip *chip,
-                                        unsigned int nid)
+											unsigned int nid)
 {
 	struct mbigen *tmp, *mbigen;
 	bool found = false;
@@ -194,7 +197,7 @@ static void mbigen_write_msg(struct mbi_desc *desc, struct mbi_msg *msg)
 	void __iomem *addr;
 
 	addr = mbigen->chip->base + MG_MSG_DATA + mbigen->nid * 4;
-	if (mbigen->nid >3)
+	if (mbigen->nid > 3)
 		addr += MG_EXT_OFST;
 
 	writel_relaxed(msg->data & ~0xffff, addr);
@@ -293,6 +296,7 @@ static int mbigen_domain_alloc(struct irq_domain *domain, unsigned int virq,
 	struct mbigen *mbigen;
 	struct mbigen_node *mgn;
 	struct mbi_desc *mbi;
+	unsigned dev_id;
 
 	/* OF style allocation, one interrupt at a time */
 	WARN_ON(nr_irqs != 1);
@@ -305,7 +309,8 @@ static int mbigen_domain_alloc(struct irq_domain *domain, unsigned int virq,
 	if (!mgn)
 		return -ENOMEM;
 
-	mbi = mbi_alloc_desc(chip->dev, &mbigen_mbi_ops, nid, mbigen_get_nr_irqs(nid),
+	dev_id = MBIGEN_DEVID(nid);
+	mbi = mbi_alloc_desc(chip->dev, &mbigen_mbi_ops, dev_id, mbigen_get_nr_irqs(nid),
 			     hwirq - mbigen_get_hwirq_base(nid), mgn);
 	if (!mbi) {
 		mbigen_free_node(mgn);
