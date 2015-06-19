@@ -38,11 +38,17 @@
 /* The gap between normal and extended pin region */
 #define MG_EXT_OFST		0x10
 
-/* Max number of interrupts supported */
-#define MG_NR_IRQS		640
+/* Max interrupts  Mbigen supported */
+#define MG_NR_IRQS		1024
 
 /* Number of mbigens supported in one chip */
 #define MG_NR			11
+
+#define	DEV_OFFSET		10
+#define	HWIRQ_MASK		(1 << DEV_OFFSET)
+#define	COMPOSE_HWIRQ(x, y)	(((x) << DEV_OFFSET) | (y))
+#define	HWIRQ_OFFSET(x)		((x) & ~HWIRQ_MASK)
+
 
 struct mbigen_node {
 	struct list_head	entry;
@@ -73,26 +79,6 @@ struct mbigen_chip {
 
 static LIST_HEAD(mbigen_chips);
 static DEFINE_SPINLOCK(mbigen_lock);
-
-static inline unsigned int mbigen_get_nr_irqs(unsigned int nid)
-{
-	return 1 << (max_t(unsigned int, nid, 3) + 3);
-}
-
-static unsigned int mbigen_get_nid(unsigned long hwirq)
-{
-	unsigned int nid = min_t(unsigned long, hwirq >> 6, 3);
-
-	if (hwirq >> 8)
-		nid += min_t(unsigned long, hwirq >> 7, 3) - 1;
-
-	return nid;
-}
-
-static unsigned long mbigen_get_hwirq_base(unsigned int nid)
-{
-	return (nid < 5) ? (nid << 6) : ((nid + 1) << 6);
-}
 
 static void mbigen_free_node(struct mbigen_node *mgn)
 {
@@ -137,7 +123,7 @@ static void mbigen_free(struct mbigen *mbigen)
 }
 
 static struct mbigen *mbigen_get_device(struct mbigen_chip *chip,
-										unsigned int nid)
+					unsigned int nid)
 {
 	struct mbigen *tmp, *mbigen;
 	bool found = false;
@@ -199,33 +185,16 @@ static struct mbi_ops mbigen_mbi_ops = {
 /*
  * Interrupt controller operations
  */
-
 static void mbigen_ack_irq(struct irq_data *d)
 {
-	irq_chip_ack_parent(d);
+	/* for 1610 the irq status dont need to clear */
 }
 
 static int mbigen_set_type(struct irq_data *d, unsigned int type)
 {
-	struct mbigen_chip *chip = d->domain->host_data;
-	u32 ofst = d->hwirq / 32 * 4;
-	u32 mask = 1 << (d->hwirq % 32);
-	u32 val;
-
-	if (type != IRQ_TYPE_LEVEL_HIGH && type != IRQ_TYPE_EDGE_RISING)
-		return -EINVAL;
-
-	raw_spin_lock(&chip->lock);
-	val = readl_relaxed(chip->base + MG_IRQ_TYPE + ofst);
-
-	if (type == IRQ_TYPE_LEVEL_HIGH)
-		val |= mask;
-	else if (type == IRQ_TYPE_EDGE_RISING)
-		val &= ~mask;
-
-	writel_relaxed(val, chip->base + MG_IRQ_TYPE + ofst);
-	raw_spin_unlock(&chip->lock);
-
+	/* for 1610 the irq type is set in bios
+	 * so we skip this
+	 */
 	return 0;
 }
 
@@ -243,8 +212,8 @@ static struct irq_chip mbigen_chip = {
 	.name			= "MBIGEN-V2",
 	.irq_mask		= irq_chip_mask_parent,
 	.irq_unmask		= irq_chip_unmask_parent,
-	.irq_ack		= mbigen_ack_irq,
 	.irq_eoi		= irq_chip_eoi_parent,
+	.irq_ack		= mbigen_ack_irq,
 	.irq_set_affinity	= mbigen_set_affinity,
 	.irq_set_type		= mbigen_set_type,
 };
@@ -259,7 +228,6 @@ static int mbigen_domain_xlate(struct irq_domain *d,
 			       unsigned long *out_hwirq,
 			       unsigned int *out_type)
 {
-	unsigned int dev_id;
 
 	if (d->of_node != controller)
 		return -EINVAL;
@@ -267,8 +235,7 @@ static int mbigen_domain_xlate(struct irq_domain *d,
 	if (intsize < 4)
 		return -EINVAL;
 
-	dev_id = intspec[0];
-	*out_hwirq = (dev_id<<12) | intspec[2];
+	*out_hwirq = COMPOSE_HWIRQ(intspec[3], intspec[2]);
 
 	*out_type = 0;
 
@@ -295,7 +262,7 @@ static int mbigen_domain_alloc(struct irq_domain *domain, unsigned int virq,
 
 	nid = irq_data->args[3];
 
-	hwirq = (dev_id << 12) | irq_data->args[2];
+	hwirq = COMPOSE_HWIRQ(nid, irq_data->args[2]);
 	mbigen = mbigen_get_device(chip, nid);
 	if (!mbigen)
 		return -ENODEV;
@@ -307,8 +274,8 @@ static int mbigen_domain_alloc(struct irq_domain *domain, unsigned int virq,
 	mbi_lines = irq_data->args[1];
 	offset = irq_data->args[2];
 
-	pr_info("%s:hwirq:%d,mbi_lines:%d,offset:%d,devid:0x%x\n",
-						__func__, hwirq, mbi_lines, offset, dev_id);
+	pr_info("%s:hwirq:0x%x,mbi_lines:%d,offset:%d,devid:0x%x\n",
+			__func__, hwirq, mbi_lines, offset, dev_id);
 	mbi = mbi_alloc_desc(chip->dev, &mbigen_mbi_ops, dev_id, mbi_lines,
 						offset, mgn);
 	if (!mbi) {

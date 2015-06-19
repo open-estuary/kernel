@@ -62,9 +62,9 @@
 		compatible = "arm,smmu-v3";
 		reg = <0x0 0xa0040000 0x0 0x20000>;
 		interrupt-parent  = <&mbigen_pcie>;
-		interrupts = 	<0x40b0c 3 0 7>,
-				<0x40b0c 3 1 7>,
-				<0x40b0c 3 2 7>;
+		interrupts = <0x40b0c 3 39 7>,
+				<0x40b0c 3 40 7>,
+				<0x40b0c 3 41 7>;
 		interrupt-names = "EVENTQ", "GERROR", "PIRQ";
 		smmu-cb-memtype = <0x0 0x1>;
 	};
@@ -73,9 +73,9 @@
 		compatible = "arm,smmu-v3";
 		reg = <0x0 0xc0040000 0x0 0x20000>;
 		interrupt-parent  = <&mbigen_dsa>;
-		interrupts = 	<0x40b20 3 0 6>,
-				<0x40b20 3 1 6>,
-				<0x40b20 3 2 6>;
+		interrupts = <0x40b20 3 76 6>,
+				<0x40b20 3 77 6>,
+				<0x40b20 3 78 6>;
 		interrupt-names = "EVENTQ", "GERROR", "PIRQ";
 		smmu-cb-memtype = <0x0 0x1>;
 	};
@@ -85,9 +85,9 @@
 		compatible = "arm,smmu-v3";
 		reg = <0x0 0xd0040000 0x0 0x20000>;
 		interrupt-parent  = <&mbigen_alg>;
-		interrupts = 	<0x40b1b 3 0 6>,
-				<0x40b1b 3 1 6>,
-				<0x40b1b 3 2 6>;
+		interrupts = <0x40b1b 3 28 6>,
+				<0x40b1b 3 29 6>,
+				<0x40b1b 3 30 6>;
 		interrupt-names = "EVENTQ", "GERROR", "PIRQ";
 		smmu-cb-memtype = <0x0 0x1>;
 	};
