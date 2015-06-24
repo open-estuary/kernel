@@ -175,7 +175,16 @@ static struct mbigen *mbigen_get_device(struct mbigen_chip *chip,
 
 static void mbigen_write_msg(struct mbi_desc *desc, struct mbi_msg *msg)
 {
-	pr_info("%s-write the 1610 msg reg\n", __func__);
+	struct mbigen_node *mgn;
+	unsigned int virq;
+	struct irq_desc *irq_desc;
+	
+	mgn = desc->data;
+	virq = mgn->irq;
+	irq_desc = irq_to_desc(virq);
+
+	pr_info("%s-offset:%d,virq:%d, hwirq:0x%x\n", __func__,
+		 desc->offset, virq, irq_desc->irq_data.hwirq);
 }
 
 static struct mbi_ops mbigen_mbi_ops = {
@@ -253,7 +262,6 @@ static int mbigen_domain_alloc(struct irq_domain *domain, unsigned int virq,
 	struct mbigen_node *mgn;
 	struct mbi_desc *mbi;
 	int mbi_lines = 0;
-	int offset = 0;
 	unsigned int dev_id;
 
 	/* OF style allocation, one interrupt at a time */
@@ -272,12 +280,11 @@ static int mbigen_domain_alloc(struct irq_domain *domain, unsigned int virq,
 		return -ENOMEM;
 
 	mbi_lines = irq_data->args[1];
-	offset = irq_data->args[2];
 
-	pr_info("%s:hwirq:0x%x,mbi_lines:%d,offset:%d,devid:0x%x\n",
-			__func__, hwirq, mbi_lines, offset, dev_id);
+	pr_info("%s:hwirq:0x%x,mbi_lines:%d,devid:0x%x\n",
+			__func__, hwirq, mbi_lines, dev_id);
 	mbi = mbi_alloc_desc(chip->dev, &mbigen_mbi_ops, dev_id, mbi_lines,
-						offset, mgn);
+						-1, mgn);
 	if (!mbi) {
 		mbigen_free_node(mgn);
 		return -ENOMEM;
@@ -418,7 +425,7 @@ MODULE_DEVICE_TABLE(of, mbigen_of_match);
 
 static struct platform_driver mbigen_platform_driver = {
 	.driver = {
-		.name		= "Hisilicon MBIGEN",
+		.name		= "Hisilicon MBIGEN-V2",
 		.owner		= THIS_MODULE,
 		.of_match_table	= mbigen_of_match,
 	},
