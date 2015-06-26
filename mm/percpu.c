@@ -73,7 +73,9 @@
 #include <asm/sections.h>
 #include <asm/tlbflush.h>
 #include <asm/io.h>
+#ifdef CONFIG_COPYCAT_NUMA
 #include <asm/smp_plat.h>
+#endif
 
 #define PCPU_SLOT_BASE_SHIFT		5	/* 1-31 shares the same slot */
 #define PCPU_DFL_MAP_ALLOC		16	/* start a map with 16 ents */
