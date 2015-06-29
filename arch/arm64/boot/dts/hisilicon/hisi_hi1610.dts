@@ -180,28 +180,28 @@
 			reg-shift = <2>;
 		};
 
-		mbigen_dsa: interrupt-controller@c0070000 {
+		mbigen_dsa: interrupt-controller@c0080000 {
 			compatible = "hisilicon,mbigen-v2";
 			msi-parent = <&its_dsa>;
 			interrupt-controller;
 			#interrupt-cells = <4>;
-			reg = <0xc0070000 0x10000>;
+			reg = <0xc0080000 0x10000>;
 		};
 
-		mbigen_pcie: interrupt-controller@a0070000 {
+		mbigen_pcie: interrupt-controller@a0080000 {
 			compatible = "hisilicon,mbigen-v2";
 			msi-parent = <&its_dsa>;
 			interrupt-controller;
 			#interrupt-cells = <4>;
-			reg = <0xa0070000 0x10000>;
+			reg = <0xa0080000 0x10000>;
 		};
 
-		mbigen_alg: interrupt-controller@d0070000 {
+		mbigen_alg: interrupt-controller@d0080000 {
 			compatible = "hisilicon,mbigen-v2";
 			msi-parent = <&its_dsa>;
 			interrupt-controller;
 			#interrupt-cells = <4>;
-			reg = <0xd0070000 0x10000>;
+			reg = <0xd0080000 0x10000>;
 		};
 
 	};
