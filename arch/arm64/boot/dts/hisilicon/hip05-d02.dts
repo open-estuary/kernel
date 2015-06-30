@@ -22,6 +22,7 @@
 		reg = <0x0 0x00000000 0x0 0x80000000>;
 	};
 
+	/include/ "hisi_p660_xge_d02.dtsi"
 	chosen {
 		bootargs = "earlycon=uart8250,mmio32,0x80300000 console=ttyS0,115200 initrd=0x7000000,350M";
 	};
