@@ -254,10 +254,21 @@ static int mbigen_set_affinity(struct irq_data *data,
 	return ret;
 }
 
+void mbigen_mask_irq(struct irq_data *data)
+{
+	irq_chip_mask_parent(data);
+}
+
+void mbigen_unmask_irq(struct irq_data *data)
+{
+	mbigen_ack_irq(data);
+	irq_chip_unmask_parent(data);
+}
+
 static struct irq_chip mbigen_chip = {
 	.name			= "Hisilicon MBIGEN",
-	.irq_mask		= irq_chip_mask_parent,
-	.irq_unmask		= irq_chip_unmask_parent,
+	.irq_mask		= mbigen_mask_irq,
+	.irq_unmask		= mbigen_unmask_irq,
 	.irq_ack		= mbigen_ack_irq,
 	.irq_eoi		= irq_chip_eoi_parent,
 	.irq_set_affinity	= mbigen_set_affinity,
@@ -296,7 +307,8 @@ static int mbigen_domain_alloc(struct irq_domain *domain, unsigned int virq,
 	struct mbigen *mbigen;
 	struct mbigen_node *mgn;
 	struct mbi_desc *mbi;
-	unsigned dev_id;
+	unsigned dev_id, type;
+	int ret, i;
 
 	/* OF style allocation, one interrupt at a time */
 	WARN_ON(nr_irqs != 1);
@@ -319,7 +331,19 @@ static int mbigen_domain_alloc(struct irq_domain *domain, unsigned int virq,
 
 	irq_domain_set_hwirq_and_chip(domain, virq, hwirq, &mbigen_chip, mgn);
 
-	return irq_domain_alloc_irqs_parent(domain, virq, nr_irqs, mbi);
+	ret = irq_domain_alloc_irqs_parent(domain, virq, nr_irqs, mbi);
+	if (ret < 0)
+		return ret;
+
+	type = irq_data->args[1] & IRQ_TYPE_SENSE_MASK;
+
+	if (type == IRQ_TYPE_LEVEL_HIGH) {
+		for (i = 0; i < nr_irqs; i++) {
+			irq_set_handler((virq + i), handle_level_irq);
+		}
+	}
+
+	return 0;
 }
 
 static void mbigen_domain_free(struct irq_domain *domain, unsigned int virq,

@@ -852,7 +852,7 @@ static int gic_irq_domain_map(struct irq_domain *d, unsigned int irq,
 		if (!gic_support_lpis)
 			return -EPERM;
 		irq_domain_set_info(d, irq, hw, &gic_chip, d->host_data,
-				    handle_edge_irq, NULL, NULL);
+				    handle_fasteoi_irq, NULL, NULL);
 		set_irq_flags(irq, IRQF_VALID);
 	}
 
