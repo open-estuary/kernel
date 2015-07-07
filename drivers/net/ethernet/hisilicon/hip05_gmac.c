@@ -762,7 +762,6 @@ static int hip05_net_xmit(struct sk_buff *skb, struct net_device *dev)
 	desc->tx.cmd_type_len |= cpu_to_le32(buf_num << HIP05_TX_DESC_BUFNUM_SHIFT);
 	desc->tx.status = cpu_to_le32(HIP05_TX_DESC_STATUS_VLD |
 				      HIP05_TX_DESC_STATUS_FE |
-				      HIP05_TX_DESC_STATUS_RI |
 				      HIP05_TX_DESC_STATUS_RA);
 
 	wmb();
