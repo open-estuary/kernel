@@ -686,7 +686,8 @@ static void hip05_xmit_reclaim(struct net_device *dev)
 		buff_info = &tx_ring->buff_info[i];
 		skb = buff_info->skb;
 		if (unlikely(!skb)) {
-			netdev_err(dev, "inconsistent tx_skb\n");
+			netdev_err(dev, "inconsistent tx_skb, start is %d, end is %d, next to use %d\n",
+				   start, end, tx_ring->next_to_use);
 			break;
 		}
 		buff_info->skb = NULL;
@@ -766,15 +767,15 @@ static int hip05_net_xmit(struct sk_buff *skb, struct net_device *dev)
 
 	wmb();
 
-	writel_relaxed(1, priv->rcb_ring_base + RCB_RING_TX_RING_TAIL);
-
-	if (++tx_ring->next_to_use == tx_ring->desc_count)
-		tx_ring->next_to_use = 0;
-
 	dev->trans_start = jiffies;
 	dev->stats.tx_packets++;
 	dev->stats.tx_bytes += skb->len;
 	netdev_sent_queue(dev, skb->len);
+
+	writel_relaxed(1, priv->rcb_ring_base + RCB_RING_TX_RING_TAIL);
+
+	if (++tx_ring->next_to_use == tx_ring->desc_count)
+		tx_ring->next_to_use = 0;
 
 	return NETDEV_TX_OK;
 }
