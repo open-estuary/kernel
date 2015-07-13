@@ -190,17 +190,36 @@ static struct mbigen *mbigen_get_device(struct mbigen_chip *chip,
  * MBI operations
  */
 
-static void mbigen_write_msg(struct mbi_desc *desc, struct mbi_msg *msg)
+static void mbigen_write_msg(struct mbi_desc *desc, struct mbi_msg *msg, bool enable)
 {
 	struct mbigen_node *mgn = desc->data;
 	struct mbigen *mbigen = mgn->mbigen;
 	void __iomem *addr;
+	u32 value, dev_id, dev_id_old;
+
+	if (!enable)
+		return;
+
+	dev_id = (msg->data >> 16) & 0xffff;
+
+	if (!dev_id) {
+		pr_warn("Warning: Mebigen device id should not be 0\n");
+		return;
+	}
 
 	addr = mbigen->chip->base + MG_MSG_DATA + mbigen->nid * 4;
 	if (mbigen->nid > 3)
 		addr += MG_EXT_OFST;
 
+	value = readl_relaxed(addr);
+	dev_id_old = (value >> 16) & 0xffff;
+
+	if (dev_id_old && (dev_id_old != dev_id))
+		pr_warn("Warning: Mbigen device id already exist.Old:0x%x,new:0x%x\n"
+			, dev_id_old, dev_id);
+
 	writel_relaxed(msg->data & ~0xffff, addr);
+
 }
 
 static struct mbi_ops mbigen_mbi_ops = {

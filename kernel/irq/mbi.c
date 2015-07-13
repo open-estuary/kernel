@@ -68,13 +68,13 @@ static void mbi_unmask_irq(struct irq_data *data)
 	irq_chip_unmask_parent(data);
 }
 
-static void mbi_write_msg(struct irq_data *data, struct mbi_msg *msg)
+static void mbi_write_msg(struct irq_data *data, struct mbi_msg *msg, bool enable)
 {
 	struct mbi_desc *desc = irq_data_get_mbi(data);
 	struct mbi_ops *ops = desc->mbi.ops;
 
 	if (ops && ops->write_msg)
-		ops->write_msg(desc, msg);
+		ops->write_msg(desc, msg, enable);
 }
 
 static int mbi_set_affinity(struct irq_data *data, const struct cpumask *mask,
@@ -86,7 +86,7 @@ static int mbi_set_affinity(struct irq_data *data, const struct cpumask *mask,
 	ret = irq_chip_set_affinity_parent(data, mask, force);
 	if (ret >= 0 && ret != IRQ_SET_MASK_OK_DONE) {
 		BUG_ON(irq_compose_mbi_msg(data, &msg));
-		mbi_write_msg(data, &msg);
+		mbi_write_msg(data, &msg, false);
 	}
 
 	return ret;
@@ -109,7 +109,7 @@ static void mbi_domain_activate(struct irq_domain *domain, struct irq_data *data
 
 	WARN_ON(domain != data->domain);
 	BUG_ON(irq_compose_mbi_msg(data, &msg));
-	mbi_write_msg(data, &msg);
+	mbi_write_msg(data, &msg, true);
 }
 
 static void mbi_domain_deactivate(struct irq_domain *domain, struct irq_data *data)
@@ -118,7 +118,7 @@ static void mbi_domain_deactivate(struct irq_domain *domain, struct irq_data *da
 
 	WARN_ON(domain != data->domain);
 	memset(&msg, 0, sizeof(msg));
-	mbi_write_msg(data, &msg);
+	mbi_write_msg(data, &msg, false);
 }
 
 static int mbi_domain_alloc(struct irq_domain *domain, unsigned int virq,

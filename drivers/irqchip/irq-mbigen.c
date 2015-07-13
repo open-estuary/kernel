@@ -26,7 +26,6 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/module.h>
-
 #include "irqchip.h"
 
 /* Register offsets */
@@ -48,7 +47,6 @@
 #define	HWIRQ_MASK		(1 << DEV_OFFSET)
 #define	COMPOSE_HWIRQ(x, y)	(((x) << DEV_OFFSET) | (y))
 #define	HWIRQ_OFFSET(x)		((x) & ~HWIRQ_MASK)
-
 
 struct mbigen_node {
 	struct list_head	entry;
@@ -173,12 +171,12 @@ static struct mbigen *mbigen_get_device(struct mbigen_chip *chip,
  * MBI operations
  */
 
-static void mbigen_write_msg(struct mbi_desc *desc, struct mbi_msg *msg)
+static void mbigen_write_msg(struct mbi_desc *desc, struct mbi_msg *msg, bool enable)
 {
 	struct mbigen_node *mgn;
 	unsigned int virq;
 	struct irq_desc *irq_desc;
-	
+
 	mgn = desc->data;
 	virq = mgn->irq;
 	irq_desc = irq_to_desc(virq);

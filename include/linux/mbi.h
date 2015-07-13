@@ -55,7 +55,7 @@ struct mbi_desc {
  * @unmask_irq:	unmask an MBI interrupt
  */
 struct mbi_ops {
-	void	(*write_msg)(struct mbi_desc *desc, struct mbi_msg *msg);
+	void	(*write_msg)(struct mbi_desc *desc, struct mbi_msg *msg, bool enable);
 	void	(*mask_irq)(struct mbi_desc *desc);
 	void	(*unmask_irq)(struct mbi_desc *desc);
 };

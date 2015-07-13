@@ -30,7 +30,7 @@ int pci_msi_ignore_mask;
 #define msix_table_size(flags)	((flags & PCI_MSIX_FLAGS_QSIZE) + 1)
 
 #if defined(CONFIG_MBI)
-static void pci_write_mbi_msg(struct mbi_desc *desc, struct mbi_msg *msg)
+static void pci_write_mbi_msg(struct mbi_desc *desc, struct mbi_msg *msg, bool enable)
 {
 	struct msi_desc *entry = desc->data;
 
