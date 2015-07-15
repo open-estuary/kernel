@@ -163,6 +163,9 @@ static int dw_i2c_probe(struct platform_device *pdev)
 	dev->irq = irq;
 	platform_set_drvdata(pdev, dev);
 
+	/* Provide a way to reset i2c controller, like hisilicon chip*/
+	i2c_dw_reset_init(dev);
+
 	/* fast mode by default because of legacy reasons */
 	clk_freq = 400000;
 

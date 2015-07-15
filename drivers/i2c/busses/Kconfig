@@ -443,6 +443,14 @@ config I2C_DAVINCI
 config I2C_DESIGNWARE_CORE
 	tristate
 
+config I2C_DESIGNWARE_HISI
+	bool "Hisilicon DesignWare I2C reset support"
+	depends on I2C_DESIGNWARE_PLATFORM
+	default ARCH_HISI
+	help
+	  This driver will provide a way to reset Synopsys DesignWare I2C
+	  controler in hisilicon chip.
+
 config I2C_DESIGNWARE_PLATFORM
 	tristate "Synopsys DesignWare Platform"
 	select I2C_DESIGNWARE_CORE

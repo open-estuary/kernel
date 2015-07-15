@@ -22,6 +22,7 @@
  *
  */
 
+#include <linux/regmap.h>
 
 #define DW_IC_CON_MASTER		0x1
 #define DW_IC_CON_SPEED_STD		0x2
@@ -30,6 +31,13 @@
 #define DW_IC_CON_RESTART_EN		0x20
 #define DW_IC_CON_SLAVE_DISABLE		0x40
 
+struct dw_i2c_reset_cfg {
+	struct regmap *sysreg;
+	int id;
+	int reset;
+	int state;
+	int dreset;
+};
 
 /**
  * struct dw_i2c_dev - private i2c-designware data
@@ -73,6 +81,8 @@ struct dw_i2c_dev {
 	struct mutex		lock;
 	struct clk		*clk;
 	u32			(*get_clk_rate_khz) (struct dw_i2c_dev *dev);
+	void			(*dw_i2c_reset) (struct dw_i2c_dev *dev);
+	struct dw_i2c_reset_cfg	reset_cfg;
 	struct dw_pci_controller *controller;
 	int			cmd_err;
 	struct i2c_msg		*msgs;
@@ -119,3 +129,8 @@ extern void i2c_dw_disable(struct dw_i2c_dev *dev);
 extern void i2c_dw_clear_int(struct dw_i2c_dev *dev);
 extern void i2c_dw_disable_int(struct dw_i2c_dev *dev);
 extern u32 i2c_dw_read_comp_param(struct dw_i2c_dev *dev);
+#if IS_ENABLED(CONFIG_I2C_DESIGNWARE_HISI)
+extern int i2c_dw_reset_init(struct dw_i2c_dev *dev);
+#else
+static inline int i2c_dw_reset_init(struct dw_i2c_dev *dev) { return 0; }
+#endif
