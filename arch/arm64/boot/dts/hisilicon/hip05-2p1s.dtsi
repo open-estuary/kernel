@@ -600,6 +600,11 @@
 			dma-coherent;
 		};
 
+		m3_sysctl: sysctl@a0000000 {
+			compatible = "hisilicon,hip05-sysctrl", "syscon";
+			reg = <0xa0000000 0x10000>;
+		};
+
 		m3_i2c1: i2c@a00f0000 {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -608,12 +613,9 @@
 			reg = <0xa00f0000 0x10000>;
 			interrupts = <9 1>;
 			clocks = <&m3_clk>;
-			clock-frequency = <100000>;
-
-			rtc0: ds3231@68 {
-				compatible = "maxim,ds3231";
-				reg = <0x68>;
-			};
+			hisilicon,sysreg-phandle = <&m3_sysctl>;
+			hisilicon,reset-cfg = <1 0xa40 0x5a20 0xa44>;
+			status = "disabled";
 		};
 	};
 
