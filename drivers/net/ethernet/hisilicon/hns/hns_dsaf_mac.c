@@ -759,7 +759,7 @@ u8 __iomem *hns_mac_get_vaddr(struct dsaf_device *dsaf_dev,
 				mac_mode_idx * 0x20000;
 	else
 		return mac_cb->serdes_vaddr + 0x1000
-			+ (mac_id - DSAF_SERVICE_PORT_NUM_PER_DSAF) * 0x10000;
+			+ (mac_id - DSAF_SERVICE_PORT_NUM_PER_DSAF) * 0x100000;
 }
 
 /**
