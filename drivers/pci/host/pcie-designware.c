@@ -11,6 +11,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/hardirq.h>
 #include <linux/irq.h>
 #include <linux/irqdomain.h>
 #include <linux/kernel.h>
@@ -48,6 +49,8 @@
 #define PCIE_MSI_INTR0_MASK		0x82C
 #define PCIE_MSI_INTR0_STATUS		0x830
 
+#define PCIE_GEN3_RELATED_OFF		0x890
+
 #define PCIE_ATU_VIEWPORT		0x900
 #define PCIE_ATU_REGION_INBOUND		(0x1 << 31)
 #define PCIE_ATU_REGION_OUTBOUND	(0x0 << 31)
@@ -70,21 +73,9 @@
 #define PCIE_ATU_FUNC(x)		(((x) & 0x7) << 16)
 #define PCIE_ATU_UPPER_TARGET		0x91C
 
-static struct hw_pci dw_pci;
 static struct pci_ops dw_pcie_ops;
 
 static unsigned long global_io_offset;
-
-static inline struct pcie_port *sys_to_pcie(void *sys)
-{
-#ifdef CONFIG_ARM
-	pci_sys_data *sys_data = (struct pci_sys_data *)sys;
-
-	BUG_ON(!sys->private_data);
-	return sys_data->private_data;
-#endif
-	return (struct pcie_port *)sys;
-}
 
 int dw_pcie_cfg_read(void __iomem *addr, int where, int size, u32 *val)
 {
@@ -246,7 +237,7 @@ static void dw_pcie_msi_set_irq(struct pcie_port *pp, int irq)
 static int assign_irq(int no_irqs, struct msi_desc *desc, int *pos)
 {
 	int irq, pos0, i;
-	struct pcie_port *pp = sys_to_pcie(desc->dev->bus->sysdata);
+	struct pcie_port *pp = desc->dev->bus->sysdata;
 
 	pos0 = bitmap_find_free_region(pp->msi_irq_in_use, MAX_MSI_IRQS,
 				       order_base_2(no_irqs));
@@ -289,10 +280,7 @@ static int dw_msi_setup_irq(struct msi_controller *chip, struct pci_dev *pdev,
 {
 	int irq, pos;
 	struct msi_msg msg;
-	struct pcie_port *pp = sys_to_pcie(pdev->bus->sysdata);
-
-	if (desc->msi_attrib.is_msix)
-		return -EINVAL;
+	struct pcie_port *pp = pdev->bus->sysdata;
 
 	irq = assign_irq(1, desc, &pos);
 	if (irq < 0)
@@ -318,7 +306,7 @@ static void dw_msi_teardown_irq(struct msi_controller *chip, unsigned int irq)
 {
 	struct irq_data *data = irq_get_irq_data(irq);
 	struct msi_desc *msi = irq_data_get_msi(data);
-	struct pcie_port *pp = sys_to_pcie(msi->dev->bus->sysdata);
+	struct pcie_port *pp = msi->dev->bus->sysdata;
 
 	clear_irq_range(pp, irq, 1, data->hwirq);
 }
@@ -350,13 +338,15 @@ static const struct irq_domain_ops msi_domain_ops = {
 	.map = dw_pcie_msi_map,
 };
 
-int dw_pcie_host_init(struct pcie_port *pp)
+int __init dw_pcie_host_init(struct pcie_port *pp)
 {
 	struct device_node *np = pp->dev->of_node;
 	struct platform_device *pdev = to_platform_device(pp->dev);
 	struct of_pci_range range;
 	struct of_pci_range_parser parser;
+	struct pci_bus *bus;
 	struct resource *cfg_res;
+	LIST_HEAD(res);
 	u32 val, na, ns;
 	const __be32 *addrp;
 	int i, index, ret;
@@ -506,28 +496,48 @@ int dw_pcie_host_init(struct pcie_port *pp)
 	/* program correct class for RC */
 	dw_pcie_wr_own_conf(pp, PCI_CLASS_DEVICE, 2, PCI_CLASS_BRIDGE_PCI);
 
-#ifdef CONFIG_ARM64
-	struct pci_bus *bus;
-	struct msi_controller *msi;
-	LIST_HEAD(res);
 
+#ifdef CONFIG_ARM
+	/*
+	 * FIXME: we should really be able to use
+	 * of_pci_get_host_bridge_resources on arm32 as well,
+	 * but the conversion needs some more testing
+	 */
+	if (global_io_offset < SZ_1M && pp->io_size > 0) {
+		pci_ioremap_io(global_io_offset, pp->io_base);
+		global_io_offset += SZ_64K;
+		pci_add_resource_offset(&res, &pp->io,
+					global_io_offset - pp->io_bus_addr);
+	}
+	pci_add_resource_offset(&res, &pp->mem,
+				pp->mem.start - pp->mem_bus_addr);
+	pci_add_resource(&res, &pp->busn);
+#else
 	ret = of_pci_get_host_bridge_resources(np, 0, 0xff, &res, &pp->io_base);
 	if (ret)
 		return ret;
+#endif
 
 	bus = pci_create_root_bus(pp->dev, pp->root_bus_nr, &dw_pcie_ops,
-				  pp, &res);
+			      pp, &res);
 	if (!bus)
 		return -ENOMEM;
 
-	/* add msi_controller to root pci_bus */
-	msi = kzalloc(sizeof(*msi), GFP_KERNEL);
-	if (!msi)
-		return -ENOMEM;
-	msi->domain = pp->domain;
-	bus->msi = msi;
+#ifdef CONFIG_GENERIC_MSI_IRQ_DOMAIN
+	bus->msi = container_of(&pp->irq_domain, struct msi_controller, domain);
+#else
+	bus->msi = &dw_pcie_msi_chip;
+#endif
 
 	pci_scan_child_bus(bus);
+	if (pp->ops->scan_bus)
+		pp->ops->scan_bus(pp);
+
+#ifdef CONFIG_ARM
+	/* support old dtbs that incorrectly describe IRQs */
+	pci_fixup_irqs(pci_common_swizzle, of_irq_parse_and_map_pci);
+#endif
+
 	pci_assign_unassigned_bus_resources(bus);
 	pci_bus_add_devices(bus);
 
@@ -535,25 +545,10 @@ int dw_pcie_host_init(struct pcie_port *pp)
 	if (!pci_has_flag(PCI_PROBE_ONLY)) {
 		struct pci_bus *child;
 
-		list_for_each_entry(child, &bus->children, node)
+		list_for_each_entry(child, &bus->children, node) {
 			pcie_bus_configure_settings(child);
+		}
 	}
-#endif
-
-#ifdef CONFIG_ARM
-#ifdef CONFIG_PCI_MSI
-	dw_pcie_msi_chip.dev = pp->dev;
-	dw_pci.msi_ctrl = &dw_pcie_msi_chip;
-#endif
-
-	dw_pci.nr_controllers = 1;
-	dw_pci.private_data = (void **)&pp;
-
-	pci_common_init_dev(pp->dev, &dw_pci);
-#ifdef CONFIG_PCI_DOMAINS
-	dw_pci.domain++;
-#endif
-#endif
 
 	return 0;
 }
@@ -696,7 +691,7 @@ static int dw_pcie_valid_config(struct pcie_port *pp,
 static int dw_pcie_rd_conf(struct pci_bus *bus, u32 devfn, int where,
 			int size, u32 *val)
 {
-	struct pcie_port *pp = sys_to_pcie(bus->sysdata);
+	struct pcie_port *pp = bus->sysdata;
 	int ret;
 
 	if (dw_pcie_valid_config(pp, bus, PCI_SLOT(devfn)) == 0) {
@@ -720,7 +715,7 @@ static int dw_pcie_rd_conf(struct pci_bus *bus, u32 devfn, int where,
 static int dw_pcie_wr_conf(struct pci_bus *bus, u32 devfn,
 			int where, int size, u32 val)
 {
-	struct pcie_port *pp = sys_to_pcie(bus->sysdata);
+	struct pcie_port *pp = bus->sysdata;
 	int ret;
 
 	if (dw_pcie_valid_config(pp, bus, PCI_SLOT(devfn)) == 0)
@@ -743,66 +738,6 @@ static struct pci_ops dw_pcie_ops = {
 	.read = dw_pcie_rd_conf,
 	.write = dw_pcie_wr_conf,
 };
-
-#ifdef CONFIG_ARM
-static int dw_pcie_setup(int nr, struct pci_sys_data *sys)
-{
-	struct pcie_port *pp;
-
-	pp = sys_to_pcie(sys);
-
-	if (global_io_offset < SZ_1M && pp->io_size > 0) {
-		sys->io_offset = global_io_offset - pp->io_bus_addr;
-		pci_ioremap_io(global_io_offset, pp->io_base);
-		global_io_offset += SZ_64K;
-		pci_add_resource_offset(&sys->resources, &pp->io,
-					sys->io_offset);
-	}
-
-	sys->mem_offset = pp->mem.start - pp->mem_bus_addr;
-	pci_add_resource_offset(&sys->resources, &pp->mem, sys->mem_offset);
-	pci_add_resource(&sys->resources, &pp->busn);
-
-	return 1;
-}
-
-static struct pci_bus *dw_pcie_scan_bus(int nr, struct pci_sys_data *sys)
-{
-	struct pci_bus *bus;
-	struct pcie_port *pp = sys_to_pcie(sys);
-
-	pp->root_bus_nr = sys->busnr;
-	bus = pci_create_root_bus(pp->dev, sys->busnr,
-				  &dw_pcie_ops, sys, &sys->resources);
-	if (!bus)
-		return NULL;
-
-	pci_scan_child_bus(bus);
-
-	if (bus && pp->ops->scan_bus)
-		pp->ops->scan_bus(pp);
-
-	return bus;
-}
-
-static int dw_pcie_map_irq(const struct pci_dev *dev, u8 slot, u8 pin)
-{
-	struct pcie_port *pp = sys_to_pcie(dev->bus->sysdata);
-	int irq;
-
-	irq = of_irq_parse_and_map_pci(dev, slot, pin);
-	if (!irq)
-		irq = pp->irq;
-
-	return irq;
-}
-
-static struct hw_pci dw_pci = {
-	.setup		= dw_pcie_setup,
-	.scan		= dw_pcie_scan_bus,
-	.map_irq	= dw_pcie_map_irq,
-};
-#endif
 
 void dw_pcie_setup_rc(struct pcie_port *pp)
 {
@@ -852,7 +787,7 @@ void dw_pcie_setup_rc(struct pcie_port *pp)
 	val |= PORT_LOGIC_SPEED_CHANGE;
 
 	dw_pcie_writel_rc(pp, val, PCIE_LINK_WIDTH_SPEED_CONTROL);
- 
+
 	/* setup RC BARs */
 	dw_pcie_writel_rc(pp, 0x00000004, PCI_BASE_ADDRESS_0);
 	dw_pcie_writel_rc(pp, 0x00000000, PCI_BASE_ADDRESS_1);
