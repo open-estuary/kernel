@@ -343,9 +343,6 @@ struct mac_driver {
 	void (*mac_init)(void *mac_drv);
 	/*remove mac when remove nic or dsaf*/
 	void (*mac_free)(void *mac_drv);
-	/*reset mac when reset nic or dsaf,wait is the waiting time*/
-	/*	if it's zero;if it's zero,no wait */
-	void (*mac_reset)(void *mac_drv, u32 wait);
 	/*enable mac when enable nic or dsaf*/
 	void (*mac_enable)(void *mac_drv, enum mac_commom_mode mode);
 	/*disable mac when disable nic or dsaf*/
@@ -384,19 +381,17 @@ struct mac_driver {
 	void (*get_regs)(void *mac_drv, void *data);
 	int (*get_regs_count)(void);
 	/* get strings name for ethtool statistic */
-	void (*get_strings)(void *mac_drv, u32 stringset, u8 *data);
+	void (*get_strings)(u32 stringset, u8 *data);
 	/* get the number of strings*/
 	int (*get_sset_count)(int stringset);
 
 	/* get the statistic by ethtools*/
-	void (*get_ethtool_stats)(void *mac_drv,
-				  struct ethtool_stats *cmd, u64 *data);
+	void (*get_ethtool_stats)(void *mac_drv, u64 *data);
 
 	/* get mac information */
 	void (*get_info)(void *mac_drv, struct mac_info *mac_info);
 
 	void (*update_stats)(void *mac_drv);
-	void (*clean_stats)(void *mac_drv);
 
 	enum mac_mode mac_mode;
 	u8 mac_id;
@@ -456,9 +451,7 @@ int hns_mac_config_sds_loopback(struct hns_mac_cb *mac_cb, u8 en);
 int hns_mac_config_mac_loopback(struct hns_mac_cb *mac_cb,
 				enum hnae_loop loop, int en);
 void hns_mac_update_stats(struct hns_mac_cb *mac_cb);
-void hns_mac_clean_stats(struct hns_mac_cb *mac_cb);
-void hns_mac_get_ethtool_stats(struct hns_mac_cb *mac_cb,
-			       struct ethtool_stats *stats, u64 *data);
+void hns_mac_get_stats(struct hns_mac_cb *mac_cb, u64 *data);
 void hns_mac_get_strings(struct hns_mac_cb *mac_cb, int stringset, u8 *data);
 int hns_mac_get_sset_count(struct hns_mac_cb *mac_cb, int stringset);
 void hns_mac_get_regs(struct hns_mac_cb *mac_cb, void *data);

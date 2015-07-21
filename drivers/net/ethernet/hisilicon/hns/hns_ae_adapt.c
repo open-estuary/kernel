@@ -239,46 +239,6 @@ static int hns_ae_set_mtu(struct hnae_handle *handle, int new_mtu)
 	return hns_mac_set_mtu(mac_cb, new_mtu);
 }
 
-void hns_ae_clean_stats(struct hnae_handle *handle)
-{
-	int port;
-	int idx;
-	struct hns_mac_cb *mac_cb;
-	struct dsaf_device *dsaf_dev;
-	struct hns_ppe_cb *ppe_cb;
-	struct hnae_queue *queue;
-	struct  hnae_port_cb *port_cb = hns_ae_get_port_cb(handle);
-
-	port = port_cb->index;
-
-	dsaf_dev = hns_ae_get_dsaf_dev(handle->dev);
-	mac_cb = hns_get_mac_cb(handle);
-	ppe_cb = hns_get_ppe_cb(handle);
-
-	for (idx = 0; idx < handle->q_num; idx++) {
-		queue = handle->qs[idx];
-		hns_rcb_update_stats(queue);
-
-		memset(&queue->tx_ring.stats, 0,
-		       sizeof(struct ring_stats));
-		memset(&queue->rx_ring.stats, 0,
-		       sizeof(struct ring_stats));
-	}
-
-	memset(&handle->net_stats, 0, sizeof(struct net_device_stats));
-
-	hns_ppe_update_stats(ppe_cb);
-	memset(&ppe_cb->hw_stats, 0, sizeof(struct hns_ppe_hw_stats));
-
-	hns_dsaf_update_stats(dsaf_dev, port);
-	memset(&dsaf_dev->inode_hw_stats[port], 0,
-	       sizeof(struct dsaf_inode_hw_stats));
-
-	hns_dsaf_update_stats(dsaf_dev, port);
-	memset(&mac_cb->hw_stats, 0, sizeof(struct mac_hw_stats));
-	hns_mac_clean_stats(mac_cb);
-}
-
 static int hns_ae_start(struct hnae_handle *handle)
 {
 	int ret;
@@ -292,7 +252,6 @@ static int hns_ae_start(struct hnae_handle *handle)
 	msleep(100);
 
 	hns_mac_start(mac_cb);
-	hns_ae_clean_stats(handle);
 
 	return 0;
 }
@@ -449,7 +408,7 @@ static void hns_ae_get_rx_max_coalesced_frames(struct hnae_handle *handle,
 }
 
 static void hns_ae_set_coalesce_usecs(struct hnae_handle *handle,
-				      u32 tx_usecs, u32 rx_usecs)
+				      u32 timeout)
 {
 	int port;
 
@@ -458,11 +417,11 @@ static void hns_ae_set_coalesce_usecs(struct hnae_handle *handle,
 	port = hns_ae_get_port_idx(handle->ae_opts);
 
 	hns_rcb_set_coalesce_usecs(hns_ae_get_dsaf_dev(handle->dev),
-				   port, tx_usecs, rx_usecs);
+				   port, timeout);
 }
 
 static int  hns_ae_set_coalesce_frames(struct hnae_handle *handle,
-				       u32 tx_frames, u32 rx_frames)
+				       u32 coalesce_frames)
 {
 	int port;
 	int ret;
@@ -472,7 +431,7 @@ static int  hns_ae_set_coalesce_frames(struct hnae_handle *handle,
 	port = hns_ae_get_port_idx(handle->ae_opts);
 
 	ret = hns_rcb_set_coalesced_frames(hns_ae_get_dsaf_dev(handle->dev),
-					   port, tx_frames, rx_frames);
+					   port, coalesce_frames);
 	return ret;
 }
 
@@ -540,19 +499,20 @@ void hns_ae_update_stats(struct hnae_handle *handle,
 
 	hns_dsaf_update_stats(dsaf_dev, port);
 	/* for port upline direction, i.e., rx. */
-	rx_missed_errors += dsaf_dev->inode_hw_stats[port].bp_drop;
-	rx_errors += dsaf_dev->inode_hw_stats[port].bp_drop;
-	rx_errors += dsaf_dev->inode_hw_stats[port].pad_drop;
-	rx_errors += dsaf_dev->inode_hw_stats[port].crc_false;
+	rx_missed_errors += dsaf_dev->hw_stats[port].bp_drop;
+	rx_errors += dsaf_dev->hw_stats[port].bp_drop;
+	rx_errors += dsaf_dev->hw_stats[port].pad_drop;
+	rx_errors += dsaf_dev->hw_stats[port].crc_false;
 
 	/* for port downline direction, i.e., tx. */
 	port = port + DSAF_PPE_INODE_BASE;
-	tx_dropped += dsaf_dev->inode_hw_stats[port].bp_drop;
-	tx_dropped += dsaf_dev->inode_hw_stats[port].pad_drop;
-	tx_dropped += dsaf_dev->inode_hw_stats[port].crc_false;
-	tx_dropped += dsaf_dev->inode_hw_stats[port].rslt_drop;
-	tx_dropped += dsaf_dev->inode_hw_stats[port].vlan_drop;
-	tx_dropped += dsaf_dev->inode_hw_stats[port].stp_drop;
+	hns_dsaf_update_stats(dsaf_dev, port);
+	tx_dropped += dsaf_dev->hw_stats[port].bp_drop;
+	tx_dropped += dsaf_dev->hw_stats[port].pad_drop;
+	tx_dropped += dsaf_dev->hw_stats[port].crc_false;
+	tx_dropped += dsaf_dev->hw_stats[port].rslt_drop;
+	tx_dropped += dsaf_dev->hw_stats[port].vlan_drop;
+	tx_dropped += dsaf_dev->hw_stats[port].stp_drop;
 
 	hns_mac_update_stats(mac_cb);
 	rx_errors += mac_cb->hw_stats.rx_fcs_err
@@ -584,8 +544,7 @@ void hns_ae_update_stats(struct hnae_handle *handle,
 	net_stats->multicast = mac_cb->hw_stats.rx_mc_pkts;
 }
 
-void hns_ae_get_ethtool_stats(struct hnae_handle *handle,
-			      struct ethtool_stats *stats, u64 *data)
+void hns_ae_get_stats(struct hnae_handle *handle, u64 *data)
 {
 	int port;
 	int idx;
@@ -605,15 +564,19 @@ void hns_ae_get_ethtool_stats(struct hnae_handle *handle,
 	ppe_cb = hns_get_ppe_cb(handle);
 
 	for (idx = 0; idx < handle->q_num; idx++) {
-		hns_rcb_get_ethtool_stats(handle->qs[idx], stats, p);
+		hns_rcb_get_stats(handle->qs[idx], p);
 		p += hns_rcb_get_ring_sset_count((int)ETH_SS_STATS);
 	}
 
-	hns_ppe_get_ethtool_stats(ppe_cb, stats, p);
+	hns_ppe_get_stats(ppe_cb, p);
 	p += hns_ppe_get_sset_count((int)ETH_SS_STATS);
 
-	hns_mac_get_ethtool_stats(mac_cb, stats, p);
+	hns_mac_get_stats(mac_cb, p);
 	p += hns_mac_get_sset_count(mac_cb, (int)ETH_SS_STATS);
+
+	if (mac_cb->mac_type == HNAE_PORT_SERVICE)
+		hns_dsaf_get_stats(port_cb->dsaf_dev, p, port_cb->index);
+
 }
 
 void hns_ae_get_strings(struct hnae_handle *handle,
@@ -624,7 +587,7 @@ void hns_ae_get_strings(struct hnae_handle *handle,
 	struct hns_mac_cb *mac_cb;
 	struct dsaf_device *dsaf_dev;
 	struct hns_ppe_cb *ppe_cb;
-	char *p = (char *)data;
+	u8 *p = data;
 	struct	hnae_port_cb *port_cb;
 
 	assert(handle);
@@ -636,15 +599,18 @@ void hns_ae_get_strings(struct hnae_handle *handle,
 	ppe_cb = hns_get_ppe_cb(handle);
 
 	for (idx = 0; idx < handle->q_num; idx++) {
-		hns_rcb_get_strings(handle->qs[idx], stringset, (u8 *)p, idx);
+		hns_rcb_get_strings(stringset, p, idx);
 		p += ETH_GSTRING_LEN * hns_rcb_get_ring_sset_count(stringset);
 	}
 
-	hns_ppe_get_strings(ppe_cb, stringset, (u8 *)p);
+	hns_ppe_get_strings(ppe_cb, stringset, p);
 	p += ETH_GSTRING_LEN * hns_ppe_get_sset_count(stringset);
 
-	hns_mac_get_strings(mac_cb, stringset, (u8 *)p);
+	hns_mac_get_strings(mac_cb, stringset, p);
 	p += ETH_GSTRING_LEN * hns_mac_get_sset_count(mac_cb, stringset);
+
+	if (mac_cb->mac_type == HNAE_PORT_SERVICE)
+		hns_dsaf_get_strings(stringset, p, port);
 }
 
 int hns_ae_get_sset_count(struct hnae_handle *handle, int stringset)
@@ -659,6 +625,9 @@ int hns_ae_get_sset_count(struct hnae_handle *handle, int stringset)
 	sset_count += hns_rcb_get_ring_sset_count(stringset) * handle->q_num;
 	sset_count += hns_ppe_get_sset_count(stringset);
 	sset_count += hns_mac_get_sset_count(mac_cb, stringset);
+
+	if (mac_cb->mac_type == HNAE_PORT_SERVICE)
+		sset_count += hns_dsaf_get_sset_count(stringset);
 
 	return sset_count;
 }
@@ -778,7 +747,7 @@ static struct hnae_ae_ops hns_dsaf_ops = {
 	.set_mc_addr = hns_ae_set_multicast_one,
 	.set_mtu = hns_ae_set_mtu,
 	.update_stats = hns_ae_update_stats,
-	.get_ethtool_stats = hns_ae_get_ethtool_stats,
+	.get_stats = hns_ae_get_stats,
 	.get_strings = hns_ae_get_strings,
 	.get_sset_count = hns_ae_get_sset_count,
 	.update_led_status = hns_ae_update_led_status,

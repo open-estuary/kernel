@@ -42,6 +42,5 @@ struct hns_gmac_port_mode_cfg {
 };
 
 #define ETH_GMAC_DUMP_NUM		96
-#define ETH_GMAC_STATIC_NUM		64
 #endif				/* __HNS_GMAC_H__ */
 

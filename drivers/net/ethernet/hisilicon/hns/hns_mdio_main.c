@@ -24,6 +24,10 @@
 
 #define MDIO_DRV_NAME "Hi-MDIO"
 #define MDIO_BUS_NAME "Hisilicon MII Bus"
+#define MDIO_DRV_VERSION "1.1.0"
+#define MDIO_COPYRIGHT "Copyright(c) 2015 - 2019 Huawei Corporation."
+#define MDIO_DRV_STRING MDIO_BUS_NAME
+#define MDIO_DEFAULT_DEVICE_DESCR MDIO_BUS_NAME
 
 #define MDIO_CTL_DEV_ADDR(x)	(x & 0x1f)
 #define MDIO_CTL_PORT_ADDR(x)	((x & 0x1f) << 5)
@@ -595,6 +599,9 @@ static struct platform_driver hns_mdio_driver = {
  **/
 int __init hns_mdio_module_init(void)
 {
+	pr_info("%s - version %s\n", MDIO_DRV_STRING, MDIO_DRV_VERSION);
+	pr_info("%s\n", MDIO_COPYRIGHT);
+
 	return platform_driver_register(&hns_mdio_driver);
 }
 

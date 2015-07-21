@@ -231,7 +231,8 @@ static inline void hns_dsaf_reg_cnt_clr_ce(struct dsaf_device *dsaf_dev,
  * @dsaf_id: dsa fabric id
  * @pppe_qid_cfg: value array
  */
-static inline void hns_ppe_qid_cfg(struct dsaf_device *dsaf_dev, u32 qid_cfg)
+static inline void hns_dsaf_ppe_qid_cfg(struct dsaf_device *dsaf_dev,
+					u32 qid_cfg)
 {
 	u32 i;
 
@@ -983,7 +984,7 @@ static void hns_dsaf_comm_init(struct dsaf_device *dsaf_dev)
 	hns_dsaf_stp_port_type_cfg(dsaf_dev, DSAF_STP_PORT_TYPE_FORWARD);
 
 	/* set 22 queue per tx ppe engine, only used in switch mode */
-	hns_ppe_qid_cfg(dsaf_dev, DSAF_DEFAUTL_QUEUE_NUM_PER_PPE);
+	hns_dsaf_ppe_qid_cfg(dsaf_dev, DSAF_DEFAUTL_QUEUE_NUM_PER_PPE);
 
 	/* in non switch mode, set all port to access mode */
 	hns_dsaf_sw_port_type_cfg(dsaf_dev, DSAF_SW_PORT_TYPE_NON_VLAN);
@@ -2081,26 +2082,41 @@ void hns_dsaf_fix_mac_mode(struct hns_mac_cb *mac_cb)
 	hns_dsaf_port_work_rate_cfg(dsaf_dev, mac_id, mode);
 }
 
-void hns_dsaf_update_stats(struct dsaf_device *dsaf_dev, u32 inode_num)
+void hns_dsaf_update_stats(struct dsaf_device *dsaf_dev, u32 node_num)
 {
-	struct dsaf_inode_hw_stats *hw_stats
-		= &dsaf_dev->inode_hw_stats[inode_num];
+	struct dsaf_hw_stats *hw_stats
+		= &dsaf_dev->hw_stats[node_num];
+
 	hw_stats->pad_drop += dsaf_read_dev(dsaf_dev,
-		DSAF_INODE_PAD_DISCARD_NUM_0_REG + 0x80 * (u64)inode_num);
+		DSAF_INODE_PAD_DISCARD_NUM_0_REG + 0x80 * (u64)node_num);
+	hw_stats->man_pkts += dsaf_read_dev(dsaf_dev,
+		DSAF_INODE_FINAL_IN_MAN_NUM_0_REG + 0x80 * (u64)node_num);
+	hw_stats->rx_pkts += dsaf_read_dev(dsaf_dev,
+		DSAF_INODE_FINAL_IN_PKT_NUM_0_REG + 0x80 * (u64)node_num);
+	hw_stats->rx_pkt_id += dsaf_read_dev(dsaf_dev,
+		DSAF_INODE_SBM_PID_NUM_0_REG + 0x80 * (u64)node_num);
+	hw_stats->rx_pause_frame += dsaf_read_dev(dsaf_dev,
+		DSAF_INODE_FINAL_IN_PAUSE_NUM_0_REG + 0x80 * (u64)node_num);
+	hw_stats->release_buf_num += dsaf_read_dev(dsaf_dev,
+		DSAF_INODE_SBM_RELS_NUM_0_REG + 0x80 * (u64)node_num);
 	hw_stats->sbm_drop += dsaf_read_dev(dsaf_dev,
-		DSAF_INODE_SBM_DROP_NUM_0_REG + 0x80 * (u64)inode_num);
+		DSAF_INODE_SBM_DROP_NUM_0_REG + 0x80 * (u64)node_num);
 	hw_stats->crc_false += dsaf_read_dev(dsaf_dev,
-		DSAF_INODE_CRC_FALSE_NUM_0_REG + 0x80 * (u64)inode_num);
+		DSAF_INODE_CRC_FALSE_NUM_0_REG + 0x80 * (u64)node_num);
 	hw_stats->bp_drop += dsaf_read_dev(dsaf_dev,
-		DSAF_INODE_BP_DISCARD_NUM_0_REG + 0x80 * (u64)inode_num);
+		DSAF_INODE_BP_DISCARD_NUM_0_REG + 0x80 * (u64)node_num);
 	hw_stats->rslt_drop += dsaf_read_dev(dsaf_dev,
-		DSAF_INODE_RSLT_DISCARD_NUM_0_REG + 0x80 * (u64)inode_num);
+		DSAF_INODE_RSLT_DISCARD_NUM_0_REG + 0x80 * (u64)node_num);
 	hw_stats->local_addr_false += dsaf_read_dev(dsaf_dev,
-		DSAF_INODE_LOCAL_ADDR_FALSE_NUM_0_REG + 0x80 * (u64)inode_num);
+		DSAF_INODE_LOCAL_ADDR_FALSE_NUM_0_REG + 0x80 * (u64)node_num);
+
 	hw_stats->vlan_drop += dsaf_read_dev(dsaf_dev,
-		DSAF_INODE_SW_VLAN_TAG_DISC_0_REG + 0x80 * (u64)inode_num);
+		DSAF_INODE_SW_VLAN_TAG_DISC_0_REG + 0x80 * (u64)node_num);
 	hw_stats->stp_drop += dsaf_read_dev(dsaf_dev,
-		DSAF_INODE_IN_DATA_STP_DISC_0_REG + 0x80 * (u64)inode_num);
+		DSAF_INODE_IN_DATA_STP_DISC_0_REG + 0x80 * (u64)node_num);
+
+	hw_stats->tx_pkts += dsaf_read_dev(dsaf_dev,
+		DSAF_XOD_RCVPKT_CNT_0_REG + 0x90 * (u64)node_num);
 }
 
 /**
@@ -2430,6 +2446,85 @@ void hns_dsaf_get_regs(struct dsaf_device *ddev, u32 port, void *data)
 		p[i] = 0xdddddddd;
 }
 
+static u8 *hns_dsaf_get_node_stats_strings(u8 *data, int node)
+{
+	char *buff = (char *)data;
+
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_pad_drop_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_manage_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_rx_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_rx_pkt_id", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_rx_pause_frame", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_release_buf_num", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_sbm_drop_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_crc_false_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_bp_drop_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_lookup_rslt_drop_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_local_rslt_fail_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_vlan_drop_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "innod%d_stp_drop_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "onnod%d_tx_pkts", node);
+	buff = buff + ETH_GSTRING_LEN;
+
+	return buff;
+}
+
+static u64 *hns_dsaf_get_node_stats(struct dsaf_device *ddev, u64 *data,
+				    int node_num)
+{
+	u64 *p = data;
+	struct dsaf_hw_stats *hw_stats = &ddev->hw_stats[node_num];
+
+	p[0] = hw_stats->pad_drop;
+	p[1] = hw_stats->man_pkts;
+	p[2] = hw_stats->rx_pkts;
+	p[3] = hw_stats->rx_pkt_id;
+	p[4] = hw_stats->rx_pause_frame;
+	p[5] = hw_stats->release_buf_num;
+	p[6] = hw_stats->sbm_drop;
+	p[7] = hw_stats->crc_false;
+	p[8] = hw_stats->bp_drop;
+	p[9] = hw_stats->rslt_drop;
+	p[10] = hw_stats->local_addr_false;
+	p[11] = hw_stats->vlan_drop;
+	p[12] = hw_stats->stp_drop;
+	p[13] = hw_stats->tx_pkts;
+
+	return &p[14];
+}
+
+/**
+ *hns_dsaf_get_stats - get dsaf statistic
+ *@ddev: dsaf device
+ *@data:statistic value
+ *@port: port num
+ */
+void hns_dsaf_get_stats(struct dsaf_device *ddev, u64 *data, int port)
+{
+	u64 *p = data;
+	int node_num = port;
+
+	/* for ge/xge node info */
+	p = hns_dsaf_get_node_stats(ddev, p, node_num);
+
+	/* for ppe node info */
+	node_num = port + DSAF_PPE_INODE_BASE;
+	(void)hns_dsaf_get_node_stats(ddev, p, node_num);
+}
+
 /**
  *hns_dsaf_get_sset_count - get dsaf string set count
  *@stringset: type of values in data
@@ -2441,6 +2536,28 @@ int hns_dsaf_get_sset_count(int stringset)
 		return DSAF_STATIC_NUM;
 
 	return 0;
+}
+
+/**
+ *hns_dsaf_get_strings - get dsaf string set
+ *@stringset:srting set index
+ *@data:strings name value
+ *@port:port index
+ */
+void hns_dsaf_get_strings(int stringset, u8 *data, int port)
+{
+	char *buff = (char *)data;
+	int node = port;
+
+	if (stringset != ETH_SS_STATS)
+		return;
+
+	/* for ge/xge node info */
+	buff = hns_dsaf_get_node_stats_strings(buff, node);
+
+	/* for ppe node info */
+	node = port + DSAF_PPE_INODE_BASE;
+	(void)hns_dsaf_get_node_stats_strings(buff, node);
 }
 
 /**
@@ -2551,6 +2668,9 @@ static struct platform_driver g_dsaf_driver = {
 static int __init hns_dsaf_module_init(void)
 {
 	int ret;
+
+	pr_info("%s - version %s\n", HNAE_DRIVER_STRING, HNAE_DRIVER_VERSION);
+	pr_info("%s\n", HNAE_COPYRIGHT);
 
 	ret = platform_driver_register(&g_dsaf_driver);
 	if (ret) {

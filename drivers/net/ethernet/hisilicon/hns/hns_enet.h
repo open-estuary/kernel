@@ -17,11 +17,6 @@
 #include <linux/netdevice.h>
 #include "hnae.h"
 
-#define HNS_MOD_VERSION "V1.0"
-#define HNS_MOD_VER_LEN 32
-#define HNS_DRIVER_NAME "hilisicon network subsystem"
-#define HNS_DRV_NAME_LEN 32
-
 enum hns_nic_state {
 	NIC_STATE_TESTING = 0,
 	NIC_STATE_RESETTING,
@@ -77,6 +72,7 @@ struct hns_nic_priv {
 
 void hns_ethtool_set_ops(struct net_device *ndev);
 void hns_nic_net_reset(struct net_device *ndev);
+void hns_nic_net_reinit(struct net_device *netdev);
 int hns_nic_init_phy(struct net_device *ndev, struct hnae_handle *h);
 int hns_nic_net_xmit_hw(struct net_device *ndev,
 			struct sk_buff *skb,

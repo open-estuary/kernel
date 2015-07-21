@@ -34,6 +34,12 @@
 #include <linux/module.h>
 #include <linux/notifier.h>
 
+#define HNAE_DRIVER_VERSION "1.1.0"
+#define HNAE_DRIVER_NAME "hns"
+#define HNAE_COPYRIGHT "Copyright(c) 2015 - 2019 Huawei Corporation."
+#define HNAE_DRIVER_STRING "Hilisicon Network Subsystem Driver"
+#define HNAE_DEFAULT_DEVICE_DESCR "Hilisicon Network Subsystem"
+
 #ifdef DEBUG
 
 #ifndef assert
@@ -416,10 +422,9 @@ struct hnae_ae_ops {
 				   u32 *tx_usecs, u32 *rx_usecs);
 	void (*get_rx_max_coalesced_frames)(struct hnae_handle *handle,
 					    u32 *tx_frames, u32 *rx_frames);
-	void (*set_coalesce_usecs)(struct hnae_handle *handle,
-				   u32 tx_usecs, u32 rx_usecs);
+	void (*set_coalesce_usecs)(struct hnae_handle *handle, u32 timeout);
 	int (*set_coalesce_frames)(struct hnae_handle *handle,
-				   u32 tx_frames, u32 rx_frames);
+				   u32 coalesce_frames);
 	void (*get_ringnum)(struct hnae_handle *handle, u32 *ringnum);
 	void (*get_max_ringnum)(struct hnae_handle *handle, u32 *max_ringnum);
 	int (*get_mac_addr)(struct hnae_handle *handle, void **p);
@@ -428,8 +433,7 @@ struct hnae_ae_ops {
 	int (*set_mtu)(struct hnae_handle *handle, int new_mtu);
 	void (*update_stats)(struct hnae_handle *handle,
 			     struct net_device_stats *net_stats);
-	void (*get_ethtool_stats)(struct hnae_handle *handle,
-				  struct ethtool_stats *stats, u64 *data);
+	void (*get_stats)(struct hnae_handle *handle, u64 *data);
 	void (*get_strings)(struct hnae_handle *handle,
 			    u32 stringset, u8 *data);
 	int (*get_sset_count)(struct hnae_handle *handle, int stringset);

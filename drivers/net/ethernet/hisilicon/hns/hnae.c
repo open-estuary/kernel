@@ -50,14 +50,17 @@ static int hnae_alloc_buffer(struct hnae_ring *ring, struct hnae_desc_cb *cb)
 	cb->reuse_flag = 0;
 	cb->buf  = page_address(p);
 	cb->length = hnae_page_size(ring);
+	cb->type = DESC_TYPE_PAGE;
 
 	return 0;
 }
 
 static void hnae_free_buffer(struct hnae_ring *ring, struct hnae_desc_cb *cb)
 {
-	assert(cb->priv);
-	put_page((struct page *)cb->priv);
+	if (cb->type == DESC_TYPE_SKB)
+		dev_kfree_skb_any((struct sk_buff *)cb->priv);
+	else if (unlikely(is_rx_ring(ring)))
+		put_page((struct page *)cb->priv);
 	memset(cb, 0, sizeof(*cb));
 }
 
@@ -74,8 +77,12 @@ static int hnae_map_buffer(struct hnae_ring *ring, struct hnae_desc_cb *cb)
 
 static void hnae_unmap_buffer(struct hnae_ring *ring, struct hnae_desc_cb *cb)
 {
-	dma_unmap_page(ring_to_dev(ring), cb->dma, cb->length,
-		       ring_to_dma_dir(ring));
+	if (cb->type == DESC_TYPE_SKB)
+		dma_unmap_single(ring_to_dev(ring), cb->dma, cb->length,
+				 ring_to_dma_dir(ring));
+	else
+		dma_unmap_page(ring_to_dev(ring), cb->dma, cb->length,
+			       ring_to_dma_dir(ring));
 }
 
 static struct hnae_buf_ops hnae_bops = {

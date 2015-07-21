@@ -23,7 +23,7 @@
 #define PPE_COMMON_REG_OFFSET 0x70000
 #define PPE_REG_OFFSET 0x10000
 
-#define ETH_PPE_DUMP_NUM 60
+#define ETH_PPE_DUMP_NUM 576
 #define ETH_PPE_STATIC_NUM 12
 enum ppe_qid_mode {
 	PPE_QID_MODE0 = 0,	/* fixed queue id mode */
@@ -55,7 +55,6 @@ struct hns_ppe_hw_stats {
 	u64 rx_alloc_buf_wait;
 	u64 rx_drop_no_buf;
 	u64 rx_err_fifo_full;
-	u64 rx_multicast;	/* only for stats modified */
 	u64 tx_bd_form_rcb;
 	u64 tx_pkts_from_rcb;
 	u64 tx_pkts;
@@ -102,6 +101,5 @@ int hns_ppe_get_regs_count(void);
 void hns_ppe_get_regs(struct hns_ppe_cb *ppe_cb, void *data);
 
 void hns_ppe_get_strings(struct hns_ppe_cb *ppe_cb, int stringset, u8 *data);
-void hns_ppe_get_ethtool_stats(struct hns_ppe_cb *ppe_cb,
-			       struct ethtool_stats *stats, u64 *data);
+void hns_ppe_get_stats(struct hns_ppe_cb *ppe_cb, u64 *data);
 #endif /* _HNS_DSAF_PPE_H */

@@ -727,8 +727,8 @@ static void hns_mac_get_info(struct hns_mac_cb *mac_cb,
 	/* Get the rest of the PHY information */
 	mac_cb->phy_node = of_parse_phandle(np, "phy-handle", mac_cb->mac_id);
 	if (mac_cb->phy_node)
-		dev_info(mac_cb->dev, "mac%d phy_node: %s\n",
-			 mac_cb->mac_id, mac_cb->phy_node->name);
+		dev_dbg(mac_cb->dev, "mac%d phy_node: %s\n",
+			mac_cb->mac_id, mac_cb->phy_node->name);
 }
 
 /**
@@ -878,20 +878,11 @@ void hns_mac_update_stats(struct hns_mac_cb *mac_cb)
 	mac_ctrl_drv->update_stats(mac_ctrl_drv);
 }
 
-void hns_mac_clean_stats(struct hns_mac_cb *mac_cb)
+void hns_mac_get_stats(struct hns_mac_cb *mac_cb, u64 *data)
 {
 	struct mac_driver *mac_ctrl_drv = hns_mac_get_drv(mac_cb);
 
-	if (NULL != mac_ctrl_drv->clean_stats)
-		mac_ctrl_drv->clean_stats(mac_ctrl_drv);
-}
-
-void hns_mac_get_ethtool_stats(struct hns_mac_cb *mac_cb,
-			       struct ethtool_stats *stats, u64 *data)
-{
-	struct mac_driver *mac_ctrl_drv = hns_mac_get_drv(mac_cb);
-
-	mac_ctrl_drv->get_ethtool_stats(mac_ctrl_drv, stats, data);
+	mac_ctrl_drv->get_ethtool_stats(mac_ctrl_drv, data);
 }
 
 void hns_mac_get_strings(struct hns_mac_cb *mac_cb,
@@ -899,7 +890,7 @@ void hns_mac_get_strings(struct hns_mac_cb *mac_cb,
 {
 	struct mac_driver *mac_ctrl_drv = hns_mac_get_drv(mac_cb);
 
-	mac_ctrl_drv->get_strings(mac_ctrl_drv, stringset, data);
+	mac_ctrl_drv->get_strings(stringset, data);
 }
 
 int hns_mac_get_sset_count(struct hns_mac_cb *mac_cb, int stringset)

@@ -22,6 +22,7 @@
 #include <linux/spinlock.h>
 
 #include "hns_dsaf_main.h"
+#include "hns_dsaf_ppe.h"
 #include "hns_dsaf_rcb.h"
 
 #define RCB_COMMON_REG_OFFSET 0x80000
@@ -53,7 +54,7 @@ void hns_rcb_reset_ring_hw(struct hnae_queue *q)
 		}
 
 		dsaf_write_dev(q, RCB_RING_T0_BE_RST, 0);
-		if (wait_cnt < RCB_RESET_WAIT_TIMES)
+		if (could_ret)
 			return;
 
 	} while (try_cnt++ < RCB_RESET_TRY_TIMES);
@@ -489,17 +490,10 @@ u32 hns_rcb_get_coalesce_usecs(struct dsaf_device *dsaf_dev, int comm_index)
  *@rx_usecs:rx time for coalesced time_out
  */
 void hns_rcb_set_coalesce_usecs(struct dsaf_device *dsaf_dev,
-				int port, u32 tx_usecs, u32 rx_usecs)
+				int port, u32 timeout)
 {
 	int comm_index =  hns_dsaf_get_comm_idx_by_port(port);
 	struct rcb_common_cb *rcb_comm = dsaf_dev->rcb_common[comm_index];
-	u32 timeout = rcb_comm->timeout;
-
-	if (tx_usecs != rcb_comm->timeout)
-		timeout = tx_usecs;
-
-	if (rx_usecs != rcb_comm->timeout)
-		timeout = rx_usecs;
 
 	if (rcb_comm->timeout == timeout)
 		return;
@@ -521,21 +515,14 @@ void hns_rcb_set_coalesce_usecs(struct dsaf_device *dsaf_dev,
  *Return 0 on success, negative on failure
  */
 int hns_rcb_set_coalesced_frames(struct dsaf_device *dsaf_dev,
-				 int port, u32 tx_frames, u32 rx_frames)
+				 int port, u32 coalesced_frames)
 {
 	int comm_index =  hns_dsaf_get_comm_idx_by_port(port);
 	struct rcb_common_cb *rcb_comm = dsaf_dev->rcb_common[comm_index];
-	u32 coalesced_frames;
 	u32 coalesced_reg_val;
 	int ret;
 
 	coalesced_reg_val = hns_rcb_get_port_coalesced_frames(rcb_comm, port);
-	coalesced_frames = coalesced_reg_val;
-	if (tx_frames != coalesced_reg_val)
-		coalesced_frames = tx_frames;
-
-	if (rx_frames != coalesced_reg_val)
-		coalesced_frames = rx_frames;
 
 	if (coalesced_reg_val == coalesced_frames)
 		return 0;
@@ -688,36 +675,79 @@ void hns_rcb_common_free_cfg(struct dsaf_device *dsaf_dev,
 
 void hns_rcb_update_stats(struct hnae_queue *queue)
 {
+	struct ring_pair_cb *ring =
+		container_of(queue, struct ring_pair_cb, q);
+	struct dsaf_device *dsaf_dev = ring->rcb_common->dsaf_dev;
+	struct ppe_common_cb *ppe_common
+		= dsaf_dev->ppe_common[ring->rcb_common->comm_index];
+	struct hns_ring_hw_stats *hw_stats = &ring->hw_stats;
+
+	hw_stats->rx_pkts += dsaf_read_dev(queue,
+			 RCB_RING_RX_RING_PKTNUM_RECORD_REG);
 	dsaf_write_dev(queue, RCB_RING_RX_RING_PKTNUM_RECORD_REG, 0x1);
 
+	hw_stats->ppe_rx_ok_pkts += dsaf_read_dev(ppe_common,
+			 PPE_COM_HIS_RX_PKT_QID_OK_CNT_REG + 4 * ring->index);
+	hw_stats->ppe_rx_drop_pkts += dsaf_read_dev(ppe_common,
+			 PPE_COM_HIS_RX_PKT_QID_DROP_CNT_REG + 4 * ring->index);
+
+	hw_stats->tx_pkts += dsaf_read_dev(queue,
+			 RCB_RING_TX_RING_PKTNUM_RECORD_REG);
 	dsaf_write_dev(queue, RCB_RING_TX_RING_PKTNUM_RECORD_REG, 0x1);
+
+	hw_stats->ppe_tx_ok_pkts += dsaf_read_dev(ppe_common,
+			 PPE_COM_HIS_TX_PKT_QID_OK_CNT_REG + 4 * ring->index);
+	hw_stats->ppe_tx_drop_pkts += dsaf_read_dev(ppe_common,
+			 PPE_COM_HIS_TX_PKT_QID_ERR_CNT_REG + 4 * ring->index);
 }
 
 /**
- *rcb_get_ethtool_stats - get rcb statistic
+ *hns_rcb_get_stats - get rcb statistic
  *@ring: rcb ring
- *@cmd:ethtool cmd
  *@data:statistic value
  */
-void hns_rcb_get_ethtool_stats(struct hnae_queue *queue,
-			       struct ethtool_stats *stats, u64 *data)
+void hns_rcb_get_stats(struct hnae_queue *queue, u64 *data)
 {
 	u64 *regs_buff = data;
+	struct ring_pair_cb *ring =
+		container_of(queue, struct ring_pair_cb, q);
+	struct hns_ring_hw_stats *hw_stats = &ring->hw_stats;
 
-	hns_rcb_update_stats(queue);
+	regs_buff[0] = hw_stats->tx_pkts;
+	regs_buff[1] = hw_stats->ppe_tx_ok_pkts;
+	regs_buff[2] = hw_stats->ppe_tx_drop_pkts;
+	regs_buff[3] =
+		dsaf_read_dev(queue, RCB_RING_TX_RING_FBDNUM_REG);
 
-	regs_buff[0] = queue->tx_ring.stats.pkts.tx_pkts;
-	regs_buff[1] = queue->tx_ring.stats.bytes.tx_bytes;
-	regs_buff[2] = queue->tx_ring.stats.err_cnt.tx_err_cnt;
-	regs_buff[3] = queue->tx_ring.stats.csum_err;
-	regs_buff[4] =
-	    dsaf_read_dev(queue, RCB_RING_TX_RING_FBDNUM_REG);
-	regs_buff[5] = queue->rx_ring.stats.pkts.rx_pkts;
-	regs_buff[6] = queue->rx_ring.stats.bytes.rx_bytes;
-	regs_buff[7] = queue->rx_ring.stats.err_cnt.rx_err_cnt;
-	regs_buff[8] = queue->rx_ring.stats.csum_err;
-	regs_buff[9] =
-	    dsaf_read_dev(queue, RCB_RING_RX_RING_FBDNUM_REG);
+	regs_buff[4] = queue->tx_ring.stats.pkts.tx_pkts;
+	regs_buff[5] = queue->tx_ring.stats.bytes.tx_bytes;
+	regs_buff[6] = queue->tx_ring.stats.err_cnt.tx_err_cnt;
+	regs_buff[7] = queue->tx_ring.stats.io_err_cnt;
+	regs_buff[8] = queue->tx_ring.stats.sw_err_cnt;
+	regs_buff[9] = queue->tx_ring.stats.seg_pkt_cnt;
+	regs_buff[10] = queue->tx_ring.stats.reuse_pg_cnt;
+	regs_buff[11] = queue->tx_ring.stats.err_pkt_len;
+	regs_buff[12] = queue->tx_ring.stats.non_vld_descs;
+	regs_buff[13] = queue->tx_ring.stats.err_bd_num;
+	regs_buff[14] = queue->tx_ring.stats.csum_err;
+
+	regs_buff[15] = hw_stats->rx_pkts;
+	regs_buff[16] = hw_stats->ppe_rx_ok_pkts;
+	regs_buff[17] = hw_stats->ppe_rx_drop_pkts;
+	regs_buff[18] =
+		dsaf_read_dev(queue, RCB_RING_RX_RING_FBDNUM_REG);
+
+	regs_buff[19] = queue->rx_ring.stats.pkts.rx_pkts;
+	regs_buff[20] = queue->rx_ring.stats.bytes.rx_bytes;
+	regs_buff[21] = queue->rx_ring.stats.err_cnt.rx_err_cnt;
+	regs_buff[22] = queue->rx_ring.stats.io_err_cnt;
+	regs_buff[23] = queue->rx_ring.stats.sw_err_cnt;
+	regs_buff[24] = queue->rx_ring.stats.seg_pkt_cnt;
+	regs_buff[25] = queue->rx_ring.stats.reuse_pg_cnt;
+	regs_buff[26] = queue->rx_ring.stats.err_pkt_len;
+	regs_buff[27] = queue->rx_ring.stats.non_vld_descs;
+	regs_buff[28] = queue->rx_ring.stats.err_bd_num;
+	regs_buff[29] = queue->rx_ring.stats.csum_err;
 }
 
 /**
@@ -728,7 +758,7 @@ void hns_rcb_get_ethtool_stats(struct hnae_queue *queue,
 int hns_rcb_get_ring_sset_count(int stringset)
 {
 	if (stringset == ETH_SS_STATS)
-		return ETH_RING_STATIC_REG_NUM;
+		return HNS_RING_STATIC_REG_NUM;
 
 	return 0;
 }
@@ -739,7 +769,7 @@ int hns_rcb_get_ring_sset_count(int stringset)
  */
 int hns_rcb_get_common_regs_count(void)
 {
-	return ETH_RCB_COMMON_DUMP_REG_NUM;
+	return HNS_RCB_COMMON_DUMP_REG_NUM;
 }
 
 /**
@@ -748,49 +778,84 @@ int hns_rcb_get_common_regs_count(void)
  */
 int hns_rcb_get_ring_regs_count(void)
 {
-	return ETH_RCB_RING_DUMP_REG_NUM;
+	return HNS_RCB_RING_DUMP_REG_NUM;
 }
 
 /**
- *hns_rcb_get_strings - get rcb key regs' string name
- *@queue: rcb ring
- *@stringset:ethtool cmd
+ *hns_rcb_get_strings - get rcb string set
+ *@stringset:string set index
  *@data:strings name value
  *@index:queue index
  */
-void hns_rcb_get_strings(struct hnae_queue *queue, int stringset,
-			 u8 *data, int index)
+void hns_rcb_get_strings(int stringset, u8 *data, int index)
 {
 	char *buff = (char *)data;
 
-	snprintf(buff, ETH_GSTRING_LEN, "TX%d_RING_PKTNUM", index);
+	if (stringset != ETH_SS_STATS)
+		return;
+
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_rcb_pkt_num", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_ppe_tx_pkt_num", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_ppe_drop_pkt_num", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_fbd_num", index);
 	buff = buff + ETH_GSTRING_LEN;
 
-	snprintf(buff, ETH_GSTRING_LEN, "TX%d_RING_BYTES", index);
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_pkt_num", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_bytes", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_err_cnt", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_io_err", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_sw_err", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_seg_pkt", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_reuse_pg", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_len_err", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_non_vld_desc_err", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_bd_num_err", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_csumerr", index);
 	buff = buff + ETH_GSTRING_LEN;
 
-	snprintf(buff, ETH_GSTRING_LEN, "TX%d_RING_ERRCNT", index);
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_rcb_pkt_num", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_ppe_pkt_num", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_ppe_drop_pkt_num", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_fbd_num", index);
 	buff = buff + ETH_GSTRING_LEN;
 
-	snprintf(buff, ETH_GSTRING_LEN, "TX%d_RING_CSUMERR", index);
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_pkt_num", index);
 	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "TX%d_RING_FBDNUM", index);
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_bytes", index);
 	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "RX%d_RING_PKTNUM", index);
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_err_cnt", index);
 	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "RX%d_RING_BYTES", index);
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_io_err", index);
 	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "RX%d_RING_ERRCNT", index);
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_sw_err", index);
 	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "RX%d_RING_CSUMERR", index);
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_seg_pkt", index);
 	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "RX%d_RING_FBDNUM", index);
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_reuse_pg", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_len_err", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_non_vld_desc_err", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_bd_num_err", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_csum_err", index);
 }
 
 void hns_rcb_get_common_regs(struct rcb_common_cb *rcb_com, void *data)
@@ -855,7 +920,7 @@ void hns_rcb_get_common_regs(struct rcb_common_cb *rcb_com, void *data)
 
 	/* mark end of rcb common regs */
 	for (i = 73; i < 80; i++)
-		regs[i] = 0xeeeeeeee;
+		regs[i] = 0xcccccccc;
 }
 
 void hns_rcb_get_ring_regs(struct hnae_queue *queue, void *data)
@@ -906,6 +971,6 @@ void hns_rcb_get_ring_regs(struct hnae_queue *queue, void *data)
 
 	/* mark end of ring regs */
 	for (i = 35; i < 40; i++)
-		regs[i] = 0xeeeeee00 + ring_pair->index;
+		regs[i] = 0xcccccc00 + ring_pair->index;
 }
 

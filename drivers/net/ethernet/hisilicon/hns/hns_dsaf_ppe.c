@@ -238,6 +238,10 @@ static int hns_ppe_common_init_hw(struct ppe_common_cb *ppe_common)
 		}
 		hns_ppe_set_qid_mode(ppe_common, qid_mode);
 	}
+
+	dsaf_set_dev_bit(ppe_common, PPE_COM_COMMON_CNT_CLR_CE_REG,
+			 PPE_COMMON_CNT_CLR_CE_B, 1);
+
 	return 0;
 }
 
@@ -401,62 +405,50 @@ void hns_ppe_get_strings(struct hns_ppe_cb *ppe_cb, int stringset, u8 *data)
 	char *buff = (char *)data;
 	int index = ppe_cb->index;
 
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_RX_SW_PKT", index);
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_rx_sw_pkt", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_rx_pkt_ok", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_rx_drop_pkt_no_bd", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_rx_alloc_buf_fail", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_rx_alloc_buf_wait", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_rx_pkt_drop_no_buf", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_rx_pkt_err_fifo_full", index);
 	buff = buff + ETH_GSTRING_LEN;
 
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_RX_WR_BD_OK", index);
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_tx_bd", index);
 	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_RX_PKT_NO_BUF", index);
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_tx_pkt", index);
 	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_TX_BD", index);
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_tx_pkt_ok", index);
 	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_TX_PKT", index);
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_tx_pkt_err_fifo_empty", index);
 	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_TX_PKT_OK", index);
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_TX_PKT_EPT", index);
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_TX_PKT_CS_FAIL", index);
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_RX_APP_BUF_FAIL", index);
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_RX_APP_BUF_WAIT", index);
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_RRX_PKT_DROP_FUL", index);
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "PPE%d_RX_PKT_DROP_PRT", index);
+	snprintf(buff, ETH_GSTRING_LEN, "ppe%d_tx_pkt_err_csum_fail", index);
 }
 
-void hns_ppe_get_ethtool_stats(struct hns_ppe_cb *ppe_cb,
-			       struct ethtool_stats *stats, u64 *data)
+void hns_ppe_get_stats(struct hns_ppe_cb *ppe_cb, u64 *data)
 {
 	u64 *regs_buff = data;
 	struct hns_ppe_hw_stats *hw_stats = &ppe_cb->hw_stats;
 
-	hns_ppe_update_stats(ppe_cb);
-
 	regs_buff[0] = hw_stats->rx_pkts_from_sw;
 	regs_buff[1] = hw_stats->rx_pkts;
 	regs_buff[2] = hw_stats->rx_drop_no_bd;
-	regs_buff[3] = hw_stats->tx_bd_form_rcb;
-	regs_buff[4] = hw_stats->tx_pkts_from_rcb;
-	regs_buff[5] = hw_stats->tx_pkts;
-	regs_buff[6] = hw_stats->tx_err_fifo_empty;
-	regs_buff[7] = hw_stats->tx_err_checksum;
-	regs_buff[8] = hw_stats->rx_alloc_buf_fail;
-	regs_buff[9] = hw_stats->rx_alloc_buf_wait;
-	regs_buff[10] = hw_stats->rx_drop_no_buf;
-	regs_buff[11] = hw_stats->rx_err_fifo_full;
+	regs_buff[3] = hw_stats->rx_alloc_buf_fail;
+	regs_buff[4] = hw_stats->rx_alloc_buf_wait;
+	regs_buff[5] = hw_stats->rx_drop_no_buf;
+	regs_buff[6] = hw_stats->rx_err_fifo_full;
+
+	regs_buff[7] = hw_stats->tx_bd_form_rcb;
+	regs_buff[8] = hw_stats->tx_pkts_from_rcb;
+	regs_buff[9] = hw_stats->tx_pkts;
+	regs_buff[10] = hw_stats->tx_err_fifo_empty;
+	regs_buff[11] = hw_stats->tx_err_checksum;
 }
 
 /**
@@ -502,6 +494,7 @@ void hns_ppe_get_regs(struct hns_ppe_cb *ppe_cb, void *data)
 	struct ppe_common_cb *ppe_common = ppe_cb->ppe_common_cb;
 	u32 *regs = data;
 	u32 i;
+	u32 offset;
 
 	/* ppe common registers */
 	regs[0] = dsaf_read_dev(ppe_common, PPE_COM_CFG_QID_MODE_REG);
@@ -510,64 +503,81 @@ void hns_ppe_get_regs(struct hns_ppe_cb *ppe_cb, void *data)
 	regs[3] = dsaf_read_dev(ppe_common, PPE_COM_INTSTS_REG);
 	regs[4] = dsaf_read_dev(ppe_common, PPE_COM_COMMON_CNT_CLR_CE_REG);
 
-	/* ppe channel registers */
-	regs[5] = dsaf_read_dev(ppe_cb, PPE_CFG_TX_FIFO_THRSLD_REG);
-	regs[6] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_FIFO_THRSLD_REG);
-	regs[7] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_FIFO_PAUSE_THRSLD_REG);
-	regs[8] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_FIFO_SW_BP_THRSLD_REG);
-	regs[9] = dsaf_read_dev(ppe_cb, PPE_CFG_PAUSE_IDLE_CNT_REG);
-	regs[10] = dsaf_read_dev(ppe_cb, PPE_CFG_BUS_CTRL_REG);
-	regs[11] = dsaf_read_dev(ppe_cb, PPE_CFG_TNL_TO_BE_RST_REG);
-	regs[12] = dsaf_read_dev(ppe_cb, PPE_CURR_TNL_CAN_RST_REG);
-
-	regs[13] = dsaf_read_dev(ppe_cb, PPE_CFG_XGE_MODE_REG);
-	regs[14] = dsaf_read_dev(ppe_cb, PPE_CFG_MAX_FRAME_LEN_REG);
-	regs[15] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_PKT_MODE_REG);
-	regs[16] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_VLAN_TAG_REG);
-	regs[17] = dsaf_read_dev(ppe_cb, PPE_CFG_TAG_GEN_REG);
-	regs[18] = dsaf_read_dev(ppe_cb, PPE_CFG_PARSE_TAG_REG);
-	regs[19] = dsaf_read_dev(ppe_cb, PPE_CFG_PRO_CHECK_EN_REG);
-
-	regs[20] = dsaf_read_dev(ppe_cb, PPE_INTEN_REG);
-	regs[21] = dsaf_read_dev(ppe_cb, PPE_RINT_REG);
-	regs[22] = dsaf_read_dev(ppe_cb, PPE_INTSTS_REG);
-	regs[23] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_PKT_INT_REG);
-
-	regs[24] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_PKT_INT_REG);
-	regs[25] = dsaf_read_dev(ppe_cb, PPE_CFG_HEAT_DECT_TIME0_REG);
-	regs[26] = dsaf_read_dev(ppe_cb, PPE_CFG_HEAT_DECT_TIME1_REG);
-
-	/* ppe static */
-	regs[27] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_SW_PKT_CNT_REG);
-	regs[28] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_WR_BD_OK_PKT_CNT_REG);
-	regs[29] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_PKT_NO_BUF_CNT_REG);
-	regs[30] = dsaf_read_dev(ppe_cb, PPE_HIS_TX_BD_CNT_REG);
-	regs[31] = dsaf_read_dev(ppe_cb, PPE_HIS_TX_PKT_CNT_REG);
-	regs[32] = dsaf_read_dev(ppe_cb, PPE_HIS_TX_PKT_OK_CNT_REG);
-	regs[33] = dsaf_read_dev(ppe_cb, PPE_HIS_TX_PKT_EPT_CNT_REG);
-	regs[34] = dsaf_read_dev(ppe_cb, PPE_HIS_TX_PKT_CS_FAIL_CNT_REG);
-	regs[35] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_APP_BUF_FAIL_CNT_REG);
-	regs[36] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_APP_BUF_WAIT_CNT_REG);
-	regs[37] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_PKT_DROP_FUL_CNT_REG);
-	regs[38] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_PKT_DROP_PRT_CNT_REG);
-
-	regs[39] = dsaf_read_dev(ppe_cb, PPE_TNL_0_5_CNT_CLR_CE_REG);
-	regs[40] = dsaf_read_dev(ppe_cb, PPE_CFG_AXI_DBG_REG);
-	regs[41] = dsaf_read_dev(ppe_cb, PPE_HIS_PRO_ERR_REG);
-	regs[42] = dsaf_read_dev(ppe_cb, PPE_HIS_TNL_FIFO_ERR_REG);
-	regs[43] = dsaf_read_dev(ppe_cb, PPE_CURR_CFF_DATA_NUM_REG);
-	regs[44] = dsaf_read_dev(ppe_cb, PPE_CURR_RX_ST_REG);
-	regs[45] = dsaf_read_dev(ppe_cb, PPE_CURR_TX_ST_REG);
-	regs[46] = dsaf_read_dev(ppe_cb, PPE_CURR_RX_FIFO0_REG);
-	regs[47] = dsaf_read_dev(ppe_cb, PPE_CURR_RX_FIFO1_REG);
-	regs[48] = dsaf_read_dev(ppe_cb, PPE_CURR_TX_FIFO0_REG);
-	regs[49] = dsaf_read_dev(ppe_cb, PPE_CURR_TX_FIFO1_REG);
-	regs[50] = dsaf_read_dev(ppe_cb, PPE_ECO0_REG);
-	regs[51] = dsaf_read_dev(ppe_cb, PPE_ECO1_REG);
-	regs[52] = dsaf_read_dev(ppe_cb, PPE_ECO2_REG);
+	for (i = 0; i < DSAF_TOTAL_QUEUE_NUM; i++) {
+		offset = PPE_COM_HIS_RX_PKT_QID_DROP_CNT_REG + 0x4 * i;
+		regs[5 + i] = dsaf_read_dev(ppe_common, offset);
+		offset = PPE_COM_HIS_RX_PKT_QID_OK_CNT_REG + 0x4 * i;
+		regs[5 + i + DSAF_TOTAL_QUEUE_NUM]
+				= dsaf_read_dev(ppe_common, offset);
+		offset = PPE_COM_HIS_TX_PKT_QID_ERR_CNT_REG + 0x4 * i;
+		regs[5 + i + DSAF_TOTAL_QUEUE_NUM * 2]
+				= dsaf_read_dev(ppe_common, offset);
+		offset = PPE_COM_HIS_TX_PKT_QID_OK_CNT_REG + 0x4 * i;
+		regs[5 + i + DSAF_TOTAL_QUEUE_NUM * 3]
+				= dsaf_read_dev(ppe_common, offset);
+	}
 
 	/* mark end of ppe regs */
-	for (i = 53; i < 60; i++)
+	for (i = 521; i < 524; i++)
+		regs[i] = 0xeeeeeeee;
+
+	/* ppe channel registers */
+	regs[525] = dsaf_read_dev(ppe_cb, PPE_CFG_TX_FIFO_THRSLD_REG);
+	regs[526] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_FIFO_THRSLD_REG);
+	regs[527] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_FIFO_PAUSE_THRSLD_REG);
+	regs[528] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_FIFO_SW_BP_THRSLD_REG);
+	regs[529] = dsaf_read_dev(ppe_cb, PPE_CFG_PAUSE_IDLE_CNT_REG);
+	regs[530] = dsaf_read_dev(ppe_cb, PPE_CFG_BUS_CTRL_REG);
+	regs[531] = dsaf_read_dev(ppe_cb, PPE_CFG_TNL_TO_BE_RST_REG);
+	regs[532] = dsaf_read_dev(ppe_cb, PPE_CURR_TNL_CAN_RST_REG);
+
+	regs[533] = dsaf_read_dev(ppe_cb, PPE_CFG_XGE_MODE_REG);
+	regs[534] = dsaf_read_dev(ppe_cb, PPE_CFG_MAX_FRAME_LEN_REG);
+	regs[535] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_PKT_MODE_REG);
+	regs[536] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_VLAN_TAG_REG);
+	regs[537] = dsaf_read_dev(ppe_cb, PPE_CFG_TAG_GEN_REG);
+	regs[538] = dsaf_read_dev(ppe_cb, PPE_CFG_PARSE_TAG_REG);
+	regs[539] = dsaf_read_dev(ppe_cb, PPE_CFG_PRO_CHECK_EN_REG);
+
+	regs[540] = dsaf_read_dev(ppe_cb, PPE_INTEN_REG);
+	regs[541] = dsaf_read_dev(ppe_cb, PPE_RINT_REG);
+	regs[542] = dsaf_read_dev(ppe_cb, PPE_INTSTS_REG);
+	regs[543] = dsaf_read_dev(ppe_cb, PPE_CFG_RX_PKT_INT_REG);
+
+	regs[544] = dsaf_read_dev(ppe_cb, PPE_CFG_HEAT_DECT_TIME0_REG);
+	regs[545] = dsaf_read_dev(ppe_cb, PPE_CFG_HEAT_DECT_TIME1_REG);
+
+	/* ppe static */
+	regs[546] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_SW_PKT_CNT_REG);
+	regs[547] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_WR_BD_OK_PKT_CNT_REG);
+	regs[548] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_PKT_NO_BUF_CNT_REG);
+	regs[549] = dsaf_read_dev(ppe_cb, PPE_HIS_TX_BD_CNT_REG);
+	regs[550] = dsaf_read_dev(ppe_cb, PPE_HIS_TX_PKT_CNT_REG);
+	regs[551] = dsaf_read_dev(ppe_cb, PPE_HIS_TX_PKT_OK_CNT_REG);
+	regs[552] = dsaf_read_dev(ppe_cb, PPE_HIS_TX_PKT_EPT_CNT_REG);
+	regs[553] = dsaf_read_dev(ppe_cb, PPE_HIS_TX_PKT_CS_FAIL_CNT_REG);
+	regs[554] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_APP_BUF_FAIL_CNT_REG);
+	regs[555] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_APP_BUF_WAIT_CNT_REG);
+	regs[556] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_PKT_DROP_FUL_CNT_REG);
+	regs[557] = dsaf_read_dev(ppe_cb, PPE_HIS_RX_PKT_DROP_PRT_CNT_REG);
+
+	regs[558] = dsaf_read_dev(ppe_cb, PPE_TNL_0_5_CNT_CLR_CE_REG);
+	regs[559] = dsaf_read_dev(ppe_cb, PPE_CFG_AXI_DBG_REG);
+	regs[560] = dsaf_read_dev(ppe_cb, PPE_HIS_PRO_ERR_REG);
+	regs[561] = dsaf_read_dev(ppe_cb, PPE_HIS_TNL_FIFO_ERR_REG);
+	regs[562] = dsaf_read_dev(ppe_cb, PPE_CURR_CFF_DATA_NUM_REG);
+	regs[563] = dsaf_read_dev(ppe_cb, PPE_CURR_RX_ST_REG);
+	regs[564] = dsaf_read_dev(ppe_cb, PPE_CURR_TX_ST_REG);
+	regs[565] = dsaf_read_dev(ppe_cb, PPE_CURR_RX_FIFO0_REG);
+	regs[566] = dsaf_read_dev(ppe_cb, PPE_CURR_RX_FIFO1_REG);
+	regs[567] = dsaf_read_dev(ppe_cb, PPE_CURR_TX_FIFO0_REG);
+	regs[568] = dsaf_read_dev(ppe_cb, PPE_CURR_TX_FIFO1_REG);
+	regs[569] = dsaf_read_dev(ppe_cb, PPE_ECO0_REG);
+	regs[570] = dsaf_read_dev(ppe_cb, PPE_ECO1_REG);
+	regs[571] = dsaf_read_dev(ppe_cb, PPE_ECO2_REG);
+
+	/* mark end of ppe regs */
+	for (i = 572; i < 576; i++)
 		regs[i] = 0xeeeeeeee;
 }
 

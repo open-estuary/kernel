@@ -11,6 +11,5 @@
 #define _HNS_XGMAC_H
 
 #define ETH_XGMAC_DUMP_NUM		(214)
-#define ETH_XGMAC_MIB_NUM		(68)
 
 #endif

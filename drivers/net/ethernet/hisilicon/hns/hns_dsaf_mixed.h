@@ -15,7 +15,7 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 
-#define CPLD_ADDR_PORT_OFFSET	0x2
+#define CPLD_ADDR_PORT_OFFSET	0x4
 
 #define HS_LED_ON		0xE
 #define HS_LED_OFF		0xF
@@ -25,7 +25,7 @@
 
 #define HNS_LED_FCR			0x10
 #define HNS_LED_PCR			0x11
-#define MAC_SFP_PORT_OFFSET	0XC
+#define MAC_SFP_PORT_OFFSET	0x2
 
 #define DSAF_LED_SPEED_S 0
 #define DSAF_LED_SPEED_M (0x3 << DSAF_LED_SPEED_S)
@@ -39,4 +39,6 @@ void hns_cpld_set_led(struct hns_mac_cb *mac_cb, int port, int link_status,
 void cpld_led_reset(struct hns_mac_cb *mac_cb);
 int cpld_set_led_id(struct hns_mac_cb *mac_cb,
 		    enum hnae_led_state status);
+int hns_mac_get_sfp_prsnt(struct hns_mac_cb *mac_cb, int *sfp_prsnt);
+
 #endif /* _IWARE_LED_HAL_H */

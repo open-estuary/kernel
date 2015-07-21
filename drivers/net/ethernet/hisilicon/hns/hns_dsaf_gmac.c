@@ -13,6 +13,55 @@
 #include "hns_dsaf_mac.h"
 #include "hns_dsaf_gmac.h"
 
+static const struct mac_stats_string g_gmac_stats_string[] = {
+	{"gmac_rx_octets_total_ok", MAC_STATS_FIELD_OFF(rx_good_bytes)},
+	{"gmac_rx_octets_bad", MAC_STATS_FIELD_OFF(rx_bad_bytes)},
+	{"gmac_rx_uc_pkts", MAC_STATS_FIELD_OFF(rx_uc_pkts)},
+	{"gamc_rx_mc_pkts", MAC_STATS_FIELD_OFF(rx_mc_pkts)},
+	{"gmac_rx_bc_pkts", MAC_STATS_FIELD_OFF(rx_bc_pkts)},
+	{"gmac_rx_pkts_64octets", MAC_STATS_FIELD_OFF(rx_64bytes)},
+	{"gmac_rx_pkts_65to127", MAC_STATS_FIELD_OFF(rx_65to127)},
+	{"gmac_rx_pkts_128to255", MAC_STATS_FIELD_OFF(rx_128to255)},
+	{"gmac_rx_pkts_256to511", MAC_STATS_FIELD_OFF(rx_256to511)},
+	{"gmac_rx_pkts_512to1023", MAC_STATS_FIELD_OFF(rx_512to1023)},
+	{"gmac_rx_pkts_1024to1518", MAC_STATS_FIELD_OFF(rx_1024to1518)},
+	{"gmac_rx_pkts_1519tomax", MAC_STATS_FIELD_OFF(rx_1519tomax)},
+	{"gmac_rx_fcs_errors", MAC_STATS_FIELD_OFF(rx_fcs_err)},
+	{"gmac_rx_tagged", MAC_STATS_FIELD_OFF(rx_vlan_pkts)},
+	{"gmac_rx_data_err", MAC_STATS_FIELD_OFF(rx_data_err)},
+	{"gmac_rx_align_errors", MAC_STATS_FIELD_OFF(rx_align_err)},
+	{"gmac_rx_long_errors", MAC_STATS_FIELD_OFF(rx_oversize)},
+	{"gmac_rx_jabber_errors", MAC_STATS_FIELD_OFF(rx_jabber_err)},
+	{"gmac_rx_pause_maccontrol", MAC_STATS_FIELD_OFF(rx_pfc_tc0)},
+	{"gmac_rx_unknown_maccontrol", MAC_STATS_FIELD_OFF(rx_unknown_ctrl)},
+	{"gmac_rx_very_long_err", MAC_STATS_FIELD_OFF(rx_long_err)},
+	{"gmac_rx_runt_err", MAC_STATS_FIELD_OFF(rx_minto64)},
+	{"gmac_rx_short_err", MAC_STATS_FIELD_OFF(rx_under_min)},
+	{"gmac_rx_filt_pkt", MAC_STATS_FIELD_OFF(rx_filter_bytes)},
+	{"gmac_rx_octets_total_filt", MAC_STATS_FIELD_OFF(rx_filter_pkts)},
+	{"gmac_rx_overrun_cnt", MAC_STATS_FIELD_OFF(rx_fifo_overrun_err)},
+	{"gmac_rx_length_err", MAC_STATS_FIELD_OFF(rx_len_err)},
+	{"gmac_rx_fail_comma", MAC_STATS_FIELD_OFF(rx_comma_err)},
+
+	{"gmac_tx_octets_ok", MAC_STATS_FIELD_OFF(tx_good_bytes)},
+	{"gmac_tx_octets_bad", MAC_STATS_FIELD_OFF(tx_bad_bytes)},
+	{"gmac_tx_uc_pkts", MAC_STATS_FIELD_OFF(tx_uc_pkts)},
+	{"gmac_tx_mc_pkts", MAC_STATS_FIELD_OFF(tx_mc_pkts)},
+	{"gmac_tx_bc_pkts", MAC_STATS_FIELD_OFF(tx_bc_pkts)},
+	{"gmac_tx_pkts_64octets", MAC_STATS_FIELD_OFF(tx_64bytes)},
+	{"gmac_tx_pkts_65to127", MAC_STATS_FIELD_OFF(tx_65to127)},
+	{"gmac_tx_pkts_128to255", MAC_STATS_FIELD_OFF(tx_128to255)},
+	{"gmac_tx_pkts_255to511", MAC_STATS_FIELD_OFF(tx_256to511)},
+	{"gmac_tx_pkts_512to1023", MAC_STATS_FIELD_OFF(tx_512to1023)},
+	{"gmac_tx_pkts_1024to1518", MAC_STATS_FIELD_OFF(tx_1024to1518)},
+	{"gmac_tx_pkts_1519tomax", MAC_STATS_FIELD_OFF(tx_1519tomax)},
+	{"gmac_tx_excessive_length_drop", MAC_STATS_FIELD_OFF(tx_jabber_err)},
+	{"gmac_tx_underrun", MAC_STATS_FIELD_OFF(tx_underrun_err)},
+	{"gmac_tx_tagged", MAC_STATS_FIELD_OFF(tx_vlan)},
+	{"gmac_tx_crc_error", MAC_STATS_FIELD_OFF(tx_crc_err)},
+	{"gmac_tx_pause_frames", MAC_STATS_FIELD_OFF(tx_pfc_tc0)}
+};
+
 static void hns_gmac_enable(void *mac_drv, enum mac_commom_mode mode)
 {
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
@@ -349,25 +398,6 @@ void hns_gmac_update_stats(void *mac_drv)
 		+= dsaf_read_dev(drv, GMAC_TX_PAUSE_FRAMES_REG);
 }
 
-static void hns_gmac_reset(void *mac_drv, u32 wait)
-{
-	u8 port;
-	struct mac_driver *drv = (struct mac_driver *)mac_drv;
-	struct dsaf_device *dsaf_dev
-		= (struct dsaf_device *)dev_get_drvdata(drv->dev);
-
-	port = drv->mac_id;
-	mdelay(10);
-	/* 0:request reset ge hw*/
-	hns_dsaf_ge_srst_by_port(dsaf_dev, port, 0);
-
-	mdelay(10);
-	/* 1:drop request reset ge hw*/
-	hns_dsaf_ge_srst_by_port(dsaf_dev, port, 1);
-
-	mdelay(10);
-}
-
 static void hns_gmac_set_mac_addr(void *mac_drv, char *mac_addr)
 {
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
@@ -587,228 +617,39 @@ static void hns_gmac_get_regs(void *mac_drv, void *data)
 		regs[i] = 0xaaaaaaaa;
 }
 
-static void hns_gmac_get_ethtool_stats(void *mac_drv,
-				       struct ethtool_stats *cmd, u64 *data)
+static void hns_gmac_get_stats(void *mac_drv, u64 *data)
 {
+	u32 i;
 	u64 *buf = data;
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
 	struct mac_hw_stats *hw_stats = NULL;
 
 	hw_stats = &drv->mac_cb->hw_stats;
 
-	hns_gmac_update_stats(drv);
-
-	buf[0] = hw_stats->rx_good_bytes;
-	buf[1] = hw_stats->rx_bad_bytes;
-	buf[2] = hw_stats->rx_uc_pkts;
-	buf[3] = hw_stats->rx_mc_pkts;
-	buf[4] = hw_stats->rx_bc_pkts;
-	buf[5] = hw_stats->rx_64bytes;
-	buf[6] = hw_stats->rx_65to127;
-	buf[7] = hw_stats->rx_128to255;
-	buf[8] = hw_stats->rx_256to511;
-	buf[9] = hw_stats->rx_512to1023;
-	buf[10] = hw_stats->rx_1024to1518;
-	buf[11] = hw_stats->rx_1519tomax;
-	buf[12] = hw_stats->rx_fcs_err;
-	buf[13] = hw_stats->rx_vlan_pkts;
-	buf[14] = hw_stats->rx_data_err;
-	buf[15] = hw_stats->rx_align_err;
-	buf[16] = hw_stats->rx_long_err;
-	buf[17] = hw_stats->rx_jabber_err;
-	buf[18] = hw_stats->rx_pfc_tc0;
-	buf[19] = hw_stats->rx_unknown_ctrl;
-	buf[20] = hw_stats->rx_oversize;
-	buf[21] = hw_stats->rx_minto64;
-	buf[22] = hw_stats->rx_under_min;
-	buf[23] = hw_stats->rx_filter_pkts;
-	buf[24] = hw_stats->rx_filter_bytes;
-
-	buf[25] = hw_stats->tx_good_bytes;
-	buf[26] = hw_stats->tx_bad_bytes;
-	buf[27] = hw_stats->tx_uc_pkts;
-	buf[28] = hw_stats->tx_mc_pkts;
-	buf[29] = hw_stats->tx_bc_pkts;
-	buf[30] = hw_stats->tx_64bytes;
-	buf[31] = hw_stats->tx_65to127;
-	buf[32] = hw_stats->tx_128to255;
-	buf[33] = hw_stats->tx_256to511;
-	buf[34] = hw_stats->tx_512to1023;
-	buf[35] = hw_stats->tx_1024to1518;
-	buf[36] = hw_stats->tx_1519tomax;
-	buf[37] = hw_stats->tx_jabber_err;
-	buf[38] = hw_stats->tx_underrun_err;
-	buf[39] = hw_stats->tx_vlan;
-	buf[40] = hw_stats->tx_crc_err;
-	buf[41] = hw_stats->tx_pfc_tc0;
-
-	buf[42] = dsaf_read_dev(drv, GMAC_DUPLEX_TYPE_REG);
-	buf[43] = dsaf_read_dev(drv, GMAC_FD_FC_TYPE_REG);
-	buf[44] = dsaf_read_dev(drv, GMAC_FC_TX_TIMER_REG);
-	buf[45] = dsaf_read_dev(drv, GMAC_PAUSE_THR_REG);
-	buf[46] = dsaf_read_dev(drv, GMAC_MAX_FRM_SIZE_REG);
-	buf[47] = dsaf_read_dev(drv, GMAC_PORT_MODE_REG);
-	buf[48] = dsaf_read_dev(drv, GMAC_PORT_EN_REG);
-	buf[49] = dsaf_read_dev(drv, GMAC_PAUSE_EN_REG);
-	buf[50] = dsaf_read_dev(drv, GMAC_SHORT_RUNTS_THR_REG);
-	buf[51] = dsaf_read_dev(drv, GMAC_AN_NEG_STATE_REG);
-	buf[52] = dsaf_read_dev(drv, GMAC_TX_LOCAL_PAGE_REG);
-	buf[53] = dsaf_read_dev(drv, GMAC_TRANSMIT_CONTROL_REG);
-	buf[54] = dsaf_read_dev(drv, GMAC_REC_FILT_CONTROL_REG);
-	buf[55] = dsaf_read_dev(drv, GMAC_LINE_LOOP_BACK_REG);
-	buf[56] = dsaf_read_dev(drv, GMAC_CF_CRC_STRIP_REG);
-	buf[57] = dsaf_read_dev(drv, GMAC_MODE_CHANGE_EN_REG);
-	buf[58] = dsaf_read_dev(drv, GMAC_SIXTEEN_BIT_CNTR_REG);
-	buf[59] = dsaf_read_dev(drv, GMAC_LD_LINK_COUNTER_REG);
-	buf[60] = dsaf_read_dev(drv, GMAC_LOOP_REG);
-	buf[61] = dsaf_read_dev(drv, GMAC_RECV_CONTROL_REG);
-	buf[62] = dsaf_read_dev(drv, GMAC_VLAN_CODE_REG);
-	buf[63] = dsaf_read_dev(drv, GMAC_RX_OVERRUN_CNT_REG);
-	buf[64] = dsaf_read_dev(drv, GMAC_RX_FAIL_COMMA_CNT_REG);
+	for (i = 0; i < ARRAY_SIZE(g_gmac_stats_string); i++) {
+		buf[i] = DSAF_STATS_READ(hw_stats,
+			g_gmac_stats_string[i].offset);
+	}
 }
 
-static void hns_gmac_get_strings(void *mac_drv, u32 stringset, u8 *data)
+static void hns_gmac_get_strings(u32 stringset, u8 *data)
 {
 	char *buff = (char *)data;
+	u32 i;
 
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_OCTETS_TOTAL_OK");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_OCTETS_BAD");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_UC_PKTS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_MC_PKTS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_BC_PKTS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_PKTS_64OCTETS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_PKTS_65TO127");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_PKTS_128TO255");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_PKTS_255TO511");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_PKTS_512TO1023");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_PKTS_1024TO1518");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_PKTS_1519TOMAX");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_FCS_ERRORS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_TAGGED");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_DATA_ERR");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_ALIGN_ERRORS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_LONG_ERRORS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_JABBER_ERRORS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_PAUSE_MACCONTROL");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_UNKNOWN_MACCONTROL");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_VERY_LONG_ERR");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_RUNT_ERR");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_SHORT_ERR");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_FILT_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_OCTETS_TOTAL_FILT");
-	buff = buff + ETH_GSTRING_LEN;
+	if (stringset != ETH_SS_STATS)
+		return;
 
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_OCTETS_TRANSMITTED_OK");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_OCTETS_TRANSMITTED_BAD");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_UC_PKTS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_MC_PKTS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_BC_PKTS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_PKTS_64OCTETS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_PKTS_65TO127");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_PKTS_128TO255");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_PKTS_255TO511");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_PKTS_512TO1023");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_PKTS_1024TO1518");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_PKTS_1519TOMAX");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_EXCESSIVE_LENGTH_DROP");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_UNDERRUN");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_TAGGED");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_CRC_ERROR");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_PAUSE_FRAMES");
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_DUPLEX_TYPE");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_FD_FC_TYPE");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_FC_TX_TIMER");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_PAUSE_THR");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_MAX_FRM_SIZE");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_PORT_MODE");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_PORT_EN");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_PAUSE_EN");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_SHORT_RUNTS_THR");
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_AN_NEG_STATE");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TX_LOCAL_PAGE");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_TRANSMIT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_REC_FILT_CONTROL");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_LINE_LOOP_BACK");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_CF_CRC_STRIP");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_MODE_CHANGE_EN");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_SIXTEEN_BIT_CNTR");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_LD_LINK_COUNTER");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_LOOP_REG");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RECV_COMTROL");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_VLAN_CODE");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_OVERRUN_CNT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "GMAC_RX_FAIL_COMMA");
+	for (i = 0; i < ARRAY_SIZE(g_gmac_stats_string); i++) {
+		snprintf(buff, ETH_GSTRING_LEN, g_gmac_stats_string[i].desc);
+		buff = buff + ETH_GSTRING_LEN;
+	}
 }
 
 static int hns_gmac_get_sset_count(int stringset)
 {
 	if (stringset == ETH_SS_STATS)
-		return ETH_GMAC_STATIC_NUM;
+		return ARRAY_SIZE(g_gmac_stats_string);
 
 	return 0;
 }
@@ -842,7 +683,6 @@ void *hns_gmac_config(struct hns_mac_cb *mac_cb, struct mac_params *mac_param)
 	mac_drv->dev = mac_param->dev;
 	mac_drv->mac_cb = mac_cb;
 
-	mac_drv->mac_reset = hns_gmac_reset;
 	mac_drv->set_mac_addr = hns_gmac_set_mac_addr;
 	mac_drv->set_an_mode = hns_gmac_config_an_mode;
 	mac_drv->config_loopback = hns_gmac_config_loopback;
@@ -856,7 +696,7 @@ void *hns_gmac_config(struct hns_mac_cb *mac_cb, struct mac_params *mac_param)
 	mac_drv->get_link_status = hns_gmac_get_link_status;
 	mac_drv->get_regs = hns_gmac_get_regs;
 	mac_drv->get_regs_count = hns_gmac_get_regs_count;
-	mac_drv->get_ethtool_stats = hns_gmac_get_ethtool_stats;
+	mac_drv->get_ethtool_stats = hns_gmac_get_stats;
 	mac_drv->get_sset_count = hns_gmac_get_sset_count;
 	mac_drv->get_strings = hns_gmac_get_strings;
 	mac_drv->update_stats = hns_gmac_update_stats;

@@ -263,9 +263,9 @@ phy_interface_t hns_mac_get_phy_if(struct hns_mac_cb *mac_cb)
 		phy_if = PHY_INTERFACE_MODE_SGMII;
 	}
 
-	dev_info(mac_cb->dev,
-		 "hilink3_mode=%d, hilink4_mode=%d dev_id=%d, phy_if=%d\n",
-		 hilink3_mode, hilink4_mode, dev_id, phy_if);
+	dev_dbg(mac_cb->dev,
+		"hilink3_mode=%d, hilink4_mode=%d dev_id=%d, phy_if=%d\n",
+		hilink3_mode, hilink4_mode, dev_id, phy_if);
 	return phy_if;
 }
 
@@ -293,6 +293,17 @@ int hns_mac_config_sds_loopback(struct hns_mac_cb *mac_cb, u8 en)
 	};
 #define RX_CSR(lane, reg) ((0x4080 + (reg) * 0x0002 + (lane) * 0x0200) * 2)
 	u64 reg_offset = RX_CSR(lane_id[mac_cb->mac_id], 0);
+
+	int sfp_prsnt;
+	int ret = hns_mac_get_sfp_prsnt(mac_cb, &sfp_prsnt);
+
+	if (!mac_cb->phy_node) {
+		if (ret)
+			pr_info("please confirm sfp is present or not\n");
+		else
+			if (!sfp_prsnt)
+				pr_info("no sfp in this eth\n");
+	}
 
 	dsaf_set_reg_field(base_addr, reg_offset, 1ull << 10, 10, !!en);
 

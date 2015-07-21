@@ -45,12 +45,12 @@ struct rcb_common_cb;
 #define HNS_BD_SIZE_2048_TYPE			2
 #define HNS_BD_SIZE_4096_TYPE			3
 
-#define ETH_RCB_COMMON_DUMP_REG_NUM 80
-#define ETH_RCB_RING_DUMP_REG_NUM 40
-#define ETH_RING_STATIC_REG_NUM 10
+#define HNS_RCB_COMMON_DUMP_REG_NUM 80
+#define HNS_RCB_RING_DUMP_REG_NUM 40
+#define HNS_RING_STATIC_REG_NUM 30
 
-#define ETH_DUMP_REG_NUM			500
-#define ETH_STATIC_REG_NUM			12
+#define HNS_DUMP_REG_NUM			500
+#define HNS_STATIC_REG_NUM			12
 
 enum rcb_int_flag {
 	RCB_INT_FLAG_TX = 0x1,
@@ -60,7 +60,11 @@ enum rcb_int_flag {
 
 struct hns_ring_hw_stats {
 	u64 tx_pkts;
+	u64 ppe_tx_ok_pkts;
+	u64 ppe_tx_drop_pkts;
 	u64 rx_pkts;
+	u64 ppe_rx_ok_pkts;
+	u64 ppe_rx_drop_pkts;
 };
 
 struct ring_pair_cb {
@@ -111,15 +115,14 @@ void hns_rcb_reset_ring_hw(struct hnae_queue *q);
 u32 hns_rcb_get_coalesced_frames(struct dsaf_device *dsaf_dev, int comm_index);
 u32 hns_rcb_get_coalesce_usecs(struct dsaf_device *dsaf_dev, int comm_index);
 void hns_rcb_set_coalesce_usecs(struct dsaf_device *dsaf_dev,
-				int comm_index, u32 tx_usecs, u32 rx_usecs);
+				int comm_index, u32 timeout);
 int hns_rcb_set_coalesced_frames(struct dsaf_device *dsaf_dev,
-				 int comm_index, u32 tx_frames, u32 rx_frames);
+				 int comm_index, u32 coalesce_frames);
 u32 hns_rcb_get_max_ringnum(struct dsaf_device *dsaf_dev);
 u32 hns_rcb_get_common_ringnum(struct dsaf_device *dsaf_dev, int common_idx);
 void hns_rcb_update_stats(struct hnae_queue *queue);
 
-void hns_rcb_get_ethtool_stats(struct hnae_queue *queue,
-			       struct ethtool_stats *stats, u64 *data);
+void hns_rcb_get_stats(struct hnae_queue *queue, u64 *data);
 
 void hns_rcb_get_common_regs(struct rcb_common_cb *rcb_common, void *data);
 
@@ -129,6 +132,5 @@ int hns_rcb_get_ring_regs_count(void);
 
 void hns_rcb_get_ring_regs(struct hnae_queue *queue, void *data);
 
-void hns_rcb_get_strings(struct hnae_queue *queue, int stringset,
-			 u8 *data, int index);
+void hns_rcb_get_strings(int stringset, u8 *data, int index);
 #endif /* _HNS_DSAF_RCB_H */

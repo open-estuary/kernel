@@ -41,7 +41,9 @@ struct hns_mac_cb;
 #define MAC_NUM_OCTETS_PER_ADDR 6
 
 #define DSAF_DUMP_REGS_NUM 504
-#define DSAF_STATIC_NUM 504
+#define DSAF_STATIC_NUM 28
+
+#define DSAF_STATS_READ(p, offset) (*((u64 *)((u64)(p) + (offset))))
 
 enum hal_dsaf_mode {
 	HRD_DSAF_NO_DSAF_MODE	= 0x0,
@@ -172,8 +174,13 @@ struct dsaf_drv_mac_multi_dest_entry {
 	u8 rsv[7];
 };
 
-struct dsaf_inode_hw_stats {
+struct dsaf_hw_stats {
 	u64 pad_drop;
+	u64 man_pkts;
+	u64 rx_pkts;
+	u64 rx_pkt_id;
+	u64 rx_pause_frame;
+	u64 release_buf_num;
 	u64 sbm_drop;
 	u64 crc_false;
 	u64 bp_drop;
@@ -181,6 +188,7 @@ struct dsaf_inode_hw_stats {
 	u64 local_addr_false;
 	u64 vlan_drop;
 	u64 stp_drop;
+	u64 tx_pkts;
 };
 
 struct hnae_port_cb {
@@ -300,7 +308,7 @@ struct dsaf_device {
 	struct rcb_common_cb *rcb_common[DSAF_COMM_DEV_NUM];
 	struct hns_mac_cb *mac_cb;
 
-	struct dsaf_inode_hw_stats inode_hw_stats[DSAF_INODE_NUM];
+	struct dsaf_hw_stats hw_stats[DSAF_NODE_NUM];
 	struct dsaf_int_stat int_stat;
 };
 
@@ -422,6 +430,9 @@ void hns_dsaf_xge_core_srst_by_port(struct dsaf_device *dsaf_dev,
 void hns_dsaf_update_stats(struct dsaf_device *dsaf_dev, u32 inode_num);
 
 int hns_dsaf_get_sset_count(int stringset);
+void hns_dsaf_get_stats(struct dsaf_device *ddev, u64 *data, int port);
+void hns_dsaf_get_strings(int stringset, u8 *data, int port);
+
 void hns_dsaf_get_regs(struct dsaf_device *ddev, u32 port, void *data);
 int hns_dsaf_get_regs_count(void);
 

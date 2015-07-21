@@ -13,6 +13,79 @@
 #include "hns_dsaf_xgmac.h"
 #include "hns_dsaf_reg.h"
 
+static const struct mac_stats_string g_xgmac_stats_string[] = {
+	{"xgmac_tx_bad_pkts_minto64", MAC_STATS_FIELD_OFF(tx_fragment_err)},
+	{"xgmac_tx_good_pkts_minto64", MAC_STATS_FIELD_OFF(tx_undersize)},
+	{"xgmac_tx_total_pkts_minto64",	MAC_STATS_FIELD_OFF(tx_under_min_pkts)},
+	{"xgmac_tx_pkts_64", MAC_STATS_FIELD_OFF(tx_64bytes)},
+	{"xgmac_tx_pkts_65to127", MAC_STATS_FIELD_OFF(tx_65to127)},
+	{"xgmac_tx_pkts_128to255", MAC_STATS_FIELD_OFF(tx_128to255)},
+	{"xgmac_tx_pkts_256to511", MAC_STATS_FIELD_OFF(tx_256to511)},
+	{"xgmac_tx_pkts_512to1023", MAC_STATS_FIELD_OFF(tx_512to1023)},
+	{"xgmac_tx_pkts_1024to1518", MAC_STATS_FIELD_OFF(tx_1024to1518)},
+	{"xgmac_tx_pkts_1519tomax", MAC_STATS_FIELD_OFF(tx_1519tomax)},
+	{"xgmac_tx_good_pkts_1519tomax",
+		MAC_STATS_FIELD_OFF(tx_1519tomax_good)},
+	{"xgmac_tx_good_pkts_untralmax", MAC_STATS_FIELD_OFF(tx_oversize)},
+	{"xgmac_tx_bad_pkts_untralmax", MAC_STATS_FIELD_OFF(tx_jabber_err)},
+	{"xgmac_tx_good_pkts_all", MAC_STATS_FIELD_OFF(tx_good_pkts)},
+	{"xgmac_tx_good_byte_all", MAC_STATS_FIELD_OFF(tx_good_bytes)},
+	{"xgmac_tx_total_pkt", MAC_STATS_FIELD_OFF(tx_total_pkts)},
+	{"xgmac_tx_total_byt", MAC_STATS_FIELD_OFF(tx_total_bytes)},
+	{"xgmac_tx_uc_pkt", MAC_STATS_FIELD_OFF(tx_uc_pkts)},
+	{"xgmac_tx_mc_pkt", MAC_STATS_FIELD_OFF(tx_mc_pkts)},
+	{"xgmac_tx_bc_pkt", MAC_STATS_FIELD_OFF(tx_bc_pkts)},
+	{"xgmac_tx_pause_frame_num", MAC_STATS_FIELD_OFF(tx_pfc_tc0)},
+	{"xgmac_tx_pfc_per_1pause_framer", MAC_STATS_FIELD_OFF(tx_pfc_tc1)},
+	{"xgmac_tx_pfc_per_2pause_framer", MAC_STATS_FIELD_OFF(tx_pfc_tc2)},
+	{"xgmac_tx_pfc_per_3pause_framer", MAC_STATS_FIELD_OFF(tx_pfc_tc3)},
+	{"xgmac_tx_pfc_per_4pause_framer", MAC_STATS_FIELD_OFF(tx_pfc_tc4)},
+	{"xgmac_tx_pfc_per_5pause_framer", MAC_STATS_FIELD_OFF(tx_pfc_tc5)},
+	{"xgmac_tx_pfc_per_6pause_framer", MAC_STATS_FIELD_OFF(tx_pfc_tc6)},
+	{"xgmac_tx_pfc_per_7pause_framer", MAC_STATS_FIELD_OFF(tx_pfc_tc7)},
+	{"xgmac_tx_mac_ctrol_frame", MAC_STATS_FIELD_OFF(tx_ctrl)},
+	{"xgmac_tx_1731_pkts", MAC_STATS_FIELD_OFF(tx_1731_pkts)},
+	{"xgmac_tx_1588_pkts", MAC_STATS_FIELD_OFF(tx_1588_pkts)},
+	{"xgmac_rx_good_pkt_from_dsaf", MAC_STATS_FIELD_OFF(rx_good_from_sw)},
+	{"xgmac_rx_bad_pkt_from_dsaf", MAC_STATS_FIELD_OFF(rx_bad_from_sw)},
+	{"xgmac_tx_bad_pkt_64tomax", MAC_STATS_FIELD_OFF(tx_bad_pkts)},
+
+	{"xgmac_rx_not_well_pkt", MAC_STATS_FIELD_OFF(rx_fragment_err)},
+	{"xgmac_rx_good_well_pkt", MAC_STATS_FIELD_OFF(rx_undersize)},
+	{"xgmac_rx_total_pkt", MAC_STATS_FIELD_OFF(rx_under_min)},
+	{"xgmac_rx_pkt_64", MAC_STATS_FIELD_OFF(rx_64bytes)},
+	{"xgmac_rx_pkt_65to127", MAC_STATS_FIELD_OFF(rx_65to127)},
+	{"xgmac_rx_pkt_128to255", MAC_STATS_FIELD_OFF(rx_128to255)},
+	{"xgmac_rx_pkt_256to511", MAC_STATS_FIELD_OFF(rx_256to511)},
+	{"xgmac_rx_pkt_512to1023", MAC_STATS_FIELD_OFF(rx_512to1023)},
+	{"xgmac_rx_pkt_1024to1518", MAC_STATS_FIELD_OFF(rx_1024to1518)},
+	{"xgmac_rx_pkt_1519tomax", MAC_STATS_FIELD_OFF(rx_1519tomax)},
+	{"xgmac_rx_good_pkt_1519tomax",	MAC_STATS_FIELD_OFF(rx_1519tomax_good)},
+	{"xgmac_rx_good_pkt_untramax", MAC_STATS_FIELD_OFF(rx_oversize)},
+	{"xgmac_rx_bad_pkt_untramax", MAC_STATS_FIELD_OFF(rx_jabber_err)},
+	{"xgmac_rx_good_pkt", MAC_STATS_FIELD_OFF(rx_good_pkts)},
+	{"xgmac_rx_good_byt", MAC_STATS_FIELD_OFF(rx_good_bytes)},
+	{"xgmac_rx_pkt", MAC_STATS_FIELD_OFF(rx_total_pkts)},
+	{"xgmac_rx_byt", MAC_STATS_FIELD_OFF(rx_total_bytes)},
+	{"xgmac_rx_uc_pkt", MAC_STATS_FIELD_OFF(rx_uc_pkts)},
+	{"xgmac_rx_mc_pkt", MAC_STATS_FIELD_OFF(rx_mc_pkts)},
+	{"xgmac_rx_bc_pkt", MAC_STATS_FIELD_OFF(rx_bc_pkts)},
+	{"xgmac_rx_pause_frame_num", MAC_STATS_FIELD_OFF(rx_pfc_tc0)},
+	{"xgmac_rx_pfc_per_1pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc1)},
+	{"xgmac_rx_pfc_per_2pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc2)},
+	{"xgmac_rx_pfc_per_3pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc3)},
+	{"xgmac_rx_pfc_per_4pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc4)},
+	{"xgmac_rx_pfc_per_5pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc5)},
+	{"xgmac_rx_pfc_per_6pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc6)},
+	{"xgmac_rx_pfc_per_7pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc7)},
+	{"xgmac_rx_mac_control", MAC_STATS_FIELD_OFF(rx_unknown_ctrl)},
+	{"xgmac_rx_good_pkt_todsaf", MAC_STATS_FIELD_OFF(tx_good_to_sw)},
+	{"xgmac_tx_bad_pkt_todsaf", MAC_STATS_FIELD_OFF(tx_bad_to_sw)},
+	{"xgmac_rx_1731_pkt", MAC_STATS_FIELD_OFF(rx_1731_pkts)},
+	{"xgmac_rx_symbol_err_pkt", MAC_STATS_FIELD_OFF(rx_symbol_err)},
+	{"xgmac_rx_fcs_pkt", MAC_STATS_FIELD_OFF(rx_fcs_err)}
+};
+
 /**
  *hns_xgmac_tx_enable - xgmac port tx enable
  *@drv: mac driver
@@ -326,13 +399,6 @@ void hns_xgmac_update_stats(void *mac_drv)
 	hw_stats->rx_symbol_err
 		= hns_mac_reg_read64(drv, XGMAC_RX_SYMBOLERRPKTS);
 	hw_stats->rx_fcs_err = hns_mac_reg_read64(drv, XGMAC_RX_FCSERRPKTS);
-}
-
-static void hns_xgmac_clean_stats(void *mac_drv)
-{
-	struct mac_driver *drv = (struct mac_driver *)mac_drv;
-
-	dsaf_write_dev(drv, XGMAC_MAC_MIB_CONTROL_REG, 1);
 }
 
 /**
@@ -654,252 +720,42 @@ static void hns_xgmac_get_regs(void *mac_drv, void *data)
 }
 
 /**
- *hns_xgmac_get_ethtool_stats - get xgmac statistic
+ *hns_xgmac_get_stats - get xgmac statistic
  *@mac_drv: mac driver
- *@cmd:ethtool cmd
  *@data:data for value of stats regs
  */
-static void hns_xgmac_get_ethtool_stats(void *mac_drv,
-					struct ethtool_stats *cmd, u64 *data)
+static void hns_xgmac_get_stats(void *mac_drv, u64 *data)
 {
-	u64 *p = data;
+	u32 i;
+	u64 *buf = data;
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
 	struct mac_hw_stats *hw_stats = NULL;
 
 	hw_stats = &drv->mac_cb->hw_stats;
 
-	hns_xgmac_update_stats(drv);
-
-	p[0] = hw_stats->tx_fragment_err;
-	p[1] = hw_stats->tx_undersize;
-	p[2] = hw_stats->tx_under_min_pkts;
-	p[3] = hw_stats->tx_64bytes;
-	p[4] = hw_stats->tx_65to127;
-	p[5] = hw_stats->tx_128to255;
-	p[6] = hw_stats->tx_256to511;
-	p[7] = hw_stats->tx_512to1023;
-	p[8] = hw_stats->tx_1024to1518;
-	p[9] = hw_stats->tx_1519tomax;
-
-	p[10] = hw_stats->tx_1519tomax_good;
-	p[11] = hw_stats->tx_oversize;
-	p[12] = hw_stats->tx_jabber_err;
-	p[13] = hw_stats->tx_good_pkts;
-	p[14] = hw_stats->tx_good_bytes;
-	p[15] = hw_stats->tx_total_pkts;
-	p[16] = hw_stats->tx_total_bytes;
-	p[17] = hw_stats->tx_uc_pkts;
-	p[18] = hw_stats->tx_mc_pkts;
-	p[19] = hw_stats->tx_bc_pkts;
-
-	p[20] = hw_stats->tx_pfc_tc0;
-	p[21] = hw_stats->tx_pfc_tc1;
-	p[22] = hw_stats->tx_pfc_tc2;
-	p[23] = hw_stats->tx_pfc_tc3;
-	p[24] = hw_stats->tx_pfc_tc4;
-	p[25] = hw_stats->tx_pfc_tc5;
-	p[26] = hw_stats->tx_pfc_tc6;
-	p[27] = hw_stats->tx_pfc_tc7;
-	p[28] = hw_stats->tx_ctrl;
-	p[29] = hw_stats->tx_1731_pkts;
-
-	p[30] = hw_stats->tx_1588_pkts;
-	p[31] = hw_stats->rx_good_from_sw;
-	p[32] = hw_stats->rx_bad_from_sw;
-	p[33] = hw_stats->tx_bad_pkts;
-
-	p[34] = hw_stats->rx_fragment_err;
-	p[35] = hw_stats->rx_undersize;
-	p[36] = hw_stats->rx_under_min;
-	p[37] = hw_stats->rx_64bytes;
-	p[38] = hw_stats->rx_65to127;
-	p[39] = hw_stats->rx_128to255;
-
-	p[40] = hw_stats->rx_256to511;
-	p[41] = hw_stats->rx_512to1023;
-	p[42] = hw_stats->rx_1024to1518;
-	p[43] = hw_stats->rx_1519tomax;
-	p[44] = hw_stats->rx_1519tomax_good;
-	p[45] = hw_stats->rx_oversize;
-	p[46] = hw_stats->rx_jabber_err;
-	p[47] = hw_stats->rx_good_pkts;
-	p[48] = hw_stats->rx_good_bytes;
-	p[49] = hw_stats->rx_total_pkts;
-
-	p[50] = hw_stats->rx_total_bytes;
-	p[51] = hw_stats->rx_uc_pkts;
-	p[52] = hw_stats->rx_mc_pkts;
-	p[53] = hw_stats->rx_bc_pkts;
-	p[54] = hw_stats->rx_pfc_tc0;
-	p[55] = hw_stats->rx_pfc_tc1;
-	p[56] = hw_stats->rx_pfc_tc2;
-	p[57] = hw_stats->rx_pfc_tc3;
-	p[58] = hw_stats->rx_pfc_tc4;
-	p[59] = hw_stats->rx_pfc_tc5;
-
-	p[60] = hw_stats->rx_pfc_tc6;
-	p[61] = hw_stats->rx_pfc_tc7;
-	p[62] = hw_stats->rx_unknown_ctrl;
-	p[63] = hw_stats->tx_good_to_sw;
-	p[64] = hw_stats->tx_bad_to_sw;
-	p[65] = hw_stats->rx_1731_pkts;
-	p[66] = hw_stats->rx_symbol_err;
-	p[67] = hw_stats->rx_fcs_err;
+	for (i = 0; i < ARRAY_SIZE(g_xgmac_stats_string); i++) {
+		buf[i] = DSAF_STATS_READ(hw_stats,
+			g_xgmac_stats_string[i].offset);
+	}
 }
 
 /**
  *hns_xgmac_get_strings - get xgmac strings name
- *@mac_drv: mac driver
- *@stringset: type of values in data,0-selftest,1-ststistics,5-dump regs
+ *@stringset: type of values in data
  *@data:data for value of string name
  */
-static void hns_xgmac_get_strings(void *mac_drv, u32 stringset, u8 *data)
+static void hns_xgmac_get_strings(u32 stringset, u8 *data)
 {
 	char *buff = (char *)data;
+	u32 i;
 
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_bad_pkts_minto64");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_good_pkts_minto64");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_total_pkts_minto64");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pkts_64");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pkts_65TO127");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pkts_128TO255");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pkts_256TO511");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pkts_512TO1023");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pkts_1024TO1518");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pkts_1519TOmax");
-	buff = buff + ETH_GSTRING_LEN;
+	if (stringset != ETH_SS_STATS)
+		return;
 
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_good_pkts_1519TOmax");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_good_pkts_untralmax");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_bad_pkts_untralmax");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_good_pkts_ALL");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_good_byte_ALL");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_total_pkt");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_total_byt");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_UC_pkt");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_MC_pkt");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_BC_pkt");
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pause_frame_num");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pfc_per_1pause_framer");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pfc_per_2pause_framer");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pfc_per_3pause_framer");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pfc_per_4pause_framer");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pfc_per_5pause_framer");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pfc_per_6pause_framer");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_pfc_per_7pause_framer");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_MAC_CTROL_FRAME");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_1731_PKTS");
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_1588_PKTS");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_GOOD_PKT_FROM_DSAF");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_BAD_PKT_FROM_DSAF");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_BAD_PKT_64TOMAX");
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_NOT_WELL_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_GOOD_WELL_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_TOTAL_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PKT_64");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PKT_65TO128");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PKT_128TO256");
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PKT_256TO512");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PKT_512TO1024");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PKT_1024TO1518");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PKT_1519TOMAX");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_GOOD_PKT_1519TOMAX");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_GOOD_PKT_UNTRAMAX");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_BAD_PKT_UNTRAMAX");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_GOOD_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_GOOD_BYT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_BYT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_UC_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_MC_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_BC_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PAUSE_FRAME_NUM");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PFC_PER_1PAUSE_FRAME");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PFC_PER_2PAUSE_FRAME");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PFC_PER_3PAUSE_FRAME");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PFC_PER_4PAUSE_FRAME");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PFC_PER_5PAUSE_FRAME");
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PFC_PER_6PAUSE_FRAME");
-	buff = buff + ETH_GSTRING_LEN;
-
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_PFC_PER_7PAUSE_FRAME");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_MAC_CONTROL");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_GOOD_PKT_TODSAF");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_TX_BAD_PKT_TODSAF");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_1731_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_SYMBOL_ERR_PKT");
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "XGMAC_RX_FCS_PKT");
+	for (i = 0; i < ARRAY_SIZE(g_xgmac_stats_string); i++) {
+		snprintf(buff, ETH_GSTRING_LEN, g_xgmac_stats_string[i].desc);
+		buff = buff + ETH_GSTRING_LEN;
+	}
 }
 
 /**
@@ -910,7 +766,7 @@ static void hns_xgmac_get_strings(void *mac_drv, u32 stringset, u8 *data)
 static int hns_xgmac_get_sset_count(int stringset)
 {
 	if (stringset == ETH_SS_STATS)
-		return ETH_XGMAC_MIB_NUM;
+		return ARRAY_SIZE(g_xgmac_stats_string);
 
 	return 0;
 }
@@ -943,7 +799,6 @@ void *hns_xgmac_config(struct hns_mac_cb *mac_cb, struct mac_params *mac_param)
 	mac_drv->dev = mac_param->dev;
 	mac_drv->mac_cb = mac_cb;
 
-	mac_drv->mac_reset = NULL;
 	mac_drv->set_mac_addr = NULL;
 	mac_drv->set_an_mode = NULL;
 	mac_drv->config_loopback = NULL;
@@ -962,12 +817,11 @@ void *hns_xgmac_config(struct hns_mac_cb *mac_cb, struct mac_params *mac_param)
 	mac_drv->get_pause_enable = hns_xgmac_get_pausefrm_cfg;
 	mac_drv->get_link_status = hns_xgmac_get_link_status;
 	mac_drv->get_regs = hns_xgmac_get_regs;
-	mac_drv->get_ethtool_stats = hns_xgmac_get_ethtool_stats;
+	mac_drv->get_ethtool_stats = hns_xgmac_get_stats;
 	mac_drv->get_sset_count = hns_xgmac_get_sset_count;
 	mac_drv->get_regs_count = hns_xgmac_get_regs_count;
 	mac_drv->get_strings = hns_xgmac_get_strings;
 	mac_drv->update_stats = hns_xgmac_update_stats;
-	mac_drv->clean_stats = hns_xgmac_clean_stats;
 
 	return (void *)mac_drv;
 }
