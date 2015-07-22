@@ -1,0 +1,63 @@
+/**
+ * Huawei Ltd.
+ * PhosphorV660
+ */
+
+/ {
+		#address-cells = <2>;
+		#size-cells = <2>;		
+		pcie0: pcie@0xb0070000 {
+			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+			reg =  <0 0xb0070000 0 0x10000>,<0 0xb0000000 0 0x10000>,
+				<0 0xb00c0000 0 0x10000>,<0 0xb2080000 0 0x40000>,
+				<0 0xb4000000 0 0x2000>;
+			reg-names = "rc_dbi","subctrl","pcs", "serdes","config";
+			bus-range = <0 19>;
+			msi-parent = <&its_pcie>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			ranges = <0x82000000 0x0 0xb4002000 0x0 0xb4002000 0x0 0x1ffe000>;
+			num-lanes = <8>;
+			port-id = <0>;
+			status = "ok";
+		};
+
+		pcie1: pcie@0xb0080000 {
+			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+			reg =  <0 0xb0080000 0 0x10000>,<0 0xb0000000 0 0x10000>,
+				<0 0xb00d0000 0 0x10000>,<0 0xb2000000 0 0x40000>,
+				<0 0xb3000000 0 0x2000>;
+			reg-names = "rc_dbi","subctrl",  "pcs","serdes", "config";
+			bus-range = <20 39>;
+			msi-parent = <&its_pcie>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			ranges = <0x82000000 0x0 0xb3002000 0x0 0xb3002000 0x0 0xffe000>;
+			num-lanes = <8>;
+			port-id = <1>;
+			status = "ok";
+		};
+
+		pcie2: pcie@0xb0090000 {
+			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+			reg = <0 0xb0090000 0 0x10000>,<0 0xb0000000 0 0x10000>,
+		 		<0 0xb00e0000 0 0x10000>,<0 0xb2100000 0 0x40000>,
+		  		<0 0xb8000000 0 0x2000>;
+			reg-names = "rc_dbi","subctrl", "pcs", "serdes","config";
+			bus-range = <40 59>;
+			msi-parent = <&its_pcie>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			ranges = <0x82000000 0x0 0xb8002000 0x0 0xb8002000 0x0 0x7ffe000>;
+			num-lanes = <8>;
+			port-id = <2>;
+			status = "ok";
+		};
+};
+
