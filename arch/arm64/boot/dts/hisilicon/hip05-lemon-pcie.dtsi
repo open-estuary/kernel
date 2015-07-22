@@ -6,6 +6,49 @@
 / {
 		#address-cells = <2>;
 		#size-cells = <2>;		
+		serdes@B2000000{
+			compatible = "hisilicon,hilink15bp";
+			reg = <0x0 0xB2000000 0 0x40000>,<0x0 0xB0002300 0x0 0x4>;
+			reg-names = "serdes_base","muxctrl_base";
+			id = <0>;
+		};
+		serdes@B2080000{
+			compatible = "hisilicon,hilink15bp";
+			reg = <0x0 0xB2080000 0 0x40000>,<0x0 0xB0002304 0x0 0x4>;
+			reg-names = "serdes_base","muxctrl_base";
+			id = <1>;
+		};
+		serdes@B2100000{
+			compatible = "hisilicon,hilink15bp";
+			reg = <0x0 0xB2100000 0 0x40000>,<0x0 0xB0002308 0x0 0x4>;
+			reg-names = "serdes_base","muxctrl_base";
+			id = <2>;
+		};
+		serdes@C2200000{
+			compatible = "hisilicon,hilink15bp";
+			reg = <0x0 0xC2200000 0 0x40000>,<0x0 0xC0000180 0x0 0x4>;
+			reg-names = "serdes_base","muxctrl_base";
+			id = <3>;
+		};
+		serdes@C2280000{
+			compatible = "hisilicon,hilink15bp";
+			reg = <0x0 0xC2280000 0 0x40000>,<0x0 0xC0000190 0x0 0x4>;
+			reg-names = "serdes_base","muxctrl_base";
+			id = <4>;
+		};
+		serdes@B2180000{
+			compatible = "hisilicon,hilink15bp";
+			reg = <0x0 0xB2180000 0 0x40000>,<0x0 0xB0002314 0x0 0x4>;
+			reg-names  = "serdes_base","muxctrl_base";
+			id = <5>;
+		};
+		serdes@B2200000{
+			compatible = "hisilicon,hilink15bp";
+			reg = <0x0 0xB2200000 0 0x40000>;
+			reg-names  = "serdes_base";
+			id = <6>;
+		};
+
 		pcie0: pcie@0xb0070000 {
 			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
 			reg =  <0 0xb0070000 0 0x10000>,<0 0xb0000000 0 0x10000>,
