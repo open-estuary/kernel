@@ -9,15 +9,16 @@
 		pcie1: pcie@0xb0080000 {
 			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
 			reg =  <0 0xb0080000 0 0x10000>,<0 0xb0000000 0 0x10000>,
-				  <0 0xb00d0000 0 0x10000>, <0 0xba000000 0 0x2000>;
-			reg-names = "rc_dbi","subctrl",  "pcs", "config";
-			bus-range = <6 10>;
+		 		<0 0xb00d0000 0 0x10000>, <0 0xba000000 0 0x2000>,
+		 		<0 0xb2000000 0 0x40000>;
+			reg-names = "rc_dbi","subctrl",  "pcs", "config","serdes";
+			bus-range = <20 39>;
 			msi-parent = <&its_pcie>;
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			ranges = <0x82000000 0x0 0xba010000 0x0 0xba010000 0x0 0x00e00000>;
+			ranges = <0x82000000 0x0 0xba002000 0x0 0xba002000 0x0 0x2e00000>;
 			num-lanes = <8>;
 			port-id = <1>;
 			status = "ok";
@@ -26,19 +27,19 @@
 		pcie2: pcie@0xb0090000 {
 			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
 			reg = <0 0xb0090000 0 0x10000>,<0 0xb0000000 0 0x10000>,
-				  <0 0xb00e0000 0 0x10000>, <0 0xbc000000 0 0x2000>;
-			reg-names = "rc_dbi","subctrl", "pcs", "config";
-			bus-range = <11 15>;
+				<0 0xb00e0000 0 0x10000>, <0 0xbc000000 0 0x2000>,
+				<0 0xb2100000 0 0x40000>;
+			reg-names = "rc_dbi","subctrl", "pcs", "config","serdes";
+			bus-range = <40 59>;
 			msi-parent = <&its_pcie>;
 			#address-cells = <3>;
 			#size-cells = <2>;
 			device_type = "pci";
 			dma-coherent;
-			ranges = <0x82000000 0x0 0xbc002000 0x0 0xbc002000 0x0 0x1ffe000>;
+			ranges = <0x82000000 0x0 0xbc002000 0x0 0xbc002000 0x0 0x2e00000>;
 			num-lanes = <8>;
 			port-id = <2>;
 			status = "ok";
 		};
-
 };
 

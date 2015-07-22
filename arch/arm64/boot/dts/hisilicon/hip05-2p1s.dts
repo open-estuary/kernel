@@ -44,7 +44,8 @@
 		};
 	};
 
-	/include/ "hip05-2p1s-nic.dtsi"
+/*	/include/ "hip05-2p1s-nic.dtsi" */
+	/include/ "hip05-2p1s-hns.dtsi"
 
 	chosen {
 		bootargs = "rdinit=/init earlycon=uart8250,mmio32,0x60300000 pci=pcie_bus_perf console=ttyS0,115200 initrd=0x7000000,350M";
