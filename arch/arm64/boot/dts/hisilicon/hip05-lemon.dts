@@ -44,13 +44,27 @@
 		};
 	};
 
-/*	/include/ "hip05-2p1s-nic.dtsi" */
 	/include/ "hip05-lemon-hns.dtsi"
 
 	chosen {
 		bootargs = "rdinit=/init earlycon=uart8250,mmio32,0x60300000 pci=pcie_bus_perf console=ttyS0,115200 initrd=0x7000000,350M";
 		#bootargs = "root=/dev/sda1 rw earlycon=uart8250,mmio32,0x60300000 console=ttyS0,115200 pci=pcie_bus_perf";
 	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		pwrbutton {
+			label = "Power Button";
+			gpios = <&porta 8 1>;
+			linux,input-type = <0x16>;
+			linux,code = <116>;
+			debounce-interval = <0>;
+		};
+	};
+
 
 };
 
