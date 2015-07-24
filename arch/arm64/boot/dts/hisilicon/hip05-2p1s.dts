@@ -31,19 +31,6 @@
 		      <0x20 0x00000000 0x10 0x00000000>;
 	};
 
-	reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		P0_L3_Directory {
-			status = "ok";
-			no-map;
-			reg = <0xf 0xfe000000 0x0 0x2000000>,
-			      <0x1f 0xfe000000 0x0 0x2000000>;
-		};
-	};
-
 /*	/include/ "hip05-2p1s-nic.dtsi" */
 	/include/ "hip05-2p1s-hns.dtsi"
 
