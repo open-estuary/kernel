@@ -167,22 +167,26 @@ soc0: soc@000000000 {
 	ethernet@0{
                 compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
-		ae-opts = "0"; 	
+		ae-opts = "0";
+		local-mac-address = [00 00 00 00 00 00];
 	};
 	ethernet@1{
                 compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
-		ae-opts = "1"; 	
+		ae-opts = "1";
+		local-mac-address = [00 00 00 00 00 00];
 	};
 	ethernet@2{
                 compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
-		ae-opts = "2"; 	
+		ae-opts = "2";
+		local-mac-address = [00 00 00 00 00 00];
 	};
 	ethernet@3{
                 compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "3"; 	
+		local-mac-address = [00 00 00 00 00 00];
 	};
 
 };
