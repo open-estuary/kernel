@@ -55,8 +55,8 @@
 
 #define MAC_MAX_FRAME_SIZE		1600
 #define DESC_SIZE			32
-#define RX_DESC_NUM			100
-#define TX_DESC_NUM			100
+#define RX_DESC_NUM			1000
+#define TX_DESC_NUM			1000
 #define BUFFER_SIZE			4000
 
 #define RCB_CFG_BD_NUM			0x9000
@@ -98,6 +98,12 @@
 #define HIP05_GET_DESC(R, i, type)	(&(((struct type *)((R).desc))[i]))
 #define HIP05_RX_DESC(R, i)		HIP05_GET_DESC(R, i, hip05_desc)
 #define HIP05_TX_DESC(R, i)		HIP05_GET_DESC(R, i, hip05_desc)
+
+#define HIP05_NEED_TO_REFILL(R)		((R->next_to_use > R->next_to_clean) ?\
+					(R->next_to_use - R->next_to_clean) :\
+					(R->next_to_use + RX_DESC_NUM - R->next_to_clean))
+
+#define HIP05_MAX_REFILL_FRAME		64
 
 #define HIP05_PPE_COMMON_OFFSET		0x70000
 #define HIP05_RCB_COMMON_OFFSET		0x80000
@@ -566,7 +572,7 @@ static void hip05_rx_refill(struct net_device *dev)
 		buff_info = &rx_ring->buff_info[i];
 		skb = buff_info->skb;
 		if (unlikely(skb)) {
-			netdev_err(dev, "inconsistent rx_skb\n");
+			netdev_err(dev, "inconsistent rx_skb for refill\n");
 			break;
 		}
 		desc = HIP05_RX_DESC(*rx_ring, i);
@@ -610,7 +616,9 @@ static int hip05_rx(struct net_device *dev, int limit)
 		buff_info = &rx_ring->buff_info[pos];
 		skb = buff_info->skb;
 		if (unlikely(!skb)) {
-			netdev_err(dev, "inconsistent rx_skb\n");
+			netdev_err(dev, "inconsistent rx_skb, %d, %d, %d\n",
+					pos, rx_ring->next_to_clean,
+					rx_ring->next_to_use);
 			break;
 		}
 		/* ensure get updated desc */
@@ -637,7 +645,7 @@ static int hip05_rx(struct net_device *dev, int limit)
 		}
 
 		if (le32_to_cpu(desc->rx.status) & HIP05_RX_DESC_STATUS_DROP) {
-			netdev_warn(dev, "drop the packege\n");
+			netdev_warn(dev, "drop the packege, queue have %d package\n", num);
 			goto next;
 		}
 
@@ -660,9 +668,11 @@ next:
 			pos = 0;
 		if (++count >= limit)
 			break;
-	}
 
-	hip05_rx_refill(dev);
+		if (HIP05_NEED_TO_REFILL(priv->rx_ring) > HIP05_MAX_REFILL_FRAME)
+			hip05_rx_refill(dev);
+		
+	}
 
 	rx_ring->next_to_use = pos;
 	return count;
