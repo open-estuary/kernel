@@ -1,5 +1,5 @@
 /**
- * dts file for Hisilicon PhosphorV660 2P1S Board
+ * dts file for Hisilicon PhosphorV660 Lemon 1P Board
  *
  * Copyright (C) 2014,2015 Hisilicon Ltd.
  *
@@ -15,8 +15,8 @@
 /include/ "hip05-lemon-pcie.dtsi"
 
 / {
-	model = "Hisilicon PhosphorV660 2P1S Development Board";
-	compatible = "hisilicon,hip05-2p1s", "hisilicon,hisi-pv660";
+	model = "Hisilicon PhosphorV660 Lemon 1P Development Board";
+	compatible = "hisilicon,hip05-lemon", "hisilicon,hisi-pv660";
 
 	memory-numa@0{
 		reg = <0x0 0x00000000 0x0 0x40000000>,
