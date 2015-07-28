@@ -163,13 +163,13 @@ soc0: soc@000000000 {
 		local-mac-address = [00 00 00 00 00 00];
 	};
 
-	ethernet@6{
+	ethernet@2{
                 compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "6";
 		local-mac-address = [00 00 00 00 00 00];
 	};
-	ethernet@7{
+	ethernet@3{
                 compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "7";
