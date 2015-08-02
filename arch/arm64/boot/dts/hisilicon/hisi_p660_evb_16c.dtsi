@@ -420,7 +420,7 @@
 		peri_clk: peri_clk {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
-			clock-frequency = <100000000>;
+			clock-frequency = <200000000>;
 		};
 
 		m3_clk: m3_clk {
