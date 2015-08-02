@@ -294,10 +294,11 @@
 		#size-cells = <2>;
 		ranges;
 		interrupt-controller;
-		#redistributor-regions = <1>;
+		#redistributor-regions = <2>;
 		redistributor-stride = <0x0 0x30000>;
 		reg = <0x0 0x6d000000 0x0 0x10000>,	/* GICD */
 		      <0x0 0x6d100000 0x0 0x300000>,	/* GICR c*/
+		      <0x0 0x4d100000 0 0x300000>,	/* GICR a */
 		      <0x0 0xfe000000 0x0 0x10000>,	/* GICC */
 		      <0x0 0xfe010000 0x0 0x10000>,     /* GICH */
 		      <0x0 0xfe020000 0x0 0x10000>;     /* GICV */
@@ -308,6 +309,15 @@
 			msi-controller;
 			reg = <0x0 0xc6000000 0x0 0x1000000>;
 		};
+	};
+
+	gic1: interrupt-controller@4d000000 {
+		compatible = "hisilicon,gic-v3";
+		#interrupt-cells = <3>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		interrupt-controller;
+		reg = <0x0 0x4d000000 0x0 0x10000>;
 	};
 
 	smmu_pcie {
@@ -400,7 +410,7 @@
 
 		phy-mode = "sgmii";
 		mac-address = [11 11 11 11 11 11];
-		phy-handle = <&phy25>;
+		phy-handle = <&phy0>;
 		ppe-handle = <&ppe 0>;
 		ge-handle = <&ge 10 1>;
 		dma-coherent;
@@ -459,7 +469,7 @@
 	};
 
 	chosen {
-		bootargs = "rdinit=/init console=ttyS0 earlycon=uart8250,mmio32,0x60300000";
+		bootargs = "rdinit=/init console=ttyS0,115200 earlycon=uart8250,mmio32,0x60300000";
 		linux,initrd-start = <0x7000000>;
 		linux,initrd-end = <0xa000000>;
 	};
