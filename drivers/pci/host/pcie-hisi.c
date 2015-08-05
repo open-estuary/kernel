@@ -1125,12 +1125,12 @@ static int __init hisi_add_pcie_port(struct pcie_port *pp,
 		dev_err(&pdev->dev, "failed to read port-id\n");
 		return -EINVAL;
 	}
-	if (port_id > 3) {
+	if (port_id > 7) {
 		dev_err(&pdev->dev, "Invalid port-id\n");
 		return -EINVAL;
 	}
 
-	hisi_pcie->port_id = port_id;
+	hisi_pcie->port_id = port_id % 4;
 
 	if (of_pci_parse_bus_range(pdev->dev.of_node, &busn)) {
 		dev_err(&pdev->dev, "failed to parse bus-ranges\n");
