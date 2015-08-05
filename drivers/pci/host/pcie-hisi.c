@@ -611,7 +611,6 @@ static int pcie_lane_release_reset(struct hisi_pcie *pcie, u32 lane)
 	return 0;
 }
 
-
 static void hisi_pcie_assert_serdes_reset(struct hisi_pcie *pcie)
 {
 	u32 lane_count = LANE_NUM;
@@ -636,6 +635,7 @@ static void	hisi_pcie_deassert_serdes_reset(struct hisi_pcie *pcie)
 	for (lane = 0; lane < lane_count; lane++)
 		pcie_lane_release_reset(pcie, lane);
 }
+
 /*
  * Change mode to indicate the same reg_base to base of PCIe host configure
  * registers, base of RC configure space or base of vmid/asid context table
@@ -1054,11 +1054,12 @@ static void hisi_pcie_establish_link(struct hisi_pcie *pcie)
 	/* assert reset signals */
 	hisi_pcie_assert_core_reset(pcie);
 	hisi_pcie_assert_pcs_reset(pcie);
+#ifndef CONFIG_P660_2P
 	hisi_pcie_assert_serdes_reset(pcie);
 
 	/* de-assert serdes reset */
 	hisi_pcie_deassert_serdes_reset(pcie);
-
+#endif
 	/* de-assert phy reset */
 	hisi_pcie_deassert_pcs_reset(pcie);
 
