@@ -624,7 +624,7 @@ static void hisi_pcie_assert_serdes_reset(struct hisi_pcie *pcie)
 		pcie_lane_reset(pcie, lane);
 	}
 }
-static void	hisi_pcie_deassert_serdes_reset(struct hisi_pcie *pcie)
+static void hisi_pcie_deassert_serdes_reset(struct hisi_pcie *pcie)
 {
 	u32 lane_count = LANE_NUM;
 	u32 lane;
@@ -634,6 +634,8 @@ static void	hisi_pcie_deassert_serdes_reset(struct hisi_pcie *pcie)
 
 	for (lane = 0; lane < lane_count; lane++)
 		pcie_lane_release_reset(pcie, lane);
+	/* FIXME: workaround for pcie2 link failed */
+	mdelay(50);
 }
 
 /*
