@@ -732,6 +732,10 @@ static void its_lpi_free(unsigned long *bitmap, int base, int nr_ids)
 static int __init its_alloc_lpi_tables(void)
 {
 	phys_addr_t paddr;
+#if defined(CONFIG_ARCH_P660) || defined(CONFIG_ARCH_Hi1610)
+	int i;
+	u8 *prop;
+#endif
 
 	gic_rdists->prop_page = alloc_pages(GFP_NOWAIT,
 					   get_order(LPI_PROPBASE_SZ));
@@ -743,10 +747,21 @@ static int __init its_alloc_lpi_tables(void)
 	paddr = page_to_phys(gic_rdists->prop_page);
 	pr_info("GIC: using LPI property table @%pa\n", &paddr);
 
+#if defined(CONFIG_ARCH_P660) || defined(CONFIG_ARCH_Hi1610)
+	/*
+	 * Avoid a hardware bug that if eight consecutive LPIs have
+	 * same prioritys, some LPIs maybe blocked.
+	 */
+	prop = (u8 *)page_address(gic_rdists->prop_page);
+
+	for (i = 0; i < LPI_PROPBASE_SZ; i++)
+		prop[i] = 0xa2 | ((i & 0x7) << 2);
+#else
 	/* Priority 0xa0, Group-1, disabled */
 	memset(page_address(gic_rdists->prop_page),
 	       LPI_PROP_DEFAULT_PRIO | LPI_PROP_GROUP1,
 	       LPI_PROPBASE_SZ);
+#endif
 
 	/* Make sure the GIC will observe the written configuration */
 	__flush_dcache_area(page_address(gic_rdists->prop_page), LPI_PROPBASE_SZ);
