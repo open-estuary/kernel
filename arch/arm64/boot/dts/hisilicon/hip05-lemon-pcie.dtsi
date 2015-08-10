@@ -64,6 +64,12 @@
 			ranges = <0x82000000 0x0 0xb4002000 0x0 0xb4002000 0x0 0x1ffe000>;
 			num-lanes = <8>;
 			port-id = <0>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0xf800 0 0 7>;
+			interrupt-map = <0x0 0 0 1 &mbigen_pcie 1 4
+						 0x0 0 0 2 &mbigen_pcie 2 4
+						 0x0 0 0 3 &mbigen_pcie 3 4
+						 0x0 0 0 4 &mbigen_pcie 4 4>;
 			status = "ok";
 		};
 
@@ -82,6 +88,12 @@
 			ranges = <0x82000000 0x0 0xb3002000 0x0 0xb3002000 0x0 0xffe000>;
 			num-lanes = <8>;
 			port-id = <1>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0xf800 0 0 7>;
+			interrupt-map = <0x0 0 0 1 &mbigen_pcie 1 4
+						 0x0 0 0 2 &mbigen_pcie 2 4
+						 0x0 0 0 3 &mbigen_pcie 3 4
+						 0x0 0 0 4 &mbigen_pcie 4 4>;
 			status = "ok";
 		};
 
@@ -100,6 +112,12 @@
 			ranges = <0x82000000 0x0 0xb8002000 0x0 0xb8002000 0x0 0x7ffe000>;
 			num-lanes = <8>;
 			port-id = <2>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0xf800 0 0 7>;
+			interrupt-map = <0x0 0 0 1 &mbigen_pcie 1 4
+						 0x0 0 0 2 &mbigen_pcie 2 4
+						 0x0 0 0 3 &mbigen_pcie 3 4
+						 0x0 0 0 4 &mbigen_pcie 4 4>;
 			status = "ok";
 		};
 };
