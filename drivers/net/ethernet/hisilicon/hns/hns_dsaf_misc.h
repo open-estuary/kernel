@@ -7,8 +7,8 @@
  * (at your option) any later version.
  */
 
-#ifndef _IWARE_LED_HAL_H
-#define _IWARE_LED_HAL_H
+#ifndef _HNS_DSAF_MISC_H
+#define _HNS_DSAF_MISC_H
 
 #include "hns_dsaf_mac.h"
 #include <linux/platform_device.h>
@@ -23,8 +23,6 @@
 #define CPLD_LED_ON_VALUE	0x20
 #define CPLD_LED_DEFAULT_VALUE	0x3
 
-#define HNS_LED_FCR			0x10
-#define HNS_LED_PCR			0x11
 #define MAC_SFP_PORT_OFFSET	0x2
 
 #define DSAF_LED_SPEED_S 0
@@ -41,4 +39,4 @@ int cpld_set_led_id(struct hns_mac_cb *mac_cb,
 		    enum hnae_led_state status);
 int hns_mac_get_sfp_prsnt(struct hns_mac_cb *mac_cb, int *sfp_prsnt);
 
-#endif /* _IWARE_LED_HAL_H */
+#endif /* _HNS_DSAF_MISC_H */

@@ -31,6 +31,9 @@
 
 #define RCB_ERR_PRINT_CYCLE 1000
 
+#define RCB_IRQ_NOT_INITED 0
+#define RCB_IRQ_INITED 1
+
 static inline void fill_desc(struct hnae_ring *ring, void *priv,
 			     int size, dma_addr_t dma, int frag_end,
 			     int buf_num, enum hns_desc_type type)
@@ -208,14 +211,14 @@ out_map_head_fail:
  * based on the average data per packet.
  **/
 static unsigned int hns_nic_get_headlen(unsigned char *data, u32 flag,
-					unsigned int max)
+					unsigned int max_size)
 {
 	unsigned char *network;
 	u8 hlen;
 
 	/* this should never happen, but better safe than sorry */
-	if (max < ETH_HLEN)
-		return max;
+	if (max_size < ETH_HLEN)
+		return max_size;
 
 	/* initialize network frame pointer */
 	network = data;
@@ -226,8 +229,8 @@ static unsigned int hns_nic_get_headlen(unsigned char *data, u32 flag,
 	/* handle any vlan tag if present */
 	if (hnae_get_field(flag, HNS_RXD_VLAN_M, HNS_RXD_VLAN_S)
 		== HNS_RX_FLAG_VLAN_PRESENT) {
-		if ((typeof(max))(network - data) > (max - VLAN_HLEN))
-			return max;
+		if ((typeof(max_size))(network - data) > (max_size - VLAN_HLEN))
+			return max_size;
 
 		network += VLAN_HLEN;
 	}
@@ -235,9 +238,9 @@ static unsigned int hns_nic_get_headlen(unsigned char *data, u32 flag,
 	/* handle L3 protocols */
 	if (hnae_get_field(flag, HNS_RXD_L3ID_M, HNS_RXD_L3ID_S)
 		== HNS_RX_FLAG_L3ID_IPV4) {
-		if ((typeof(max))(network - data) >
-					(max - sizeof(struct iphdr)))
-			return max;
+		if ((typeof(max_size))(network - data) >
+		    (max_size - sizeof(struct iphdr)))
+			return max_size;
 
 		/* access ihl as a u8 to avoid unaligned access on ia64 */
 		hlen = (network[0] & 0x0F) << 2;
@@ -249,9 +252,9 @@ static unsigned int hns_nic_get_headlen(unsigned char *data, u32 flag,
 		/* record next protocol if header is present */
 	} else if (hnae_get_field(flag, HNS_RXD_L3ID_M, HNS_RXD_L3ID_S)
 		== HNS_RX_FLAG_L3ID_IPV6) {
-		if ((typeof(max))(network - data) >
-						(max - sizeof(struct ipv6hdr)))
-			return max;
+		if ((typeof(max_size))(network - data) >
+		    (max_size - sizeof(struct ipv6hdr)))
+			return max_size;
 
 		/* record next protocol */
 		hlen = sizeof(struct ipv6hdr);
@@ -265,9 +268,9 @@ static unsigned int hns_nic_get_headlen(unsigned char *data, u32 flag,
 	/* finally sort out TCP/UDP */
 	if (hnae_get_field(flag, HNS_RXD_L4ID_M, HNS_RXD_L4ID_S)
 		== HNS_RX_FLAG_L4ID_TCP) {
-		if ((typeof(max))(network - data) >
-						(max - sizeof(struct tcphdr)))
-			return max;
+		if ((typeof(max_size))(network - data) >
+		    (max_size - sizeof(struct tcphdr)))
+			return max_size;
 
 		/* access doff as a u8 to avoid unaligned access on ia64 */
 		hlen = (network[12] & 0xF0) >> 2;
@@ -279,9 +282,9 @@ static unsigned int hns_nic_get_headlen(unsigned char *data, u32 flag,
 		network += hlen;
 	} else if (hnae_get_field(flag, HNS_RXD_L4ID_M, HNS_RXD_L4ID_S)
 		== HNS_RX_FLAG_L4ID_UDP) {
-		if ((typeof(max))(network - data) >
-						(max - sizeof(struct udphdr)))
-			return max;
+		if ((typeof(max_size))(network - data) >
+		    (max_size - sizeof(struct udphdr)))
+			return max_size;
 
 		network += sizeof(struct udphdr);
 	}
@@ -291,10 +294,10 @@ static unsigned int hns_nic_get_headlen(unsigned char *data, u32 flag,
 	 * If not then it probably represents the end of the last recognized
 	 * header.
 	 */
-	if ((typeof(max))(network - data) < max)
+	if ((typeof(max_size))(network - data) < max_size)
 		return network - data;
 	else
-		return max;
+		return max_size;
 }
 
 static inline void hns_nic_reuse_page(struct hnae_desc_cb *desc_cb, int tsize,
@@ -453,13 +456,11 @@ static inline void hns_nic_alloc_rx_buffers(struct hns_nic_ring_data *ring_data,
 {
 	int i, ret;
 	struct hnae_desc_cb res_cbs;
-	struct hnae_desc *desc;
 	struct hnae_desc_cb *desc_cb;
 	struct hnae_ring *ring = ring_data->ring;
 	struct net_device *ndev = ring_data->napi.dev;
 
 	for (i = 0; i < cleand_count; i++) {
-		desc = &ring->desc[ring->next_to_use];
 		desc_cb = &ring->desc_cb[ring->next_to_use];
 		if (desc_cb->reuse_flag) {
 			ring->stats.reuse_pg_cnt++;
@@ -765,21 +766,7 @@ void hns_nic_update_stats(struct net_device *netdev)
 	struct hns_nic_priv *priv = netdev_priv(netdev);
 	struct hnae_handle *h = priv->ae_handle;
 
-	h->dev->ops->update_stats(h, &h->net_stats);
-
-	netdev->stats.rx_bytes = h->net_stats.rx_bytes;
-	netdev->stats.rx_packets = h->net_stats.rx_packets;
-	netdev->stats.tx_bytes = h->net_stats.tx_bytes;
-	netdev->stats.tx_packets = h->net_stats.tx_packets;
-	netdev->stats.rx_crc_errors = h->net_stats.rx_crc_errors;
-	netdev->stats.rx_frame_errors = h->net_stats.rx_frame_errors;
-	netdev->stats.rx_fifo_errors = h->net_stats.rx_fifo_errors;
-	netdev->stats.rx_length_errors = h->net_stats.rx_length_errors;
-	netdev->stats.multicast = h->net_stats.multicast;
-	netdev->stats.rx_errors = h->net_stats.rx_errors;
-	netdev->stats.rx_dropped = h->net_stats.rx_dropped;
-	netdev->stats.tx_errors = h->net_stats.tx_errors;
-	netdev->stats.tx_dropped = h->net_stats.tx_dropped;
+	h->dev->ops->update_stats(h, &netdev->stats);
 }
 
 /* set mac addr if it is configed. or leave it to the AE driver */
@@ -810,6 +797,39 @@ static void hns_nic_ring_close(struct net_device *netdev, int idx)
 	napi_disable(&priv->ring_data[idx].napi);
 }
 
+static int hns_nic_init_irq(struct hns_nic_priv *priv)
+{
+	struct hnae_handle *h = priv->ae_handle;
+	struct hns_nic_ring_data *rd;
+	int i;
+	int ret;
+
+	for (i = 0; i < h->q_num * 2; i++) {
+		rd = &priv->ring_data[i];
+
+		if (rd->ring->irq_init_flag == RCB_IRQ_INITED)
+			break;
+
+		snprintf(rd->ring->ring_name, RCB_RING_NAME_LEN,
+			 "%s-%s%d", priv->netdev->name,
+			 (i < h->q_num ? "tx" : "rx"), rd->queue_index);
+
+		rd->ring->ring_name[RCB_RING_NAME_LEN-1] = '\0';
+
+		ret = request_irq(rd->ring->irq,
+				  hns_irq_handle, 0, rd->ring->ring_name, rd);
+		if (ret) {
+			netdev_err(priv->netdev, "request irq(%d) fail\n",
+				   rd->ring->irq);
+			return ret;
+		}
+		disable_irq(rd->ring->irq);
+		rd->ring->irq_init_flag = RCB_IRQ_INITED;
+	}
+
+	return 0;
+}
+
 static int hns_nic_net_up(struct net_device *ndev)
 {
 	struct hns_nic_priv *priv = netdev_priv(ndev);
@@ -817,10 +837,10 @@ static int hns_nic_net_up(struct net_device *ndev)
 	int i, j, k;
 	int ret;
 
-	if (h->phy_node) {
-		ret = hns_nic_init_phy(ndev, h);
-		if (ret)
-			goto out;
+	ret = hns_nic_init_irq(priv);
+	if (ret != 0) {
+		netdev_err(ndev, "hns init irq failed! ret=%d\n", ret);
+		return ret;
 	}
 
 	for (i = 0; i < h->q_num * 2; i++) {
@@ -858,8 +878,9 @@ out_set_mac_addr_err:
 out_has_some_queues:
 	for (j = i - 1; j >= 0; j--)
 		hns_nic_ring_close(ndev, j);
-out:
+
 	set_bit(NIC_STATE_DOWN, &priv->state);
+
 	return ret;
 }
 
@@ -876,11 +897,9 @@ static void hns_nic_net_down(struct net_device *ndev)
 	priv->link = 0;
 	netif_carrier_off(ndev);
 
-	if (priv->phy) {
+	if (priv->phy)
 		phy_stop(priv->phy);
-		phy_disconnect(priv->phy);
-		priv->phy = NULL;
-	}
+
 	ops = priv->ae_handle->dev->ops;
 
 	if (ops->stop)
@@ -1036,7 +1055,7 @@ static int hns_nic_change_mtu(struct net_device *ndev, int new_mtu)
 		return -ENOTSUPP;
 
 	if (netif_running(ndev)) {
-		hns_nic_net_stop(ndev);
+		(void)hns_nic_net_stop(ndev);
 		msleep(100);
 
 		ret = h->dev->ops->set_mtu(h, new_mtu);
@@ -1187,7 +1206,7 @@ static void hns_nic_dump(struct hns_nic_priv *priv)
 		data = kcalloc(reg_num, sizeof(u32), GFP_KERNEL);
 		if (data) {
 			ops->get_regs(priv->ae_handle, data);
-			for (i = 0; i < reg_num; i++)
+			for (i = 0; i < reg_num; i += 4)
 				pr_info("0x%08x: 0x%08x 0x%08x 0x%08x 0x%08x\n",
 					i, data[i], data[i + 1],
 					data[i + 2], data[i + 3]);
@@ -1286,21 +1305,18 @@ static int hns_nic_init_ring_data(struct hns_nic_priv *priv)
 {
 	struct hnae_handle *h = priv->ae_handle;
 	struct hns_nic_ring_data *rd;
-	int i, j;
-	int ret;
+	int i;
 
 	if (h->q_num > NIC_MAX_Q_PER_VF) {
-		ret = -EINVAL;
 		netdev_err(priv->netdev, "too much queue (%d)\n", h->q_num);
-		goto out;
+		return -EINVAL;
 	}
 
 	priv->ring_data = kzalloc(h->q_num * sizeof(*priv->ring_data) * 2,
 				  GFP_KERNEL);
 	if (!priv->ring_data) {
-		ret = -ENOMEM;
 		netdev_err(priv->netdev, "malloc ring data fail\n");
-		goto out;
+		return -ENOMEM;
 	}
 
 	for (i = 0; i < h->q_num; i++) {
@@ -1309,20 +1325,9 @@ static int hns_nic_init_ring_data(struct hns_nic_priv *priv)
 		rd->ring = &h->qs[i]->tx_ring;
 		rd->poll_one = hns_nic_tx_poll_one;
 
-		snprintf(rd->ring->ring_name, RCB_RING_NAME_LEN, "eth%s-tx%d",
-			 h->ae_opts, rd->queue_index);
-		rd->ring->ring_name[RCB_RING_NAME_LEN-1] = '\0';
-
-		ret = request_irq(rd->ring->irq,
-				  hns_irq_handle, 0, rd->ring->ring_name, rd);
-		if (ret) {
-			netdev_err(priv->netdev, "request irq(%d) fail\n",
-				   rd->ring->irq);
-			goto out_has_some_queues;
-		}
-		disable_irq(rd->ring->irq);
 		netif_napi_add(priv->netdev, &rd->napi,
 			       hns_nic_common_poll, NIC_TX_CLEAN_MAX_NUM);
+		rd->ring->irq_init_flag = RCB_IRQ_NOT_INITED;
 	}
 	for (i = h->q_num; i < h->q_num * 2; i++) {
 		rd = &priv->ring_data[i];
@@ -1331,33 +1336,12 @@ static int hns_nic_init_ring_data(struct hns_nic_priv *priv)
 		rd->poll_one = hns_nic_rx_poll_one;
 		rd->ex_process = hns_nic_rx_up_pro;
 
-		snprintf(rd->ring->ring_name, RCB_RING_NAME_LEN, "eth%s-rx%d",
-			 h->ae_opts, rd->queue_index);
-		rd->ring->ring_name[RCB_RING_NAME_LEN-1] = '\0';
-
-		ret = request_irq(rd->ring->irq,
-				  hns_irq_handle, 0, rd->ring->ring_name, rd);
-		if (ret) {
-			netdev_err(priv->netdev, "request irq(%d) fail\n",
-				   rd->ring->irq);
-			goto out_has_some_queues;
-		}
-		disable_irq(rd->ring->irq);
 		netif_napi_add(priv->netdev, &rd->napi,
 			       hns_nic_common_poll, NIC_RX_CLEAN_MAX_NUM);
+		rd->ring->irq_init_flag = RCB_IRQ_NOT_INITED;
 	}
 
 	return 0;
-
-out_has_some_queues:
-	for (j = i - 1; j >= 0; j--) {
-		netif_napi_del(&priv->ring_data[j].napi);
-		free_irq(priv->ring_data[j].ring->irq, &priv->ring_data[j]);
-	}
-	kfree(priv->ring_data);
-	priv->ring_data = NULL;
-out:
-	return ret;
 }
 
 static void hns_nic_uninit_ring_data(struct hns_nic_priv *priv)
@@ -1367,7 +1351,11 @@ static void hns_nic_uninit_ring_data(struct hns_nic_priv *priv)
 
 	for (i = 0; i < h->q_num * 2; i++) {
 		netif_napi_del(&priv->ring_data[i].napi);
-		free_irq(priv->ring_data[i].ring->irq, &priv->ring_data[i]);
+		if (priv->ring_data[i].ring->irq_init_flag == RCB_IRQ_INITED)
+			free_irq(priv->ring_data[i].ring->irq,
+				 &priv->ring_data[i]);
+
+		priv->ring_data[i].ring->irq_init_flag = RCB_IRQ_NOT_INITED;
 	}
 	kfree(priv->ring_data);
 }
@@ -1387,6 +1375,12 @@ static int hns_nic_try_get_ae(struct net_device *ndev)
 	}
 	priv->ae_handle = h;
 
+	ret = hns_nic_init_phy(ndev, h);
+	if (ret) {
+		dev_err(priv->dev, "probe phy device fail!\n");
+		goto out_init_phy;
+	}
+
 	ret = hns_nic_init_ring_data(priv);
 	if (ret) {
 		ret = -ENOMEM;
@@ -1403,6 +1397,7 @@ static int hns_nic_try_get_ae(struct net_device *ndev)
 out_reg_ndev_fail:
 	hns_nic_uninit_ring_data(priv);
 	priv->ring_data = NULL;
+out_init_phy:
 out_init_ring_data:
 	hnae_put_handle(priv->ae_handle);
 	priv->ae_handle = NULL;
@@ -1512,6 +1507,10 @@ static int hns_nic_dev_remove(struct platform_device *pdev)
 	if (priv->ring_data)
 		hns_nic_uninit_ring_data(priv);
 	priv->ring_data = NULL;
+
+	if (priv->phy)
+		phy_disconnect(priv->phy);
+	priv->phy = NULL;
 
 	if (!IS_ERR_OR_NULL(priv->ae_handle))
 		hnae_put_handle(priv->ae_handle);

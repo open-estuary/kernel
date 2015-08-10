@@ -36,7 +36,7 @@ struct rcb_common_cb;
 #define HNS_RCB_MAX_COALESCED_FRAMES		1023
 #define HNS_RCB_MIN_COALESCED_FRAMES		1
 #define HNS_RCB_DEF_COALESCED_FRAMES		50
-#define HNS_RCB_MAX_TIME_OUT			0x5dc0
+#define HNS_RCB_MAX_TIME_OUT			0x500
 
 #define HNS_RCB_COMMON_ENDIAN			1
 
@@ -118,8 +118,6 @@ void hns_rcb_set_coalesce_usecs(struct dsaf_device *dsaf_dev,
 				int comm_index, u32 timeout);
 int hns_rcb_set_coalesced_frames(struct dsaf_device *dsaf_dev,
 				 int comm_index, u32 coalesce_frames);
-u32 hns_rcb_get_max_ringnum(struct dsaf_device *dsaf_dev);
-u32 hns_rcb_get_common_ringnum(struct dsaf_device *dsaf_dev, int common_idx);
 void hns_rcb_update_stats(struct hnae_queue *queue);
 
 void hns_rcb_get_stats(struct hnae_queue *queue, u64 *data);

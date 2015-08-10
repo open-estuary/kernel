@@ -963,6 +963,19 @@ static void hns_dsaf_tbl_tcam_init(struct dsaf_device *dsaf_dev)
 }
 
 /**
+ * hns_dsaf_pfc_en_cfg - dsaf pfc pause cfg
+ * @mac_cb: mac contrl block
+ */
+static void hns_dsaf_pfc_en_cfg(struct dsaf_device *dsaf_dev,
+				int mac_id, int en)
+{
+	if (!en)
+		dsaf_write_dev(dsaf_dev, DSAF_PFC_EN_0_REG + mac_id * 4, 0);
+	else
+		dsaf_write_dev(dsaf_dev, DSAF_PFC_EN_0_REG + mac_id * 4, 0xff);
+}
+
+/**
  * hns_dsaf_tbl_tcam_init - INT
  * @dsaf_id: dsa fabric id
  * @dsaf_mode
@@ -988,6 +1001,10 @@ static void hns_dsaf_comm_init(struct dsaf_device *dsaf_dev)
 
 	/* in non switch mode, set all port to access mode */
 	hns_dsaf_sw_port_type_cfg(dsaf_dev, DSAF_SW_PORT_TYPE_NON_VLAN);
+
+	/*set dsaf pfc  to 0 for parseing rx pause*/
+	for (i = 0; i < DSAF_COMM_CHN; i++)
+		hns_dsaf_pfc_en_cfg(dsaf_dev, i, 0);
 
 	/*msk and  clr exception irqs */
 	for (i = 0; i < DSAF_COMM_CHN; i++) {
@@ -2446,9 +2463,9 @@ void hns_dsaf_get_regs(struct dsaf_device *ddev, u32 port, void *data)
 		p[i] = 0xdddddddd;
 }
 
-static u8 *hns_dsaf_get_node_stats_strings(u8 *data, int node)
+static char *hns_dsaf_get_node_stats_strings(char *data, int node)
 {
-	char *buff = (char *)data;
+	char *buff = data;
 
 	snprintf(buff, ETH_GSTRING_LEN, "innod%d_pad_drop_pkts", node);
 	buff = buff + ETH_GSTRING_LEN;

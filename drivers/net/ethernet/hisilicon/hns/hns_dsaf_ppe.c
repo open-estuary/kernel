@@ -580,4 +580,3 @@ void hns_ppe_get_regs(struct hns_ppe_cb *ppe_cb, void *data)
 	for (i = 572; i < 576; i++)
 		regs[i] = 0xeeeeeeee;
 }
-

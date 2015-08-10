@@ -34,7 +34,7 @@
 #include <linux/module.h>
 #include <linux/notifier.h>
 
-#define HNAE_DRIVER_VERSION "1.1.0"
+#define HNAE_DRIVER_VERSION "1.2.0"
 #define HNAE_DRIVER_NAME "hns"
 #define HNAE_COPYRIGHT "Copyright(c) 2015 - 2019 Huawei Corporation."
 #define HNAE_DRIVER_STRING "Hilisicon Network Subsystem Driver"
@@ -238,6 +238,7 @@ struct hnae_ring {
 	int next_to_clean;
 
 	int flags;          /* ring attribute */
+	int irq_init_flag;
 };
 
 #define ring_ptr_move_fw(ring, p) \
@@ -301,10 +302,10 @@ struct hnae_queue {
 
 /*hnae loop mode*/
 enum hnae_loop {
-	MAC_LOOP_NONE = 0,
-	MAC_INTERNALLOOP_MAC,
+	MAC_INTERNALLOOP_MAC = 0,
 	MAC_INTERNALLOOP_SERDES,
 	MAC_INTERNALLOOP_PHY,
+	MAC_LOOP_NONE,
 };
 
 /*hnae port type*/
@@ -411,13 +412,13 @@ struct hnae_ae_ops {
 	int (*set_loopback)(struct hnae_handle *handle,
 			    enum hnae_loop loop_mode, int en);
 	void (*get_ring_bdnum_limit)(struct hnae_queue *queue,
-				     u32 *uplimit, u32 *lowlimit);
+				     u32 *uplimit);
 	void (*get_pauseparam)(struct hnae_handle *handle,
 			       u32 *auto_neg, u32 *rx_en, u32 *tx_en);
 	int (*set_autoneg)(struct hnae_handle *handle, u8 enable);
 	int (*get_autoneg)(struct hnae_handle *handle);
-	void (*set_pauseparam)(struct hnae_handle *handle,
-			       u32 rx_en, u32 tx_en);
+	int (*set_pauseparam)(struct hnae_handle *handle,
+			      u32 auto_neg, u32 rx_en, u32 tx_en);
 	void (*get_coalesce_usecs)(struct hnae_handle *handle,
 				   u32 *tx_usecs, u32 *rx_usecs);
 	void (*get_rx_max_coalesced_frames)(struct hnae_handle *handle,
@@ -425,8 +426,6 @@ struct hnae_ae_ops {
 	void (*set_coalesce_usecs)(struct hnae_handle *handle, u32 timeout);
 	int (*set_coalesce_frames)(struct hnae_handle *handle,
 				   u32 coalesce_frames);
-	void (*get_ringnum)(struct hnae_handle *handle, u32 *ringnum);
-	void (*get_max_ringnum)(struct hnae_handle *handle, u32 *max_ringnum);
 	int (*get_mac_addr)(struct hnae_handle *handle, void **p);
 	int (*set_mac_addr)(struct hnae_handle *handle, void *p);
 	int (*set_mc_addr)(struct hnae_handle *handle, void *addr);
@@ -467,7 +466,6 @@ struct hnae_handle {
 	enum hnae_port_type port_type;
 	struct list_head node;    /* list to hnae_ae_dev->handle_list */
 	struct hnae_buf_ops *bops; /* operation for the buffer */
-	struct net_device_stats net_stats;
 	struct hnae_queue **qs;  /* array base of all queues */
 };
 

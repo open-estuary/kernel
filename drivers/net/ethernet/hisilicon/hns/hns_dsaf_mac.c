@@ -17,7 +17,7 @@
 #include <linux/of.h>
 #include <linux/of_address.h>
 
-#include "hns_dsaf_mixed.h"
+#include "hns_dsaf_misc.h"
 #include "hns_dsaf_main.h"
 #include "hns_dsaf_rcb.h"
 
@@ -106,7 +106,7 @@ void hns_mac_get_link_status(struct hns_mac_cb *mac_cb, u32 *link_status)
 
 	ret = hns_mac_get_sfp_prsnt(mac_cb, &sfp_prsnt);
 	if (!ret)
-		*link_status = *link_status && !sfp_prsnt;
+		*link_status = *link_status && sfp_prsnt;
 
 	mac_cb->link = *link_status;
 }
@@ -141,6 +141,10 @@ static int hns_mac_verify_set_params(struct mac_info *info,
 	    info->duplex == duplex)
 		return 0;
 
+	if (speed != MAC_SPEED_10 && speed != MAC_SPEED_100 &&
+	    speed != MAC_SPEED_1000)
+		return -EINVAL;
+
 	if (info->speed == MAC_SPEED_10000)
 		return -EINVAL;
 
@@ -172,9 +176,7 @@ int hns_mac_set_port_info(struct hns_mac_cb *mac_cb,
 	if (ret)
 		return -EINVAL;
 
-	hns_mac_set_autoneg(mac_cb, auto_neg);
-
-	return 0;
+	return hns_mac_set_autoneg(mac_cb, auto_neg);
 }
 
 void hns_mac_adjust_link(struct hns_mac_cb *mac_cb, int speed, int duplex)
@@ -315,7 +317,7 @@ static int hns_mac_change_vf_addr(struct hns_mac_cb *mac_cb,
 			return ret;
 	}
 
-	if (mac_ctrl_drv->set_mac_addr)
+	if ((mac_ctrl_drv->set_mac_addr) && (vmid == 0))
 		mac_ctrl_drv->set_mac_addr(mac_cb->priv.mac, addr);
 
 	memcpy(old_entry->addr, addr, sizeof(old_entry->addr));
@@ -518,8 +520,8 @@ void hns_mac_reset(struct hns_mac_cb *mac_cb)
 	if (drv->mac_pausefrm_cfg) {
 		if (mac_cb->mac_type == HNAE_PORT_DEBUG)
 			drv->mac_pausefrm_cfg(drv, 0, 0);
-		else
-			drv->mac_pausefrm_cfg(drv, 1, 1);
+		else /* mac rx must disable, dsaf pfc close instead of it*/
+			drv->mac_pausefrm_cfg(drv, 0, 1);
 	}
 }
 
@@ -590,7 +592,7 @@ void hns_mac_stop(struct hns_mac_cb *mac_cb)
  * @enable: enable or not
  * retuen 0 - success , negative --fail
  */
-int hns_mac_get_autoneg(struct hns_mac_cb *mac_cb, u32 *auto_neg)
+void hns_mac_get_autoneg(struct hns_mac_cb *mac_cb, u32 *auto_neg)
 {
 	struct mac_driver *mac_ctrl_drv = hns_mac_get_drv(mac_cb);
 
@@ -598,8 +600,6 @@ int hns_mac_get_autoneg(struct hns_mac_cb *mac_cb, u32 *auto_neg)
 		mac_ctrl_drv->autoneg_stat(mac_ctrl_drv, auto_neg);
 	else
 		*auto_neg = 0;
-
-	return 0;
 }
 
 /**
@@ -609,7 +609,7 @@ int hns_mac_get_autoneg(struct hns_mac_cb *mac_cb, u32 *auto_neg)
  * @tx_en: tx enable status
  * retuen 0 - success , negative --fail
  */
-int hns_mac_get_pauseparam(struct hns_mac_cb *mac_cb, u32 *rx_en, u32 *tx_en)
+void hns_mac_get_pauseparam(struct hns_mac_cb *mac_cb, u32 *rx_en, u32 *tx_en)
 {
 	struct mac_driver *mac_ctrl_drv = hns_mac_get_drv(mac_cb);
 
@@ -619,8 +619,6 @@ int hns_mac_get_pauseparam(struct hns_mac_cb *mac_cb, u32 *rx_en, u32 *tx_en)
 		*rx_en = 0;
 		*tx_en = 0;
 	}
-
-	return 0;
 }
 
 /**
@@ -633,6 +631,11 @@ int hns_mac_set_autoneg(struct hns_mac_cb *mac_cb, u8 enable)
 {
 	struct mac_driver *mac_ctrl_drv = hns_mac_get_drv(mac_cb);
 
+	if (mac_cb->phy_if == PHY_INTERFACE_MODE_XGMII && enable) {
+		dev_err(mac_cb->dev, "enable autoneg is not allowed!");
+		return -ENOTSUPP;
+	}
+
 	if (mac_ctrl_drv->set_an_mode)
 		mac_ctrl_drv->set_an_mode(mac_ctrl_drv, enable);
 
@@ -644,14 +647,31 @@ int hns_mac_set_autoneg(struct hns_mac_cb *mac_cb, u8 enable)
  * @mac_cb: mac control block
  * @rx_en: rx enable or not
  * @tx_en: tx enable or not
- * retuen void
+ * return 0 - success , negative --fail
  */
-void hns_mac_set_pauseparam(struct hns_mac_cb *mac_cb, u32 rx_en, u32 tx_en)
+int hns_mac_set_pauseparam(struct hns_mac_cb *mac_cb, u32 rx_en, u32 tx_en)
 {
 	struct mac_driver *mac_ctrl_drv = hns_mac_get_drv(mac_cb);
 
+	if (mac_cb->mac_type == HNAE_PORT_SERVICE) {
+		if (!rx_en) {
+			dev_err(mac_cb->dev, "disable rx_pause is not allowed!");
+			return -EINVAL;
+		}
+	} else if (mac_cb->mac_type == HNAE_PORT_DEBUG) {
+		if (tx_en || rx_en) {
+			dev_err(mac_cb->dev, "enable tx_pause or enable rx_pause are not allowed!");
+			return -EINVAL;
+		}
+	} else {
+		dev_err(mac_cb->dev, "Unsupport this operation!");
+		return -EINVAL;
+	}
+
 	if (mac_ctrl_drv->mac_pausefrm_cfg)
 		mac_ctrl_drv->mac_pausefrm_cfg(mac_ctrl_drv, rx_en, tx_en);
+
+	return 0;
 }
 
 /**
@@ -715,7 +735,6 @@ static void hns_mac_get_info(struct hns_mac_cb *mac_cb,
 	if (PHY_INTERFACE_MODE_SGMII == mac_cb->phy_if) {
 		mac_cb->if_support = MAC_GMAC_SUPPORTED;
 		mac_cb->if_support |= SUPPORTED_1000baseT_Full;
-		mac_cb->if_support |= SUPPORTED_2500baseX_Full;
 	} else if (PHY_INTERFACE_MODE_XGMII == mac_cb->phy_if) {
 		mac_cb->if_support = SUPPORTED_10000baseR_FEC;
 		mac_cb->if_support |= SUPPORTED_10000baseKR_Full;
@@ -914,7 +933,7 @@ void hns_mac_get_regs(struct hns_mac_cb *mac_cb, void *data)
 	mac_ctrl_drv->get_regs(mac_ctrl_drv, data);
 }
 
-int hns_set_led_opt(struct hns_mac_cb *mac_cb)
+void hns_set_led_opt(struct hns_mac_cb *mac_cb)
 {
 	int port;
 	int nic_data = 0;
@@ -931,7 +950,6 @@ int hns_set_led_opt(struct hns_mac_cb *mac_cb)
 	mac_cb->rxpkt_for_led = mac_cb->hw_stats.rx_good_pkts;
 	hns_cpld_set_led(mac_cb, port, (int)mac_cb->link,
 			 mac_cb->speed, nic_data);
-	return 0;
 }
 
 int hns_cpld_led_set_id(struct hns_mac_cb *mac_cb,

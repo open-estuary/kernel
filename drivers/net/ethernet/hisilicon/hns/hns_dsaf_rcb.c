@@ -301,8 +301,8 @@ int hns_rcb_common_init_hw(struct rcb_common_cb *rcb_common)
 
 	for (i = 0; i < port_num; i++) {
 		hns_rcb_set_port_desc_cnt(rcb_common, i, rcb_common->desc_num);
-		hns_rcb_set_port_coalesced_frames(rcb_common, i,
-						  rcb_common->coalesced_frames);
+		(void)hns_rcb_set_port_coalesced_frames(
+			rcb_common, i, rcb_common->coalesced_frames);
 	}
 	hns_rcb_set_timeout(rcb_common, rcb_common->timeout);
 
@@ -352,7 +352,8 @@ static void hns_rcb_ring_get_cfg(struct hnae_queue *q, int ring_type)
 		irq_idx = HNS_RCB_IRQ_IDX_RX;
 	} else {
 		ring = &q->tx_ring;
-		ring->io_base = ring_pair_cb->q.io_base + HNS_RCB_TX_REG_OFFSET;
+		ring->io_base = (u8 __iomem *)ring_pair_cb->q.io_base +
+			HNS_RCB_TX_REG_OFFSET;
 		irq_idx = HNS_RCB_IRQ_IDX_TX;
 	}
 
@@ -565,18 +566,6 @@ static void hns_rcb_get_queue_mode(enum dsaf_mode dsaf_mode, int comm_index,
 		*max_vfn = 1;
 		*max_q_per_vf = 1;
 	}
-}
-
-u32 hns_rcb_get_max_ringnum(struct dsaf_device *dsaf_dev)
-{
-	return DSAF_MAX_VM_NUM;
-}
-
-u32 hns_rcb_get_common_ringnum(struct dsaf_device *dsaf_dev, int common_idx)
-{
-	struct rcb_common_cb *rcb_comm  = dsaf_dev->rcb_common[common_idx];
-
-	return rcb_comm->ring_num;
 }
 
 int hns_rcb_get_ring_num(struct dsaf_device *dsaf_dev, int comm_index)
@@ -973,4 +962,3 @@ void hns_rcb_get_ring_regs(struct hnae_queue *queue, void *data)
 	for (i = 35; i < 40; i++)
 		regs[i] = 0xcccccc00 + ring_pair->index;
 }
-

@@ -274,7 +274,7 @@ static int hns_gmac_adjust_link(void *mac_drv, enum mac_speed speed,
 		break;
 	default:
 		dev_err(drv->dev,
-			"hns_gmac_adjust_link fail, speed 0x%x dsaf%d mac%d\n",
+			"hns_gmac_adjust_link fail, speed %d dsaf%d mac%d\n",
 			speed, drv->dsaf_id, drv->mac_id);
 		return -EINVAL;
 	}

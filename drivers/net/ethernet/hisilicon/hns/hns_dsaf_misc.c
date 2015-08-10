@@ -7,7 +7,7 @@
  * (at your option) any later version.
  */
 
-#include "hns_dsaf_mixed.h"
+#include "hns_dsaf_misc.h"
 #include "hns_dsaf_mac.h"
 #include "hns_dsaf_reg.h"
 #include "hns_dsaf_ppe.h"

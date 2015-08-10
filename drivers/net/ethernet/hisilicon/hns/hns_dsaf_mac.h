@@ -437,10 +437,10 @@ int hns_mac_del_mac(struct hns_mac_cb *mac_cb, u32 vfn, char *mac);
 void hns_mac_uninit(struct dsaf_device *dsaf_dev);
 void hns_mac_adjust_link(struct hns_mac_cb *mac_cb, int speed, int duplex);
 void hns_mac_reset(struct hns_mac_cb *mac_cb);
-int hns_mac_get_autoneg(struct hns_mac_cb *mac_cb, u32 *auto_neg);
-int hns_mac_get_pauseparam(struct hns_mac_cb *mac_cb, u32 *rx_en, u32 *tx_en);
+void hns_mac_get_autoneg(struct hns_mac_cb *mac_cb, u32 *auto_neg);
+void hns_mac_get_pauseparam(struct hns_mac_cb *mac_cb, u32 *rx_en, u32 *tx_en);
 int hns_mac_set_autoneg(struct hns_mac_cb *mac_cb, u8 enable);
-void hns_mac_set_pauseparam(struct hns_mac_cb *mac_cb, u32 rx_en, u32 tx_en);
+int hns_mac_set_pauseparam(struct hns_mac_cb *mac_cb, u32 rx_en, u32 tx_en);
 int hns_mac_set_mtu(struct hns_mac_cb *mac_cb, u32 new_mtu);
 int hns_mac_get_port_info(struct hns_mac_cb *mac_cb,
 			  u8 *auto_neg, u16 *speed, u8 *duplex);
@@ -456,7 +456,7 @@ void hns_mac_get_strings(struct hns_mac_cb *mac_cb, int stringset, u8 *data);
 int hns_mac_get_sset_count(struct hns_mac_cb *mac_cb, int stringset);
 void hns_mac_get_regs(struct hns_mac_cb *mac_cb, void *data);
 int hns_mac_get_regs_count(struct hns_mac_cb *mac_cb);
-int hns_set_led_opt(struct hns_mac_cb *mac_cb);
+void hns_set_led_opt(struct hns_mac_cb *mac_cb);
 int hns_cpld_led_set_id(struct hns_mac_cb *mac_cb,
 			enum hnae_led_state status);
 #endif /* _HNS_DSAF_MAC_H */

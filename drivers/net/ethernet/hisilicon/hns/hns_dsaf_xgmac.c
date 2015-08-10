@@ -240,6 +240,17 @@ static void hns_xgmac_pausefrm_cfg(void *mac_drv, u32 rx_en, u32 tx_en)
 	dsaf_write_dev(drv, XGMAC_MAC_PAUSE_CTRL_REG, origin);
 }
 
+static void hns_xgmac_set_pausefrm_mac_addr(void *mac_drv, char *mac_addr)
+{
+	struct mac_driver *drv = (struct mac_driver *)mac_drv;
+
+	u32 high_val = mac_addr[1] | (mac_addr[0] << 8);
+	u32 low_val = mac_addr[5] | (mac_addr[4] << 8)
+		| (mac_addr[3] << 16) | (mac_addr[2] << 24);
+	dsaf_write_dev(drv, XGMAC_MAC_PAUSE_LOCAL_MAC_L_REG, low_val);
+	dsaf_write_dev(drv, XGMAC_MAC_PAUSE_LOCAL_MAC_H_REG, high_val);
+}
+
 /**
  *hns_xgmac_set_rx_ignore_pause_frames - set rx pause param about xgmac
  *@mac_drv: mac driver
@@ -414,7 +425,6 @@ static void hns_xgmac_free(void *mac_drv)
 	u32 mac_id = drv->mac_id;
 
 	hns_dsaf_xge_srst_by_port(dsaf_dev, mac_id, 0);
-
 }
 
 /**
@@ -799,7 +809,7 @@ void *hns_xgmac_config(struct hns_mac_cb *mac_cb, struct mac_params *mac_param)
 	mac_drv->dev = mac_param->dev;
 	mac_drv->mac_cb = mac_cb;
 
-	mac_drv->set_mac_addr = NULL;
+	mac_drv->set_mac_addr = hns_xgmac_set_pausefrm_mac_addr;
 	mac_drv->set_an_mode = NULL;
 	mac_drv->config_loopback = NULL;
 	mac_drv->config_pad_and_crc = hns_xgmac_config_pad_and_crc;

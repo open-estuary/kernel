@@ -32,13 +32,7 @@
 #define MDIO_CTL_DEV_ADDR(x)	(x & 0x1f)
 #define MDIO_CTL_PORT_ADDR(x)	((x & 0x1f) << 5)
 
-#define MDIO_BASE_ADDR			0x403C0000
-#define MDIO_REG_ADDR_LEN		0x1000
-#define MDIO_PHY_GRP_LEN		0x100
-#define MDIO_REG_LEN			0x10
-#define MDIO_PHY_ADDR_NUM		5
 #define MDIO_MAX_PHY_ADDR		0x1F
-#define MDIO_MAX_PHY_REG_ADDR		0xFFFF
 
 #define MDIO_TIMEOUT			1000000
 
@@ -46,12 +40,14 @@ typedef u16 UINT16;
 struct hns_mdio_device {
 	struct device *dev;
 	void *vbase;		/* mdio reg base address */
+	void *sys_vbase;
 	u8 phy_class[PHY_MAX_ADDR];
 	u8 index;
 	u8 chip_id;
 	u8 gidx;		/* global index */
 };
 
+/* phy reg */
 #define MDIO_COMMAND_REG		0x0
 #define MDIO_ADDR_REG			0x4
 #define MDIO_WDATA_REG			0x8
@@ -95,6 +91,15 @@ enum mdio_c45_op_seq {
 	MDIO_C45_READ_INCREMENT,
 	MDIO_C45_READ
 };
+
+/* peri subctrl reg */
+#define MDIO_SC_CLK_EN		0x338
+#define MDIO_SC_CLK_DIS		0x33C
+#define MDIO_SC_RESET_REQ	0xA38
+#define MDIO_SC_RESET_DREQ	0xA3C
+#define MDIO_SC_CTRL		0x2010
+#define MDIO_SC_CLK_ST		0x531C
+#define MDIO_SC_RESET_ST	0x5A1C
 
 static inline void mdio_write_reg(void *base, u32 reg, u32 value)
 {
@@ -383,6 +388,84 @@ static int hns_mdio_write_hw(struct hns_mdio_device *mdio_dev, u8 phy_addr,
 	return 0;
 }
 
+#define MDIO_CHECK_SET_ST	1
+#define MDIO_CHECK_CLR_ST	0
+
+static int mdio_sc_cfg_reg_write(struct hns_mdio_device *mdio_dev,
+				 u32 cfg_reg, u32 set_val,
+				 u32 st_reg, u32 st_msk, u8 check_st)
+{
+	u32 time_cnt;
+	u32 reg_value;
+
+	mdio_write_reg((void *)mdio_dev->sys_vbase, cfg_reg, set_val);
+
+	for (time_cnt = MDIO_TIMEOUT; time_cnt; time_cnt--) {
+		reg_value = mdio_read_reg((void *)mdio_dev->sys_vbase, st_reg);
+		reg_value &= st_msk;
+		if ((!!check_st) == (!!reg_value))
+			break;
+	}
+
+	if ((!!check_st) != (!!reg_value))
+		return -EBUSY;
+
+	return 0;
+}
+
+/**
+ *mdio_reset_hw - reset hw
+ *@mdio_dev: mdio device
+ *return status
+ */
+static int hns_mdio_reset_hw(struct hns_mdio_device *mdio_dev)
+{
+	int ret;
+
+	if (!mdio_dev->sys_vbase) {
+		dev_err(mdio_dev->dev, "mdio sys ctl reg has not maped\n");
+		return -ENODEV;
+	}
+
+	/*1. reset req, and read reset st check*/
+	ret = mdio_sc_cfg_reg_write(mdio_dev, MDIO_SC_RESET_REQ, 0x1,
+				    MDIO_SC_RESET_ST, 0x1,
+				    MDIO_CHECK_SET_ST);
+	if (ret) {
+		dev_err(mdio_dev->dev, "MDIO reset fail\n");
+		return ret;
+	}
+
+	/*2. dis clk, and read clk st check*/
+	ret = mdio_sc_cfg_reg_write(mdio_dev, MDIO_SC_CLK_DIS,
+				    0x1, MDIO_SC_CLK_ST, 0x1,
+				    MDIO_CHECK_CLR_ST);
+	if (ret) {
+		dev_err(mdio_dev->dev, "MDIO dis clk fail\n");
+		return ret;
+	}
+
+	/*3. reset dreq, and read reset st check*/
+	ret = mdio_sc_cfg_reg_write(mdio_dev, MDIO_SC_RESET_DREQ, 0x1,
+				    MDIO_SC_RESET_ST, 0x1,
+				    MDIO_CHECK_CLR_ST);
+	if (ret) {
+		dev_err(mdio_dev->dev, "MDIO dis clk fail\n");
+		return ret;
+	}
+
+	/*4. en clk, and read clk st check*/
+	ret = mdio_sc_cfg_reg_write(mdio_dev, MDIO_SC_CLK_EN,
+				    0x1, MDIO_SC_CLK_ST, 0x1,
+				    MDIO_CHECK_SET_ST);
+	if (ret) {
+		dev_err(mdio_dev->dev, "MDIO en clk fail\n");
+		return ret;
+	}
+
+	return 0;
+}
+
 /**
  * hns_mdio_get_chip_id - get parent node's chip-id attribute
  * @dpev: mdio platform device
@@ -471,7 +554,9 @@ static int hns_mdio_read(struct mii_bus *bus, int phy_id, int regnum)
  */
 static int hns_mdio_reset(struct mii_bus *bus)
 {
-	return 0;
+	struct hns_mdio_device *mdio_dev = (struct hns_mdio_device *)bus->priv;
+
+	return hns_mdio_reset_hw(mdio_dev);
 }
 
 /**
@@ -532,8 +617,16 @@ static int hns_mdio_probe(struct platform_device *pdev)
 	mdio_dev->vbase = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(mdio_dev->vbase)) {
 		ret = PTR_ERR(mdio_dev->vbase);
-		return -EFAULT;
+		return ret;
 	}
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	mdio_dev->sys_vbase = devm_ioremap_resource(&pdev->dev, res);
+	if (IS_ERR(mdio_dev->sys_vbase)) {
+		ret = PTR_ERR(mdio_dev->sys_vbase);
+		return ret;
+	}
+
 	mdio_dev->index = 0;
 	mdio_dev->chip_id = hns_mdio_get_chip_id(pdev);
 	mdio_dev->gidx = mdio_dev->chip_id;
@@ -565,11 +658,9 @@ static int hns_mdio_probe(struct platform_device *pdev)
  */
 static int hns_mdio_remove(struct platform_device *pdev)
 {
-	struct hns_mdio_device *mdio_dev;
 	struct mii_bus *bus;
 
 	bus = platform_get_drvdata(pdev);
-	mdio_dev = (struct hns_mdio_device *)bus->priv;
 
 	mdiobus_unregister(bus);
 	platform_set_drvdata(pdev, NULL);

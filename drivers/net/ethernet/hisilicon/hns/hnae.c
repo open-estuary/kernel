@@ -371,7 +371,7 @@ void hnae_put_handle(struct hnae_handle *h)
 }
 EXPORT_SYMBOL(hnae_put_handle);
 
-static void __hnae_release(struct device *dev)
+static void hnae_release(struct device *dev)
 {
 }
 
@@ -399,8 +399,8 @@ int hnae_ae_register(struct hnae_ae_dev *hdev, struct module *owner)
 	hdev->id = (int)atomic_inc_return(&id);
 	hdev->cls_dev.parent = hdev->dev;
 	hdev->cls_dev.class = hnae_class;
-	hdev->cls_dev.release = __hnae_release;
-	dev_set_name(&hdev->cls_dev, "hnae%d", hdev->id);
+	hdev->cls_dev.release = hnae_release;
+	(void)dev_set_name(&hdev->cls_dev, "hnae%d", hdev->id);
 	ret = device_register(&hdev->cls_dev);
 	if (ret)
 		return ret;
@@ -442,12 +442,12 @@ static ssize_t handles_show(struct device *dev,
 		s += sprintf(buf + s, "handle %d (opts=%s from %s):\n",
 			    i++, h->ae_opts, dev_name(h->owner_dev));
 		for (j = 0; j < h->q_num; j++) {
-			s += sprintf(buf + s, "\tqueue[%d] on 0x%lx\n",
-				     j, (unsigned long)h->qs[i]->io_base);
-#define HANDEL_TX_MSG "\t\ttx_ring on 0x%lx:%u,%u,%u,%u,%u,%llu,%llu\n"
+			s += sprintf(buf + s, "\tqueue[%d] on 0x%llx\n",
+				     j, (u64)h->qs[i]->io_base);
+#define HANDEL_TX_MSG "\t\ttx_ring on 0x%llx:%u,%u,%u,%u,%u,%llu,%llu\n"
 			s += sprintf(buf + s,
 				     HANDEL_TX_MSG,
-				     (unsigned long)h->qs[i]->tx_ring.io_base,
+				     (u64)h->qs[i]->tx_ring.io_base,
 				     h->qs[i]->tx_ring.buf_size,
 				     h->qs[i]->tx_ring.desc_num,
 				     h->qs[i]->tx_ring.max_desc_num_per_pkt,
@@ -456,8 +456,8 @@ static ssize_t handles_show(struct device *dev,
 				 h->qs[i]->tx_ring.stats.sw_err_cnt,
 				 h->qs[i]->tx_ring.stats.io_err_cnt);
 			s += sprintf(buf + s,
-				"\t\trx_ring on 0x%lx:%u,%u,%llu,%llu,%llu\n",
-				(unsigned long)h->qs[i]->rx_ring.io_base,
+				"\t\trx_ring on 0x%llx:%u,%u,%llu,%llu,%llu\n",
+				(u64)h->qs[i]->rx_ring.io_base,
 				h->qs[i]->rx_ring.buf_size,
 				h->qs[i]->rx_ring.desc_num,
 				h->qs[i]->rx_ring.stats.sw_err_cnt,
