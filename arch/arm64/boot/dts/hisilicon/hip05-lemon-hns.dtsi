@@ -10,7 +10,8 @@ soc0: soc@000000000 {
 		#address-cells = <1>;
 		#size-cells = <0>;
 		compatible = "hisilicon,mdio";
-		reg = <0x0 0x603c0000 0x0 0x10000>;
+		reg = <0x0 0x603c0000 0x0 0x10000
+			0x0 0x60000000 0x0 0x10000>;
 		irq-num = <9383>;
 
 		soc0_phy6: ethernet-phy@6 {
@@ -34,6 +35,7 @@ soc0: soc@000000000 {
                        0x0 0xC2000000 0x0 0x300000
                        0x0 0xc5000000 0x0 0x890000
                        0x0 0xc7000000 0x0 0x60000
+                       0x0 0x78000010 0x0 0x100
 		       >;
 
 		phy-handle = <0 0 0 0 0 0 &soc0_phy6 &soc0_phy7>;
@@ -150,6 +152,18 @@ soc0: soc@000000000 {
                 dma-coherent;
         };
 
+	ethernet@6{
+                compatible = "hisilicon,hns-nic";
+		ae-name = "soc0-n4";
+		ae-opts = "6";
+		local-mac-address = [00 00 00 00 00 00];
+	};
+	ethernet@7{
+                compatible = "hisilicon,hns-nic";
+		ae-name = "soc0-n4";
+		ae-opts = "7";
+		local-mac-address = [00 00 00 00 00 00];
+	};
 	ethernet@0{
                 compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
@@ -163,17 +177,6 @@ soc0: soc@000000000 {
 		local-mac-address = [00 00 00 00 00 00];
 	};
 
-	ethernet@2{
-                compatible = "hisilicon,hns-nic";
-		ae-name = "soc0-n4";
-		ae-opts = "6";
-		local-mac-address = [00 00 00 00 00 00];
-	};
-	ethernet@3{
-                compatible = "hisilicon,hns-nic";
-		ae-name = "soc0-n4";
-		ae-opts = "7";
-		local-mac-address = [00 00 00 00 00 00];
-	};
+
 
 };
