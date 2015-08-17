@@ -87,15 +87,4 @@
 		pinctrl-0 = <&sd_pmx_func &sd_clk_cfg_func &sd_cfg_func>;
 		pinctrl-1 = <&sd_pmx_idle &sd_clk_cfg_idle &sd_cfg_idle>;
 	};
-
-	dwmmc_2: dwmmc2@f723f000 {
-		bus-width = <0x4>;
-		broken-cd;
-		non-removable;
-		/* WL_EN */
-		pinctrl-names = "default", "idle";
-		pinctrl-0 = <&sdio_pmx_func &sdio_clk_cfg_func &sdio_cfg_func>;
-		pinctrl-1 = <&sdio_pmx_idle &sdio_clk_cfg_idle &sdio_cfg_idle>;
-	};
-
 };
