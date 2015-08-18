@@ -818,10 +818,10 @@ static int get_free_slot(struct hisi_hba *hisi_hba, int *q, int *s)
 
 void start_delivery(struct hisi_hba *hisi_hba)
 {
-	int queue = hisi_hba->slot_prep->queue;
-	u32 w = hisi_sas_read32(hisi_hba, DLVRY_Q_0_WR_PTR + (queue * 0x14));
+	int dlvry_queue = hisi_hba->slot_prep->dlvry_queue;
+	u32 w = hisi_sas_read32(hisi_hba, DLVRY_Q_0_WR_PTR + (dlvry_queue * 0x14));
 
-	hisi_sas_write32(hisi_hba, DLVRY_Q_0_WR_PTR + (queue * 0x14), ++w % HISI_SAS_QUEUE_SLOTS);
+	hisi_sas_write32(hisi_hba, DLVRY_Q_0_WR_PTR + (dlvry_queue * 0x14), ++w % HISI_SAS_QUEUE_SLOTS);
 }
 
 static int is_phy_ready(struct hisi_hba *hisi_hba, int phy_no)
@@ -1340,9 +1340,9 @@ static int slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, 
 	struct task_status_struct *tstat;
 	struct domain_device *dev;
 	enum exec_status sts;
-	struct hisi_sas_complete_hdr *complete_queue = hisi_hba->complete_hdr[slot->queue];
+	struct hisi_sas_complete_hdr *complete_queue = hisi_hba->complete_hdr[slot->cmplt_queue];
 	struct hisi_sas_complete_hdr *complete_hdr;
-	complete_hdr = &complete_queue[slot->queue_slot];
+	complete_hdr = &complete_queue[slot->cmplt_queue_slot];
 
 	if (unlikely(!task || !task->lldd_task || !task->dev))
 		return -1;
@@ -1372,36 +1372,36 @@ static int slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, 
 
 		if (info_reg & HGC_INVLD_DQE_INFO_DQ_MSK)
 			dev_err(hisi_hba->dev, "%s slot %d has dq IPTT error",
-				__func__, slot->queue_slot);
+				__func__, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_TYPE_MSK)
 			dev_err(hisi_hba->dev, "%s slot %d has dq type error",
-				__func__, slot->queue_slot);
+				__func__, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_FORCE_MSK)
 			dev_err(hisi_hba->dev, "%s slot %d has dq force phy error",
-				__func__, slot->queue_slot);
+				__func__, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_PHY_MSK)
 			dev_err(hisi_hba->dev, "%s slot %d has dq phy id error",
-				__func__, slot->queue_slot);
+				__func__, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_ABORT_MSK)
 			dev_err(hisi_hba->dev, "%s slot %d has dq abort flag error",
-				__func__, slot->queue_slot);
+				__func__, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_IPTT_OF_MSK)
 			dev_err(hisi_hba->dev, "%s slot %d has dq IPTT or ICT error",
-				__func__, slot->queue_slot);
+				__func__, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_SSP_ERR_MSK)
 			dev_err(hisi_hba->dev, "%s slot %d has dq SSP frame type error",
-				__func__, slot->queue_slot);
+				__func__, slot->cmplt_queue_slot);
 
 
 		if (info_reg & HGC_INVLD_DQE_INFO_OFL_MSK)
 			dev_err(hisi_hba->dev, "%s slot %d has dq order frame length error",
-				__func__, slot->queue_slot);
+				__func__, slot->cmplt_queue_slot);
 
 		tstat->resp = SAS_TASK_UNDELIVERED;
 		tstat->stat = SAS_OPEN_REJECT;
@@ -1734,15 +1734,10 @@ static irqreturn_t cq_interrupt(int queue, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	struct hisi_sas_slot *slot;
-	struct hisi_sas_complete_hdr *complete_queue = hisi_hba->complete_hdr[queue];
+	struct hisi_sas_complete_hdr *const complete_queue = hisi_hba->complete_hdr[queue];
 	u32 irq_value;
 	u32 rd_point, wr_point;
-	static int count = 0;
 
-	if (count ==0) {
-		pr_err("%s\n", __func__);
-		count = 1;
-	}
 	irq_value = hisi_sas_read32(hisi_hba, OQ_INT_SRC);
 
 	hisi_sas_write32(hisi_hba, OQ_INT_SRC, 1 << queue);
@@ -1759,6 +1754,8 @@ static irqreturn_t cq_interrupt(int queue, void *p)
 
 		slot = &hisi_hba->slot_info[iptt];
 
+		slot->cmplt_queue_slot = rd_point;
+		slot->cmplt_queue = queue;
 		slot_complete(hisi_hba, slot, 0);
 
 		if (++rd_point >= HISI_SAS_QUEUE_SLOTS)
