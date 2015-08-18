@@ -138,8 +138,10 @@ struct hisi_sas_slot {
 	};
 	u64	n_elem;
 	u64	tx;
-	int	queue_slot;
-	int	queue;
+	int	dlvry_queue;
+	int	dlvry_queue_slot;
+	int	cmplt_queue;
+	int	cmplt_queue_slot;
 	int	iptt;
 
 	void	*cmd_hdr;

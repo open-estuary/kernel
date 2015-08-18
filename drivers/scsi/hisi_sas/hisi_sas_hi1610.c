@@ -779,9 +779,9 @@ static int hisi_sas_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slo
 	struct domain_device *dev;
 	void *to;
 	enum exec_status sts;
-	struct hisi_sas_complete_hdr *complete_queue = hisi_hba->complete_hdr[slot->queue];
+	struct hisi_sas_complete_hdr *complete_queue = hisi_hba->complete_hdr[slot->cmplt_queue];
 	struct hisi_sas_complete_hdr *complete_hdr;
-	complete_hdr = &complete_queue[slot->queue_slot];
+	complete_hdr = &complete_queue[slot->cmplt_queue_slot];
 
 	if (unlikely(!task || !task->lldd_task || !task->dev))
 		return -1;
@@ -813,7 +813,7 @@ static int hisi_sas_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slo
 
 	if (complete_hdr->err_rcrd_xfrd) {
 		dev_dbg(hisi_hba->dev, "%s slot %d has error info 0x%x\n",
-			__func__, slot->queue_slot,
+			__func__, slot->cmplt_queue_slot,
 			complete_hdr->err_rcrd_xfrd);
 		/* tstat->stat = hisi_sas_slot_err(hisi_hba, task, slot);  fixme j00310691 */
 		tstat->resp = SAS_TASK_COMPLETE;
@@ -1256,7 +1256,7 @@ static irqreturn_t cq_interrupt(int queue, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	struct hisi_sas_slot *slot;
-	struct hisi_sas_complete_hdr *complete_queue = hisi_hba->complete_hdr[queue];
+	struct hisi_sas_complete_hdr *const complete_queue = hisi_hba->complete_hdr[queue];
 	u32 irq_value;
 	u32 rd_point, wr_point;
 
@@ -1276,6 +1276,8 @@ static irqreturn_t cq_interrupt(int queue, void *p)
 
 		slot = &hisi_hba->slot_info[iptt];
 
+		slot->cmplt_queue_slot = rd_point;
+		slot->cmplt_queue = queue;
 		hisi_sas_slot_complete(hisi_hba, slot, 0);
 
 		if (++rd_point >= HISI_SAS_QUEUE_SLOTS)

@@ -166,7 +166,7 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 	struct hisi_sas_tei tei;
 	struct hisi_sas_slot *slot;
 	struct hisi_sas_cmd_hdr	*cmd_hdr_base;
-	int queue_slot, queue, n_elem = 0, rc, iptt;
+	int dlvry_queue_slot, dlvry_queue, n_elem = 0, rc, iptt;
 
 	if (!dev->port) {
 		struct task_status_struct *tsm = &task->task_status;
@@ -233,7 +233,7 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 	rc = hisi_sas_iptt_alloc(hisi_hba, &iptt);
 	if (rc)
 		goto err_out;
-	rc = HISI_SAS_DISP->get_free_slot(hisi_hba, &queue, &queue_slot);
+	rc = HISI_SAS_DISP->get_free_slot(hisi_hba, &dlvry_queue, &dlvry_queue_slot);
 	if (rc)
 		goto err_out;
 
@@ -243,10 +243,10 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 	task->lldd_task = NULL;
 	slot->iptt = iptt;
 	slot->n_elem = n_elem;
-	slot->queue = queue;
-	slot->queue_slot = queue_slot;
-	cmd_hdr_base = hisi_hba->cmd_hdr[queue];
-	slot->cmd_hdr = &cmd_hdr_base[queue_slot];
+	slot->dlvry_queue = dlvry_queue;
+	slot->dlvry_queue_slot = dlvry_queue_slot;
+	cmd_hdr_base = hisi_hba->cmd_hdr[dlvry_queue];
+	slot->cmd_hdr = &cmd_hdr_base[dlvry_queue_slot];
 
 	slot->status_buffer = dma_pool_alloc(hisi_hba->status_buffer_pool,
 					GFP_ATOMIC, &slot->status_buffer_dma);
@@ -625,8 +625,8 @@ void hisi_sas_do_release_task(struct hisi_hba *hisi_hba,
 			continue;
 
 		dev_info(hisi_hba->dev, "Release slot [%x:%x], task [%p]:\n",
-			slot->queue, slot->queue_slot, task);
-
+			slot->dlvry_queue, slot->dlvry_queue_slot, task);
+		//fixme set slot and queue slot for completion
 		HISI_SAS_DISP->slot_complete(hisi_hba, slot, 1);
 	}
 }
