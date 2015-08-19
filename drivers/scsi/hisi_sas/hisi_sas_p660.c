@@ -1212,10 +1212,11 @@ static int config_serdes_12G(struct hisi_hba *hisi_hba, int phy_id)
 	return 0;
 }
 
-static int hisi_sas_slot_err(struct hisi_hba *hisi_hba,
+// by default, task resp is complete
+static void hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 		struct sas_task *task, struct hisi_sas_slot *slot)
 {
-	int stat = SAM_STAT_CHECK_CONDITION;
+	struct task_status_struct *tstat = &task->task_status;
 	struct hisi_sas_err_record *err_record = slot->status_buffer;
 
 	switch (task->task_proto) {
@@ -1241,10 +1242,11 @@ static int hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 		case DMA_TX_DATA_UNDERFLOW_ERR:
 		case DMA_RX_DATA_UNDERFLOW_ERR:
 		{
+			tstat->residual = 0; //fixme j00310691 get the sense data (if any)
+			tstat->stat = SAS_DATA_UNDERRUN;
 		//	pr_info("%s SAS_DATA_UNDERRUN error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
 		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
 		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
-			stat = SAS_DATA_UNDERRUN;
 			break;
 		}
 		case DMA_TX_DATA_SGL_OVERFLOW_ERR:
@@ -1257,7 +1259,8 @@ static int hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 		//	pr_info("%s SAS_DATA_OVERRUN error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
 		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
 		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
-			stat = SAS_DATA_OVERRUN;
+			tstat->stat = SAS_DATA_OVERRUN;
+			tstat->residual = 0;
 			break;
 		}
 		case TRANS_TX_PHY_NOT_ENABLE_ERR:
@@ -1265,7 +1268,8 @@ static int hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 		//	pr_info("%s SAS_PHY_DOWN error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
 		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
 		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
-			stat = SAS_PHY_DOWN;
+			tstat->stat = SAS_PHY_DOWN;
+			tstat->resp = SAS_TASK_UNDELIVERED;
 			break;
 		}
 		case TRANS_TX_OPEN_REJCT_WRONG_DEST_ERR:
@@ -1284,7 +1288,8 @@ static int hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 		//	pr_info("%s SAS_DATA_UNDERRUN error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
 		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
 		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
-			stat = SAS_OPEN_REJECT;
+			tstat->stat = SAS_OPEN_REJECT;
+			// fixme add open_rej_reason
 			break;
 		}
 		case TRANS_TX_OPEN_TIMEOUT_ERR:
@@ -1292,7 +1297,7 @@ static int hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 		//	pr_info("%s SAS_OPEN_TO error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
 		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
 		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
-			stat = SAS_OPEN_TO;
+			tstat->stat = SAS_OPEN_TO;
 			break;
 		}
 		case TRANS_TX_NAK_RECEIVE_ERR:
@@ -1301,7 +1306,7 @@ static int hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 		//	pr_info("%s SAS_NAK_R_ERR error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
 		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
 		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
-			stat = SAS_NAK_R_ERR;
+			tstat->stat = SAS_NAK_R_ERR;
 			break;
 		}
 		default:
@@ -1309,12 +1314,14 @@ static int hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 		//	pr_info("%s default error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
 		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
 		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
+			tstat->stat = SAM_STAT_CHECK_CONDITION;
 			break;
 		}
 		}
 	}
+		break;
 	case SAS_PROTOCOL_SMP:
-		stat = SAM_STAT_CHECK_CONDITION;
+		tstat->stat = SAM_STAT_CHECK_CONDITION;
 		break;
 
 	case SAS_PROTOCOL_SATA:
@@ -1322,7 +1329,7 @@ static int hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 	case SAS_PROTOCOL_SATA | SAS_PROTOCOL_STP:
 	{
 		task->ata_task.use_ncq = 0;
-		stat = SAS_PROTO_RESPONSE;
+		tstat->stat = SAS_PROTO_RESPONSE;
 		/* j00310691 fixme mvs_sata_done(mvi, task, slot_idx, err_dw0); */
 	}
 		break;
@@ -1330,7 +1337,6 @@ static int hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 		break;
 	}
 
-	return stat;
 }
 
 static int slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, u32 abort)
@@ -1404,28 +1410,19 @@ static int slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, 
 				__func__, slot->cmplt_queue_slot);
 
 		tstat->resp = SAS_TASK_UNDELIVERED;
-		tstat->stat = SAS_OPEN_REJECT;
+		tstat->stat = SAS_OPEN_REJECT; //fixme add open_rej_reason
 		goto out;
 	}
 
-
-	if (complete_hdr->err_rcrd_xfrd) {
-		if (complete_hdr->rspns_good) {
-			tstat->stat = hisi_sas_slot_err(hisi_hba, task, slot);
-		} else {
-			tstat->stat = SAS_DATA_UNDERRUN; //fixme j00310691
-			//dev_err(hisi_hba->dev, "%s cc=%d rx=%d a=%d cr=%d srs=%d rg=%d as=%d\n",
-			//	__func__,
-			//	complete_hdr->cmd_complt,
-			//	complete_hdr->rspns_xfrd,
-			//	complete_hdr->attention,
-			//	complete_hdr->cmd_rcvd,
-			//	complete_hdr->slot_rst_cmplt,
-			//	complete_hdr->rspns_good,
-			//	complete_hdr->abort_status);
+	if (!complete_hdr->err_rcrd_xfrd) {
+		if (!complete_hdr->cmd_complt || !complete_hdr->rspns_xfrd) { //fixme j00310691
+			tstat->stat = SAS_DATA_OVERRUN;
+			//j00310691 in IT we get DID_ERROR, but in sas_end_task we need to use overrun to get DID_ERROR
+			//tstat->buf_valid_size = 0;
+			goto out;
 		}
-
-		tstat->resp = SAS_TASK_COMPLETE;
+	} else {
+		hisi_sas_slot_err(hisi_hba, task, slot);
 		goto out;
 	}
 
@@ -1436,33 +1433,22 @@ static int slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, 
 		struct ssp_response_iu *iu = slot->status_buffer +
 			sizeof(struct hisi_sas_err_record);
 		sas_ssp_task_response(hisi_hba->dev, task, iu);
+		tstat->stat = SAM_STAT_GOOD;
 		break;
 	}
 	case SAS_PROTOCOL_SMP:
 	{
-		int i;
 		void *to;
-		unsigned int *john = slot->status_buffer + sizeof(struct hisi_sas_err_record);
 		struct scatterlist *sg_resp = &task->smp_task.smp_resp;
-			tstat->stat = SAM_STAT_GOOD;
+
+		tstat->stat = SAM_STAT_GOOD;
 		to = kmap_atomic(sg_page(sg_resp));
-		for (i = 0;i<sg_dma_len(sg_resp)/4;i++) {
-			pr_info("%s before %d: 0x%08x\n", __func__, i, *john);
-			john++;
-		}
-		#ifdef SWAP_UNAMP
+
 		/*for expander*/
 		dma_unmap_sg(hisi_hba->dev, &task->smp_task.smp_resp, 1,
 			DMA_FROM_DEVICE);/*fixme*/
 		dma_unmap_sg(hisi_hba->dev, &task->smp_task.smp_req, 1,
 			DMA_TO_DEVICE);/*fixme*/
-		#endif
-			/* j00310691 for SMP, buffer contains the full SMP frame */
-		john = slot->status_buffer + sizeof(struct hisi_sas_err_record);
-		for (i = 0;i<sg_dma_len(sg_resp)/4;i++) {
-			pr_info("%s after %d: 0x%08x\n", __func__, i, *john);
-			john++;
-		}
 		memcpy(to + sg_resp->offset,
 			slot->status_buffer + sizeof(struct hisi_sas_err_record),
 			sg_dma_len(sg_resp));
@@ -1730,7 +1716,7 @@ static irqreturn_t int_abnormal(int phy_no, void *p)
 }
 
 /* Interrupts */
-static irqreturn_t cq_interrupt(int queue, void *p)
+static irqreturn_t cq_interrupt(const int queue, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	struct hisi_sas_slot *slot;
