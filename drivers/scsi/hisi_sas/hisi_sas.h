@@ -8,7 +8,7 @@
  * (at your option) any later version.
  *
  */
-
+#undef CONFIG_DEBUG_FS
 #ifndef _HISI_SAS_H_
 #define _HISI_SAS_H_
 
