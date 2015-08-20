@@ -28,7 +28,7 @@
 		reg = <0 0xb0080000 0 0x10000>, <0 0xb0000000 0 0x10000>,
 		      <0 0xb00d0000 0 0x10000>, <0x220 0x00000000 0 0x1000>;
 		reg-names = "rc_dbi", "subctrl", "pcs", "config";
-		bus-range = <0  15>;
+		bus-range = <16  31>;
 		msi-parent = <&its_pcie>;
 		#address-cells = <3>;
 		#size-cells = <2>;
@@ -45,7 +45,7 @@
 		reg = <0 0xb0090000 0 0x10000>, <0 0xb0000000 0 0x10000>,
 		      <0 0xb00e0000 0 0x10000>, <0x240 0x00000000 0 0x1000>;
 		reg-names = "rc_dbi", "subctrl", "pcs", "config";
-		bus-range = <16 31>;
+		bus-range = <32 47>;
 		msi-parent = <&its_pcie>;
 		#address-cells = <3>;
 		#size-cells = <2>;
