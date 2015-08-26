@@ -142,7 +142,8 @@ struct hisi_sas_slot {
 	int	dlvry_queue_slot;
 	int	cmplt_queue;
 	int	cmplt_queue_slot;
-	int	iptt;
+	int	idx;
+	int	tmf_idx;
 
 	void	*cmd_hdr;
 	dma_addr_t cmd_hdr_dma;
@@ -210,8 +211,8 @@ struct hisi_hba {
 	const struct hisi_sas_dispatch *dispatch;
 	struct hisi_fatal_stat fatal_stat;
 
-	int iptt_count;
-	unsigned long *iptt_tags;
+	int slot_index_count;
+	unsigned long *slot_index_tags;
 
 	struct dma_pool *sge_page_pool;
 
@@ -258,8 +259,11 @@ struct hisi_sas_dispatch {
 			struct hisi_sas_tei *tei);
 	int (*prep_stp)(struct hisi_hba *hisi_hba,
 			struct hisi_sas_tei *tei);
-	int (*is_phy_ready)(struct hisi_hba *hisi_hba, int phy_no);
 	int (*slot_complete)(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, u32 abort);
+	int (*is_phy_ready)(struct hisi_hba *hisi_hba, int phy_no);
+	void (*phy_enable)(struct hisi_hba *hisi_hba, int phy_no);
+	void (*phy_disable)(struct hisi_hba *hisi_hba, int phy_no);
+	void (*hard_phy_reset)(struct hisi_hba *hisi_hba, int phy_no);
 };
 
 
@@ -544,7 +548,7 @@ struct ssp_command_iu {
 int hisi_sas_scan_finished(struct Scsi_Host *shost, unsigned long time);
 void hisi_sas_scan_start(struct Scsi_Host *shost);
 
-void hisi_sas_iptt_init(struct hisi_hba *hisi_hba);
+void hisi_sas_slot_index_init(struct hisi_hba *hisi_hba);
 void hisi_sas_phy_init(struct hisi_hba *hisi_hba, int i);
 int hisi_sas_start_phy_layer(struct hisi_hba *hisi_hba);
 int hisi_sas_dev_found(struct domain_device *dev);
