@@ -748,6 +748,13 @@ static void enable_phy(struct hisi_hba *hisi_hba, int phy)
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
 }
 
+static void disable_phy(struct hisi_hba *hisi_hba, int phy)
+{
+	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+	cfg &= ~PHY_CFG_ENA_MSK;
+	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
+}
+
 static void start_phy(struct hisi_hba *hisi_hba, int phy)
 {
 	config_id_frame(hisi_hba, phy);
@@ -759,6 +766,19 @@ static void start_phy(struct hisi_hba *hisi_hba, int phy)
 	config_phy_opt_mode(hisi_hba, phy);
 	config_tx_tfe_autoneg(hisi_hba, phy);
 	enable_phy(hisi_hba, phy);
+}
+
+static void stop_phy(struct hisi_hba *hisi_hba, int phy)
+{
+	disable_phy(hisi_hba, phy);
+}
+
+static void hard_phy_reset(struct hisi_hba *hisi_hba, int phy)
+{
+	stop_phy(hisi_hba, phy);
+	// j00310691 add serdes lane reset
+	msleep(100);
+	start_phy(hisi_hba, phy);
 }
 
 static void start_phys(unsigned long data)
@@ -1119,7 +1139,8 @@ static int prep_ssp(struct hisi_hba *hisi_hba,
 
 	/* dw7 */
 	/* hdr->double_mode is set only for DIF todo */
-	/* hdr->abort_iptt set in Higgs_PrepareAbort */
+	if (is_tmf && TMF_ABORT_TASK == tmf->tmf)
+		hdr->abort_iptt = tmf->tag_of_task_to_be_managed;
 
 	/* dw8,9 */
 	/* j00310691 reference driver sets in Higgs_SendCommandHw */
@@ -1139,7 +1160,7 @@ static int prep_ssp(struct hisi_hba *hisi_hba,
 	/* fill in IU for TASK and Command Frame */
 	if (task->ssp_task.enable_first_burst) {
 		fburst = (1 << 7);
-		pr_warn("%s fburst enabled: edit hdr?\n", __func__);
+		dw2->first_burst = 1;
 	}
 
 	memcpy(buf_cmd, &task->ssp_task.LUN, 8);
@@ -1396,37 +1417,36 @@ static int slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, 
 		u32 info_reg = hisi_sas_read32(hisi_hba, HGC_INVLD_DQE_INFO);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_DQ_MSK)
-			dev_err(hisi_hba->dev, "%s slot %d has dq IPTT error",
-				__func__, slot->cmplt_queue_slot);
+			dev_err(hisi_hba->dev, "%s slot [%d:%d] has dq IPTT error",
+				__func__, slot->cmplt_queue, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_TYPE_MSK)
-			dev_err(hisi_hba->dev, "%s slot %d has dq type error",
-				__func__, slot->cmplt_queue_slot);
+			dev_err(hisi_hba->dev, "%s slot [%d:%d] has dq type error",
+				__func__, slot->cmplt_queue, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_FORCE_MSK)
-			dev_err(hisi_hba->dev, "%s slot %d has dq force phy error",
-				__func__, slot->cmplt_queue_slot);
+			dev_err(hisi_hba->dev, "%s slot [%d:%d] has dq force phy error",
+				__func__, slot->cmplt_queue, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_PHY_MSK)
-			dev_err(hisi_hba->dev, "%s slot %d has dq phy id error",
-				__func__, slot->cmplt_queue_slot);
+			dev_err(hisi_hba->dev, "%s slot [%d:%d] has dq phy id error",
+				__func__, slot->cmplt_queue, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_ABORT_MSK)
-			dev_err(hisi_hba->dev, "%s slot %d has dq abort flag error",
-				__func__, slot->cmplt_queue_slot);
+			dev_err(hisi_hba->dev, "%s slot [%d:%d] has dq abort flag error",
+				__func__, slot->cmplt_queue, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_IPTT_OF_MSK)
-			dev_err(hisi_hba->dev, "%s slot %d has dq IPTT or ICT error",
-				__func__, slot->cmplt_queue_slot);
+			dev_err(hisi_hba->dev, "%s slot [%d:%d] has dq IPTT or ICT error",
+				__func__, slot->cmplt_queue, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_SSP_ERR_MSK)
-			dev_err(hisi_hba->dev, "%s slot %d has dq SSP frame type error",
-				__func__, slot->cmplt_queue_slot);
-
+			dev_err(hisi_hba->dev, "%s slot [%d:%d] has dq SSP frame type error",
+				__func__, slot->cmplt_queue, slot->cmplt_queue_slot);
 
 		if (info_reg & HGC_INVLD_DQE_INFO_OFL_MSK)
-			dev_err(hisi_hba->dev, "%s slot %d has dq order frame length error",
-				__func__, slot->cmplt_queue_slot);
+			dev_err(hisi_hba->dev, "%s slot [%d:%d] has dq order frame length error",
+				__func__, slot->cmplt_queue, slot->cmplt_queue_slot);
 
 		tstat->resp = SAS_TASK_UNDELIVERED;
 		tstat->stat = SAS_OPEN_REJECT; //fixme add open_rej_reason
@@ -1754,10 +1774,16 @@ static irqreturn_t cq_interrupt(const int queue, void *p)
 
 	while (rd_point != wr_point) {
 		struct hisi_sas_complete_hdr *complete_hdr;
-		int iptt;
+		int iptt, slot_idx;
 
 		complete_hdr = &complete_queue[rd_point];
 		iptt = complete_hdr->iptt;
+		slot_idx = iptt;
+		slot = &hisi_hba->slot_info[slot_idx];
+		if (slot->tmf_idx != -1) {
+			//BUG();
+			slot = &hisi_hba->slot_info[slot->tmf_idx];
+		}
 
 		slot = &hisi_hba->slot_info[iptt];
 
@@ -2107,5 +2133,8 @@ const struct hisi_sas_dispatch hisi_sas_p660_dispatch = {
 	.prep_smp = prep_smp,
 	.is_phy_ready = is_phy_ready,
 	.slot_complete = slot_complete,
+	.phy_enable = enable_phy,
+	.phy_disable = disable_phy,
+	.hard_phy_reset = hard_phy_reset,
 	/* p660 does not support STP */
 };

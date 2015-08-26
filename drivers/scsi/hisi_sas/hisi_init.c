@@ -168,10 +168,10 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 
 	memset(hisi_hba->breakpoint, 0, s);
 
-	hisi_hba->iptt_count = HISI_SAS_COMMAND_ENTRIES;
-	s = hisi_hba->iptt_count / sizeof(unsigned long);
-	hisi_hba->iptt_tags = devm_kzalloc(dev, s, GFP_KERNEL);
-	if (!hisi_hba->iptt_tags)
+	hisi_hba->slot_index_count = HISI_SAS_COMMAND_ENTRIES;
+	s = hisi_hba->slot_index_count / sizeof(unsigned long);
+	hisi_hba->slot_index_tags = devm_kzalloc(dev, s, GFP_KERNEL);
+	if (!hisi_hba->slot_index_tags)
 		goto err_out;
 
 	sprintf(pool_name, "%s%d", "hisi_sas_status_sge_pool", hisi_hba->id);
@@ -194,7 +194,7 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 		goto err_out;
 	memset(hisi_hba->sata_breakpoint, 0, s);
 
-	hisi_sas_iptt_init(hisi_hba);
+	hisi_sas_slot_index_init(hisi_hba);
 
 	return 0;
 err_out:
