@@ -16,6 +16,8 @@
 #include <linux/debugfs.h>
 #include <linux/types.h>
 
+#undef SAS_12G
+
 /* global registers need init*/
 #define DLVRY_QUEUE_ENABLE		0x0
 #define IOST_BASE_ADDR_LO		0x8
@@ -407,6 +409,10 @@ static void config_phy_link_param(struct hisi_hba *hisi_hba,
 
 	rate &= ~PROG_PHY_LINK_RATE_MAX_MSK;
 	switch (linkrate) {
+	case SAS_LINK_RATE_6_0_GBPS:
+		rate |= SAS_LINK_RATE_6_0_GBPS << PROG_PHY_LINK_RATE_MAX_OFF;
+		pcn = 0x80a80000;
+		break;
 	case SAS_LINK_RATE_12_0_GBPS:
 		rate |= SAS_LINK_RATE_12_0_GBPS << PROG_PHY_LINK_RATE_MAX_OFF;
 		pcn = 0x80aa0001;
@@ -650,11 +656,18 @@ static void init_reg(struct hisi_hba *hisi_hba)
 	hisi_sas_write32(hisi_hba, CFG_SAS_CONFIG, 0x22000000);
 
 	for (i = 0; i < hisi_hba->n_phy; i++) {
-		/* phy registers init set 12G - see g_astPortRegConfig */
+		/* see g_astPortRegConfig */
+		#ifdef SAS_12G
 		hisi_sas_phy_write32(hisi_hba, i, PROG_PHY_LINK_RATE, 0x0000088a);
 		hisi_sas_phy_write32(hisi_hba, i, PHY_CONFIG2, 0x80c7c084);
 		hisi_sas_phy_write32(hisi_hba, i, PHY_RATE_NEGO, 0x415ee00);
 		hisi_sas_phy_write32(hisi_hba, i, PHY_PCN, 0x80aa0001);
+		#else
+		hisi_sas_phy_write32(hisi_hba, i, PROG_PHY_LINK_RATE, 0x0000088a);
+		hisi_sas_phy_write32(hisi_hba, i, PHY_CONFIG2, 0x0007c080);
+		hisi_sas_phy_write32(hisi_hba, i, PHY_RATE_NEGO, 0x0415ee00);
+		hisi_sas_phy_write32(hisi_hba, i, PHY_PCN, 0x80a80000);
+		#endif
 
 		hisi_sas_phy_write32(hisi_hba, i, SL_TOUT_CFG, 0x7d7d7d7d);
 		hisi_sas_phy_write32(hisi_hba, i, DONE_RECEIVED_TIME, 0x0);
@@ -738,7 +751,11 @@ static void enable_phy(struct hisi_hba *hisi_hba, int phy)
 static void start_phy(struct hisi_hba *hisi_hba, int phy)
 {
 	config_id_frame(hisi_hba, phy);
+	#ifdef SAS_12G
 	config_phy_link_param(hisi_hba, phy, SAS_LINK_RATE_12_0_GBPS);
+	#else
+	config_phy_link_param(hisi_hba, phy, SAS_LINK_RATE_6_0_GBPS);
+	#endif
 	config_phy_opt_mode(hisi_hba, phy);
 	config_tx_tfe_autoneg(hisi_hba, phy);
 	enable_phy(hisi_hba, phy);
@@ -1150,6 +1167,7 @@ static int prep_ssp(struct hisi_hba *hisi_hba,
 
 }
 
+#ifdef SAS_12G
 void config_serdes_12G_timer_handler(unsigned long arg)
 {
 	struct hisi_sas_phy *phy = (struct hisi_sas_phy *)arg;
@@ -1211,6 +1229,7 @@ static int config_serdes_12G(struct hisi_hba *hisi_hba, int phy_id)
 
 	return 0;
 }
+#endif
 
 // by default, task resp is complete
 static void hisi_sas_slot_err(struct hisi_hba *hisi_hba,
@@ -1500,7 +1519,9 @@ static irqreturn_t int_ctrlrdy(int phy, void *p)
 		return IRQ_NONE;
 	}
 
+	#ifdef SAS_12G
 	config_serdes_12G(hisi_hba, phy);
+	#endif
 	hisi_sas_phy_write32(hisi_hba, phy, CHL_INT2,
 			CHL_INT2_CTRL_PHY_RDY_MSK);
 
