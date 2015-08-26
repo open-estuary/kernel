@@ -400,7 +400,7 @@ static inline u32 hisi_sas_phy_read32(struct hisi_hba *hisi_hba, int phy, u32 of
 	return readl(regs);
 }
 
-static void config_phy_link_param(struct hisi_hba *hisi_hba,
+static void p660_config_phy_link_param(struct hisi_hba *hisi_hba,
 					int phy,
 					enum sas_linkrate linkrate)
 {
@@ -432,7 +432,7 @@ static void config_phy_link_param(struct hisi_hba *hisi_hba,
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_PCN, pcn);
 }
 
-static void config_phy_opt_mode(struct hisi_hba *hisi_hba, int phy)
+static void p660_config_phy_opt_mode(struct hisi_hba *hisi_hba, int phy)
 {
 	/* j00310691 assume not optical cable for now */
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
@@ -441,14 +441,14 @@ static void config_phy_opt_mode(struct hisi_hba *hisi_hba, int phy)
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
 }
 
-static void config_tx_tfe_autoneg(struct hisi_hba *hisi_hba, int phy)
+static void p660_config_tx_tfe_autoneg(struct hisi_hba *hisi_hba, int phy)
 {
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CONFIG2);
 	cfg &= ~PHY_CONFIG2_RXCLTEPRES_MSK;
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CONFIG2, cfg);
 }
 
-static void config_id_frame(struct hisi_hba *hisi_hba, int phy)
+static void p660_config_id_frame(struct hisi_hba *hisi_hba, int phy)
 {
 	struct sas_identify_frame identify_frame;
 	u32 *identify_buffer;
@@ -482,17 +482,17 @@ static void config_id_frame(struct hisi_hba *hisi_hba, int phy)
 			__swab32(identify_buffer[5]));
 }
 
-static void init_id_frame(struct hisi_hba *hisi_hba)
+static void p660_init_id_frame(struct hisi_hba *hisi_hba)
 {
 	int i;
 
 	/*ifdef _LITTLE_ENDIAN_BITFIELD,
 	*sas_identify_frame the same as the structure in IT code*/
 	for (i = 0; i < hisi_hba->n_phy; i++)
-		config_id_frame(hisi_hba, i);
+		p660_config_id_frame(hisi_hba, i);
 }
 
-static int reset_hw(struct hisi_hba *hisi_hba)
+static int p660_reset_hw(struct hisi_hba *hisi_hba)
 {
 	int i;
 	unsigned long end_time;
@@ -617,7 +617,7 @@ static int reset_hw(struct hisi_hba *hisi_hba)
 	return 0;
 }
 
-static void init_reg(struct hisi_hba *hisi_hba)
+static void p660_init_reg(struct hisi_hba *hisi_hba)
 {
 	int i;
 
@@ -722,78 +722,78 @@ static void init_reg(struct hisi_hba *hisi_hba)
 			 DMA_ADDR_HI(hisi_hba->breakpoint_dma));
 }
 
-static int hw_init(struct hisi_hba *hisi_hba)
+static int p660_hw_init(struct hisi_hba *hisi_hba)
 {
 	int rc;
 
-	rc = reset_hw(hisi_hba);
+	rc = p660_reset_hw(hisi_hba);
 	if (rc) {
 		dev_err(hisi_hba->dev, "hisi_sas_reset_hw failed, rc=%d", rc);
 		return rc;
 	}
 
 	msleep(100);
-	init_reg(hisi_hba);
+	p660_init_reg(hisi_hba);
 
 	/* maybe init serdes param j00310691 */
-	init_id_frame(hisi_hba);
+	p660_init_id_frame(hisi_hba);
 
 	return 0;
 }
 
-static void enable_phy(struct hisi_hba *hisi_hba, int phy)
+static void p660_enable_phy(struct hisi_hba *hisi_hba, int phy)
 {
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
 	cfg |= PHY_CFG_ENA_MSK;
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
 }
 
-static void disable_phy(struct hisi_hba *hisi_hba, int phy)
+static void p660_disable_phy(struct hisi_hba *hisi_hba, int phy)
 {
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
 	cfg &= ~PHY_CFG_ENA_MSK;
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
 }
 
-static void start_phy(struct hisi_hba *hisi_hba, int phy)
+static void p660_start_phy(struct hisi_hba *hisi_hba, int phy)
 {
-	config_id_frame(hisi_hba, phy);
+	p660_config_id_frame(hisi_hba, phy);
 	#ifdef SAS_12G
-	config_phy_link_param(hisi_hba, phy, SAS_LINK_RATE_12_0_GBPS);
+	p660_config_phy_link_param(hisi_hba, phy, SAS_LINK_RATE_12_0_GBPS);
 	#else
-	config_phy_link_param(hisi_hba, phy, SAS_LINK_RATE_6_0_GBPS);
+	p660_config_phy_link_param(hisi_hba, phy, SAS_LINK_RATE_6_0_GBPS);
 	#endif
-	config_phy_opt_mode(hisi_hba, phy);
-	config_tx_tfe_autoneg(hisi_hba, phy);
-	enable_phy(hisi_hba, phy);
+	p660_config_phy_opt_mode(hisi_hba, phy);
+	p660_config_tx_tfe_autoneg(hisi_hba, phy);
+	p660_enable_phy(hisi_hba, phy);
 }
 
-static void stop_phy(struct hisi_hba *hisi_hba, int phy)
+static void p660_stop_phy(struct hisi_hba *hisi_hba, int phy)
 {
-	disable_phy(hisi_hba, phy);
+	p660_disable_phy(hisi_hba, phy);
 }
 
-static void hard_phy_reset(struct hisi_hba *hisi_hba, int phy)
+static void p660_hard_phy_reset(struct hisi_hba *hisi_hba, int phy)
 {
-	stop_phy(hisi_hba, phy);
+	p660_stop_phy(hisi_hba, phy);
 	// j00310691 add serdes lane reset
 	msleep(100);
-	start_phy(hisi_hba, phy);
+	p660_start_phy(hisi_hba, phy);
 }
 
-static void start_phys(unsigned long data)
+static void p660_start_phys(unsigned long data)
 {
 	struct hisi_hba *hisi_hba = (struct hisi_hba *)data;
 	int i;
 
 	for (i = 0; i < hisi_hba->n_phy; i++) {
 		hisi_sas_phy_write32(hisi_hba, i, CHL_INT2_MSK, 0x0000032a);
-		start_phy(hisi_hba, i);
+		p660_start_phy(hisi_hba, i);
 	}
 
 }
 
-static void phys_up(struct hisi_hba *hisi_hba)
+static void p660_phys_up(struct hisi_hba *hisi_hba)
 {
 	int i;
 
@@ -803,7 +803,7 @@ static void phys_up(struct hisi_hba *hisi_hba)
 	}
 }
 
-static int start_phy_layer(struct hisi_hba *hisi_hba)
+static int p660_start_phy_layer(struct hisi_hba *hisi_hba)
 {
 	struct timer_list *timer = NULL;
 
@@ -814,22 +814,22 @@ static int start_phy_layer(struct hisi_hba *hisi_hba)
 	init_timer(timer);
 	timer->data = (unsigned long)hisi_hba;
 	timer->expires = jiffies + msecs_to_jiffies(1000);
-	timer->function = start_phys;
+	timer->function = p660_start_phys;
 
 	add_timer(timer);
 
 	return 0;
 }
 
-static int phys_init(struct hisi_hba *hisi_hba)
+static int p660_phys_init(struct hisi_hba *hisi_hba)
 {
-	phys_up(hisi_hba);
-	start_phy_layer(hisi_hba);
+	p660_phys_up(hisi_hba);
+	p660_start_phy_layer(hisi_hba);
 
 	return 0;
 }
 
-static int get_free_slot(struct hisi_hba *hisi_hba, int *q, int *s)
+static int p660_get_free_slot(struct hisi_hba *hisi_hba, int *q, int *s)
 {
 	u32 r, w;
 	int queue = smp_processor_id() % hisi_hba->queue_count;
@@ -853,7 +853,7 @@ static int get_free_slot(struct hisi_hba *hisi_hba, int *q, int *s)
 	return 0;
 }
 
-void start_delivery(struct hisi_hba *hisi_hba)
+void p660_start_delivery(struct hisi_hba *hisi_hba)
 {
 	int dlvry_queue = hisi_hba->slot_prep->dlvry_queue;
 	u32 w = hisi_sas_read32(hisi_hba, DLVRY_Q_0_WR_PTR + (dlvry_queue * 0x14));
@@ -861,7 +861,7 @@ void start_delivery(struct hisi_hba *hisi_hba)
 	hisi_sas_write32(hisi_hba, DLVRY_Q_0_WR_PTR + (dlvry_queue * 0x14), ++w % HISI_SAS_QUEUE_SLOTS);
 }
 
-static int is_phy_ready(struct hisi_hba *hisi_hba, int phy_no)
+static int p660_is_phy_ready(struct hisi_hba *hisi_hba, int phy_no)
 {
 	u32 phy_state, port_state, phy_port_dis_state;
 	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
@@ -896,7 +896,7 @@ static int is_phy_ready(struct hisi_hba *hisi_hba, int phy_no)
 	return 0;
 }
 
-static int hisi_sas_prep_prd_sge(struct hisi_hba *hisi_hba,
+static int p660_prep_prd_sge(struct hisi_hba *hisi_hba,
 				 struct hisi_sas_slot *slot,
 				 struct hisi_sas_cmd_hdr *hdr,
 				 struct scatterlist *scatter,
@@ -941,7 +941,7 @@ static int hisi_sas_prep_prd_sge(struct hisi_hba *hisi_hba,
 	return 0;
 }
 
-static int prep_smp(struct hisi_hba *hisi_hba,
+static int p660_prep_smp(struct hisi_hba *hisi_hba,
 			struct hisi_sas_tei *tei)
 {
 	struct sas_task *task = tei->task;
@@ -1046,7 +1046,7 @@ err_out:
 	return rc;
 }
 
-static int prep_ssp(struct hisi_hba *hisi_hba,
+static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 		struct hisi_sas_tei *tei, int is_tmf,
 		struct hisi_sas_tmf_task *tmf)
 {
@@ -1121,7 +1121,7 @@ static int prep_ssp(struct hisi_hba *hisi_hba,
 	hdr->tptt = 0;
 
 	if (has_data) {
-		rc = hisi_sas_prep_prd_sge(hisi_hba, slot, hdr, task->scatter,
+		rc = p660_prep_prd_sge(hisi_hba, slot, hdr, task->scatter,
 					tei->n_elem);
 		if (rc)
 			return rc;
@@ -1189,7 +1189,7 @@ static int prep_ssp(struct hisi_hba *hisi_hba,
 }
 
 #ifdef SAS_12G
-void config_serdes_12G_timer_handler(unsigned long arg)
+void p660_config_serdes_12G_timer_handler(unsigned long arg)
 {
 	struct hisi_sas_phy *phy = (struct hisi_sas_phy *)arg;
 	struct hisi_hba *hisi_hba = phy->hisi_hba;
@@ -1200,7 +1200,7 @@ void config_serdes_12G_timer_handler(unsigned long arg)
 	hisi_sas_phy_write32(hisi_hba, phy_id, PHY_CONFIG2, val);
 }
 
-static int config_serdes_12G(struct hisi_hba *hisi_hba, int phy_id)
+static int p660_config_serdes_12G(struct hisi_hba *hisi_hba, int phy_id)
 {
 	u32 link_rate = 0, val;
 	unsigned long end_time;
@@ -1241,7 +1241,7 @@ static int config_serdes_12G(struct hisi_hba *hisi_hba, int phy_id)
 			init_timer(timer);
 			timer->data = (unsigned long)phy;
 			timer->expires = jiffies + msecs_to_jiffies(300);
-			timer->function = config_serdes_12G_timer_handler;
+			timer->function = p660_config_serdes_12G_timer_handler;
 			add_timer(timer);
 		} else {
 			mod_timer(timer, jiffies + msecs_to_jiffies(300));
@@ -1253,7 +1253,7 @@ static int config_serdes_12G(struct hisi_hba *hisi_hba, int phy_id)
 #endif
 
 // by default, task resp is complete
-static void hisi_sas_slot_err(struct hisi_hba *hisi_hba,
+static void p660_slot_err(struct hisi_hba *hisi_hba,
 		struct sas_task *task, struct hisi_sas_slot *slot)
 {
 	struct task_status_struct *tstat = &task->task_status;
@@ -1379,7 +1379,7 @@ static void hisi_sas_slot_err(struct hisi_hba *hisi_hba,
 
 }
 
-static int slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, u32 abort)
+static int p660_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, u32 abort)
 {
 	struct sas_task *task = slot->task;
 	struct hisi_sas_device *hisi_sas_dev;
@@ -1461,7 +1461,7 @@ static int slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, 
 			goto out;
 		}
 	} else {
-		hisi_sas_slot_err(hisi_hba, task, slot);
+		p660_slot_err(hisi_hba, task, slot);
 		goto out;
 	}
 
@@ -1524,7 +1524,7 @@ out:
 	return sts;
 }
 
-static irqreturn_t int_ctrlrdy(int phy, void *p)
+static irqreturn_t p660_int_ctrlrdy(int phy, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	u32 irq_value;
@@ -1540,7 +1540,7 @@ static irqreturn_t int_ctrlrdy(int phy, void *p)
 	}
 
 	#ifdef SAS_12G
-	config_serdes_12G(hisi_hba, phy);
+	p660_config_serdes_12G(hisi_hba, phy);
 	#endif
 	hisi_sas_phy_write32(hisi_hba, phy, CHL_INT2,
 			CHL_INT2_CTRL_PHY_RDY_MSK);
@@ -1548,7 +1548,7 @@ static irqreturn_t int_ctrlrdy(int phy, void *p)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t int_phyup(int phy_no, void *p)
+static irqreturn_t p660_int_phyup(int phy_no, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	u32 irq_value, context, port_id, link_rate;
@@ -1639,7 +1639,7 @@ end:
 	return res;
 }
 
-static irqreturn_t int_bcast(int phy_no, void *p)
+static irqreturn_t p660_int_bcast(int phy_no, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	u32 irq_value;
@@ -1667,7 +1667,7 @@ end:
 	return res;
 }
 
-static irqreturn_t int_statuscg(int phy_no, void *p)
+static irqreturn_t p660_int_statuscg(int phy_no, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	u32 irq_value;
@@ -1688,7 +1688,7 @@ static irqreturn_t int_statuscg(int phy_no, void *p)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t int_abnormal(int phy_no, void *p)
+static irqreturn_t p660_int_abnormal(int phy_no, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	u32 irq_value;
@@ -1757,7 +1757,7 @@ static irqreturn_t int_abnormal(int phy_no, void *p)
 }
 
 /* Interrupts */
-static irqreturn_t cq_interrupt(const int queue, void *p)
+static irqreturn_t p660_cq_interrupt(const int queue, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	struct hisi_sas_slot *slot;
@@ -1789,7 +1789,7 @@ static irqreturn_t cq_interrupt(const int queue, void *p)
 
 		slot->cmplt_queue_slot = rd_point;
 		slot->cmplt_queue = queue;
-		slot_complete(hisi_hba, slot, 0);
+		p660_slot_complete(hisi_hba, slot, 0);
 
 		if (++rd_point >= HISI_SAS_QUEUE_SLOTS)
 			rd_point = 0;
@@ -1800,7 +1800,7 @@ static irqreturn_t cq_interrupt(const int queue, void *p)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t fatal_ecc_int(int irq, void *p)
+static irqreturn_t p660_fatal_ecc_int(int irq, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	u32 ecc_int = hisi_sas_read32(hisi_hba, SAS_ECC_INTR);
@@ -1864,7 +1864,7 @@ static irqreturn_t fatal_ecc_int(int irq, void *p)
 	return IRQ_HANDLED;
 }
 
-static irqreturn_t fatal_axi_int(int irq, void *p)
+static irqreturn_t p660_fatal_axi_int(int irq, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	u32 axi_int = hisi_sas_read32(hisi_hba, ENT_INT_SRC2);
@@ -1887,19 +1887,19 @@ static irqreturn_t fatal_axi_int(int irq, void *p)
 }
 
 #define DECLARE_PHY_INT_HANDLER_GROUP(phy)\
-	DECLARE_INT_HANDLER(int_ctrlrdy, phy)\
-	DECLARE_INT_HANDLER(int_bcast, phy)\
-	DECLARE_INT_HANDLER(int_statuscg, phy)\
-	DECLARE_INT_HANDLER(int_phyup, phy)\
-	DECLARE_INT_HANDLER(int_abnormal, phy)\
+	DECLARE_INT_HANDLER(p660_int_ctrlrdy, phy)\
+	DECLARE_INT_HANDLER(p660_int_bcast, phy)\
+	DECLARE_INT_HANDLER(p660_int_statuscg, phy)\
+	DECLARE_INT_HANDLER(p660_int_phyup, phy)\
+	DECLARE_INT_HANDLER(p660_int_abnormal, phy)\
 
 
 #define DECLARE_PHY_INT_GROUP_PTR(phy)\
-	INT_HANDLER_NAME(int_ctrlrdy, phy),\
-	INT_HANDLER_NAME(int_bcast, phy),\
-	INT_HANDLER_NAME(int_statuscg, phy),\
-	INT_HANDLER_NAME(int_phyup, phy),\
-	INT_HANDLER_NAME(int_abnormal, phy),\
+	INT_HANDLER_NAME(p660_int_ctrlrdy, phy),\
+	INT_HANDLER_NAME(p660_int_bcast, phy),\
+	INT_HANDLER_NAME(p660_int_statuscg, phy),\
+	INT_HANDLER_NAME(p660_int_phyup, phy),\
+	INT_HANDLER_NAME(p660_int_abnormal, phy),\
 
 DECLARE_PHY_INT_HANDLER_GROUP(0)
 DECLARE_PHY_INT_HANDLER_GROUP(1)
@@ -1937,80 +1937,80 @@ static irq_handler_t phy_interrupts[HISI_SAS_MAX_PHYS][HISI_SAS_PHY_INT_NR] = {
 	{DECLARE_PHY_INT_GROUP_PTR(8)},
 };
 
-DECLARE_INT_HANDLER(cq_interrupt, 0)
-DECLARE_INT_HANDLER(cq_interrupt, 1)
-DECLARE_INT_HANDLER(cq_interrupt, 2)
-DECLARE_INT_HANDLER(cq_interrupt, 3)
-DECLARE_INT_HANDLER(cq_interrupt, 4)
-DECLARE_INT_HANDLER(cq_interrupt, 5)
-DECLARE_INT_HANDLER(cq_interrupt, 6)
-DECLARE_INT_HANDLER(cq_interrupt, 7)
-DECLARE_INT_HANDLER(cq_interrupt, 8)
-DECLARE_INT_HANDLER(cq_interrupt, 9)
-DECLARE_INT_HANDLER(cq_interrupt, 10)
-DECLARE_INT_HANDLER(cq_interrupt, 11)
-DECLARE_INT_HANDLER(cq_interrupt, 12)
-DECLARE_INT_HANDLER(cq_interrupt, 13)
-DECLARE_INT_HANDLER(cq_interrupt, 14)
-DECLARE_INT_HANDLER(cq_interrupt, 15)
-DECLARE_INT_HANDLER(cq_interrupt, 16)
-DECLARE_INT_HANDLER(cq_interrupt, 17)
-DECLARE_INT_HANDLER(cq_interrupt, 18)
-DECLARE_INT_HANDLER(cq_interrupt, 19)
-DECLARE_INT_HANDLER(cq_interrupt, 20)
-DECLARE_INT_HANDLER(cq_interrupt, 21)
-DECLARE_INT_HANDLER(cq_interrupt, 22)
-DECLARE_INT_HANDLER(cq_interrupt, 23)
-DECLARE_INT_HANDLER(cq_interrupt, 24)
-DECLARE_INT_HANDLER(cq_interrupt, 25)
-DECLARE_INT_HANDLER(cq_interrupt, 26)
-DECLARE_INT_HANDLER(cq_interrupt, 27)
-DECLARE_INT_HANDLER(cq_interrupt, 28)
-DECLARE_INT_HANDLER(cq_interrupt, 29)
-DECLARE_INT_HANDLER(cq_interrupt, 30)
-DECLARE_INT_HANDLER(cq_interrupt, 31)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 0)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 1)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 2)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 3)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 4)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 5)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 6)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 7)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 8)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 9)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 10)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 11)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 12)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 13)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 14)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 15)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 16)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 17)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 18)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 19)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 20)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 21)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 22)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 23)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 24)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 25)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 26)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 27)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 28)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 29)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 30)
+DECLARE_INT_HANDLER(p660_cq_interrupt, 31)
 
 static irq_handler_t cq_interrupts[HISI_SAS_MAX_QUEUES] = {
-	INT_HANDLER_NAME(cq_interrupt, 0),
-	INT_HANDLER_NAME(cq_interrupt, 1),
-	INT_HANDLER_NAME(cq_interrupt, 2),
-	INT_HANDLER_NAME(cq_interrupt, 3),
-	INT_HANDLER_NAME(cq_interrupt, 4),
-	INT_HANDLER_NAME(cq_interrupt, 5),
-	INT_HANDLER_NAME(cq_interrupt, 6),
-	INT_HANDLER_NAME(cq_interrupt, 7),
-	INT_HANDLER_NAME(cq_interrupt, 8),
-	INT_HANDLER_NAME(cq_interrupt, 9),
-	INT_HANDLER_NAME(cq_interrupt, 10),
-	INT_HANDLER_NAME(cq_interrupt, 11),
-	INT_HANDLER_NAME(cq_interrupt, 12),
-	INT_HANDLER_NAME(cq_interrupt, 13),
-	INT_HANDLER_NAME(cq_interrupt, 14),
-	INT_HANDLER_NAME(cq_interrupt, 15),
-	INT_HANDLER_NAME(cq_interrupt, 16),
-	INT_HANDLER_NAME(cq_interrupt, 17),
-	INT_HANDLER_NAME(cq_interrupt, 18),
-	INT_HANDLER_NAME(cq_interrupt, 19),
-	INT_HANDLER_NAME(cq_interrupt, 20),
-	INT_HANDLER_NAME(cq_interrupt, 21),
-	INT_HANDLER_NAME(cq_interrupt, 22),
-	INT_HANDLER_NAME(cq_interrupt, 23),
-	INT_HANDLER_NAME(cq_interrupt, 24),
-	INT_HANDLER_NAME(cq_interrupt, 25),
-	INT_HANDLER_NAME(cq_interrupt, 26),
-	INT_HANDLER_NAME(cq_interrupt, 27),
-	INT_HANDLER_NAME(cq_interrupt, 28),
-	INT_HANDLER_NAME(cq_interrupt, 29),
-	INT_HANDLER_NAME(cq_interrupt, 30),
-	INT_HANDLER_NAME(cq_interrupt, 31)
+	INT_HANDLER_NAME(p660_cq_interrupt, 0),
+	INT_HANDLER_NAME(p660_cq_interrupt, 1),
+	INT_HANDLER_NAME(p660_cq_interrupt, 2),
+	INT_HANDLER_NAME(p660_cq_interrupt, 3),
+	INT_HANDLER_NAME(p660_cq_interrupt, 4),
+	INT_HANDLER_NAME(p660_cq_interrupt, 5),
+	INT_HANDLER_NAME(p660_cq_interrupt, 6),
+	INT_HANDLER_NAME(p660_cq_interrupt, 7),
+	INT_HANDLER_NAME(p660_cq_interrupt, 8),
+	INT_HANDLER_NAME(p660_cq_interrupt, 9),
+	INT_HANDLER_NAME(p660_cq_interrupt, 10),
+	INT_HANDLER_NAME(p660_cq_interrupt, 11),
+	INT_HANDLER_NAME(p660_cq_interrupt, 12),
+	INT_HANDLER_NAME(p660_cq_interrupt, 13),
+	INT_HANDLER_NAME(p660_cq_interrupt, 14),
+	INT_HANDLER_NAME(p660_cq_interrupt, 15),
+	INT_HANDLER_NAME(p660_cq_interrupt, 16),
+	INT_HANDLER_NAME(p660_cq_interrupt, 17),
+	INT_HANDLER_NAME(p660_cq_interrupt, 18),
+	INT_HANDLER_NAME(p660_cq_interrupt, 19),
+	INT_HANDLER_NAME(p660_cq_interrupt, 20),
+	INT_HANDLER_NAME(p660_cq_interrupt, 21),
+	INT_HANDLER_NAME(p660_cq_interrupt, 22),
+	INT_HANDLER_NAME(p660_cq_interrupt, 23),
+	INT_HANDLER_NAME(p660_cq_interrupt, 24),
+	INT_HANDLER_NAME(p660_cq_interrupt, 25),
+	INT_HANDLER_NAME(p660_cq_interrupt, 26),
+	INT_HANDLER_NAME(p660_cq_interrupt, 27),
+	INT_HANDLER_NAME(p660_cq_interrupt, 28),
+	INT_HANDLER_NAME(p660_cq_interrupt, 29),
+	INT_HANDLER_NAME(p660_cq_interrupt, 30),
+	INT_HANDLER_NAME(p660_cq_interrupt, 31)
 };
 
 static irq_handler_t fatal_interrupts[HISI_SAS_MAX_QUEUES] = {
-	fatal_ecc_int,
-	fatal_axi_int
+	p660_fatal_ecc_int,
+	p660_fatal_axi_int
 };
 
-static int interrupt_init(struct hisi_hba *hisi_hba)
+static int p660_interrupt_init(struct hisi_hba *hisi_hba)
 {
 	int i, j, irq, rc, id = hisi_hba->id;
 	struct device *dev = hisi_hba->dev;
@@ -2095,7 +2095,7 @@ static int interrupt_init(struct hisi_hba *hisi_hba)
 	return 0;
 }
 
-static int interrupt_openall(struct hisi_hba *hisi_hba)
+static int p660_interrupt_openall(struct hisi_hba *hisi_hba)
 {
 	int i;
 	u32 val;
@@ -2123,18 +2123,18 @@ static int interrupt_openall(struct hisi_hba *hisi_hba)
 
 
 const struct hisi_sas_dispatch hisi_sas_p660_dispatch = {
-	.hw_init = hw_init,
-	.phys_init = phys_init,
-	.interrupt_init = interrupt_init,
-	.interrupt_openall = interrupt_openall,
-	.get_free_slot = get_free_slot,
-	.start_delivery = start_delivery,
-	.prep_ssp = prep_ssp,
-	.prep_smp = prep_smp,
-	.is_phy_ready = is_phy_ready,
-	.slot_complete = slot_complete,
-	.phy_enable = enable_phy,
-	.phy_disable = disable_phy,
-	.hard_phy_reset = hard_phy_reset,
+	.hw_init = p660_hw_init,
+	.phys_init = p660_phys_init,
+	.interrupt_init = p660_interrupt_init,
+	.interrupt_openall = p660_interrupt_openall,
+	.get_free_slot = p660_get_free_slot,
+	.start_delivery = p660_start_delivery,
+	.prep_ssp = p660_prep_ssp,
+	.prep_smp = p660_prep_smp,
+	.is_phy_ready = p660_is_phy_ready,
+	.slot_complete = p660_slot_complete,
+	.phy_enable = p660_enable_phy,
+	.phy_disable = p660_disable_phy,
+	.hard_phy_reset = p660_hard_phy_reset,
 	/* p660 does not support STP */
 };
