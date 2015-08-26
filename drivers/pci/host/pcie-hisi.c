@@ -301,15 +301,17 @@ static const struct of_device_id hisi_pcie_of_match[] = {
 MODULE_DEVICE_TABLE(of, hisi_pcie_of_match);
 
 static struct platform_driver hisi_pcie_driver = {
-	.probe = hisi_pcie_probe,
 	.driver = {
 		   .name = "hisi-pcie",
-		   .owner = THIS_MODULE,
 		   .of_match_table = hisi_pcie_of_match,
 		   },
 };
 
-module_platform_driver(hisi_pcie_driver);
+static int __init hisi_pcie_init(void)
+{
+	return platform_driver_probe(&hisi_pcie_driver, hisi_pcie_probe);
+}
+subsys_initcall(hisi_pcie_init);
 
 MODULE_AUTHOR("Zhou Wang <wangzhou1@xxxxxxxxxx>");
 MODULE_AUTHOR("Dacai Zhu <zhudacai@xxxxxxxxxx>");
