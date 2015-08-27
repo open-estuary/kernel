@@ -14,12 +14,12 @@ sudo make mrproper
 make defconfig
 
 rm *.out
-make Image -j16 > build0.out 2>&1
+make Image -j14 > build0.out 2>&1
 
 if [ "$march" = "aarch64" ]; then
-	sudo make modules -j16 > build1.out 2>&1
-	sudo make modules_install > build2.out 2>&1
-	sudo make firmware_install > build3.out 2>&1
+	sudo make modules -j14 > build1.out 2>&1
+	sudo make modules_install -j14 > build2.out 2>&1
+	sudo make firmware_install -j14 > build3.out 2>&1
 fi
 
 make hisilicon/hip05-d02.dtb
