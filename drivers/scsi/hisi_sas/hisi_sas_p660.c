@@ -1077,7 +1077,10 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 	dw0->force_phy = 0; /* do not force ordering in phy */
 	dw0->port = sas_port->id; /* double-check */
 	/* hdr->sata_reg_set not applicable to smp */
-	dw0->priority = 0; /* ordinary priority */
+	if (is_tmf)
+		dw0->priority = 1;
+	else
+		dw0->priority = 0; /* ordinary priority */
 	dw0->mode = 1; /* ini mode */
 	dw0->cmd = 1; /* ssp */
 
@@ -1109,8 +1112,13 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 	dw1->device_id = hisi_sas_dev->device_id; /* map itct entry */
 
 	/* dw2 */
-	dw2->cmd_frame_len = (sizeof(struct ssp_command_iu) +
+	if (is_tmf) {
+		dw2->cmd_frame_len = (sizeof(struct ssp_task_iu) +
 			sizeof(struct ssp_frame_hdr) + 3) / 4;
+	} else {
+		dw2->cmd_frame_len = (sizeof(struct ssp_command_iu) +
+			sizeof(struct ssp_frame_hdr) + 3) / 4;
+	}
 	/* hdr->leave_affil_open only applicable to stp */
 	dw2->max_resp_frame_len = HISI_SAS_MAX_SSP_RESP_SZ/4;
 	dw2->sg_mode = 0; /* see Higgs_DQGlobalConfig */
@@ -1128,7 +1136,11 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 	}
 
 	/* dw4 */
-	hdr->data_transfer_len = scsi_bufflen(scsi_cmnd);
+	if (!is_tmf)
+		hdr->data_transfer_len = scsi_bufflen(scsi_cmnd);
+	else {
+		hdr->data_transfer_len = 0;
+	}
 
 	/* dw5 */
 	/* hdr->first_burst_num not set in Higgs code */
@@ -1139,8 +1151,7 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 
 	/* dw7 */
 	/* hdr->double_mode is set only for DIF todo */
-	if (is_tmf && TMF_ABORT_TASK == tmf->tmf)
-		hdr->abort_iptt = tmf->tag_of_task_to_be_managed;
+	/* hdr->abort_iptt set in Higgs_PrepareAbort */
 
 	/* dw8,9 */
 	/* j00310691 reference driver sets in Higgs_SendCommandHw */
@@ -1785,7 +1796,6 @@ static irqreturn_t p660_cq_interrupt(const int queue, void *p)
 			slot = &hisi_hba->slot_info[slot->tmf_idx];
 		}
 
-		slot = &hisi_hba->slot_info[iptt];
 
 		slot->cmplt_queue_slot = rd_point;
 		slot->cmplt_queue = queue;
