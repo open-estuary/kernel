@@ -523,6 +523,18 @@ struct hisi_sas_sge_page {
 };
 
 #define LUN_SIZE 8
+
+/* See SAS spec, task IU
+ */
+struct ssp_task_iu {
+	u8     lun[LUN_SIZE];	  /* BE */
+	u16    _r_a;
+	u8     tmf;
+	u8     _r_b;
+	__be16 tag;		  /* BE */
+	u8     _r_c[14];
+} __attribute__ ((packed));
+
 /* from SAS spec 1.1; table 119 */
 struct ssp_command_iu {
 	u8     lun[LUN_SIZE];
@@ -544,6 +556,8 @@ struct ssp_command_iu {
 		} long_cdb;	  /* sequencer extension */
 	};
 } __packed;
+
+
 
 int hisi_sas_scan_finished(struct Scsi_Host *shost, unsigned long time);
 void hisi_sas_scan_start(struct Scsi_Host *shost);
