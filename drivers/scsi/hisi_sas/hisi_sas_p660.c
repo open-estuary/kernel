@@ -169,10 +169,12 @@
 #define DONE_RECEIVED_TIME		(PORT_BASE + 0x12c)
 #define CON_CFG_DRIVER			(PORT_BASE + 0x130)
 #define PHY_CONFIG2			(PORT_BASE + 0x1a8)
-#define PHY_CONFIG2_RXCLTEPRES_OFF	0
-#define PHY_CONFIG2_RXCLTEPRES_MSK	0xFF
-#define CFG_TX_TRAIN_COMP_OFF		24
-#define CFG_TX_TRAIN_COMP_MSK		0x1
+#define PHY_CONFIG2_FORCE_TXDEEMPH_OFF	3
+#define PHY_CONFIG2_FORCE_TXDEEMPH_MSK	0x8
+#define PHY_CONFIG2_TX_TRAIN_COMP_OFF	24
+#define PHY_CONFIG2_TX_TRAIN_COMP_MSK	0x1000000
+#define PHY_CONFIG2_TX_TRAIN_ENA_OFF	31
+#define PHY_CONFIG2_TX_TRAIN_ENA_MSK	0x80000000
 #define CHL_INT_COAL_EN			(PORT_BASE + 0x1d0)
 #define DMA_TX_STATUS			(PORT_BASE + 0x2d0)
 #define DMA_TX_STATUS_BUSY_OFF		0
@@ -444,7 +446,7 @@ static void p660_config_phy_opt_mode(struct hisi_hba *hisi_hba, int phy)
 static void p660_config_tx_tfe_autoneg(struct hisi_hba *hisi_hba, int phy)
 {
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CONFIG2);
-	cfg &= ~PHY_CONFIG2_RXCLTEPRES_MSK;
+	cfg &= ~PHY_CONFIG2_FORCE_TXDEEMPH_MSK;
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CONFIG2, cfg);
 }
 
