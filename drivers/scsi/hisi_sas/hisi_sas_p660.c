@@ -500,6 +500,58 @@ static void p660_init_id_frame(struct hisi_hba *hisi_hba)
 		p660_config_id_frame(hisi_hba, i);
 }
 
+#ifdef SAS_12G
+extern void SRE_CommonSerdesEnableCTLEDFE(unsigned int node,
+		unsigned int macro,
+		unsigned int lane,
+		unsigned int ulDsCfg);
+
+static void p660_serdes_enable_ctledfe(struct hisi_hba *hisi_hba, int phy_id)
+{
+	int ds_api = 0;
+	int hilink_id;
+	int cpu_node = 0;
+	if (hisi_hba->id == 0) {
+		hilink_id = 2;
+		ds_api = phy_id;
+		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 6);
+	} else if (hisi_hba->id == 1) {
+		if (phy_id < 4)
+			hilink_id = 5;
+		else
+			hilink_id = 6;
+		ds_api = phy_id %4;
+		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 6);
+	} else
+		BUG();
+}
+
+extern unsigned int SRE_CommonSerdesLaneReset(unsigned int node,
+			unsigned int ulMacroId,
+			unsigned int ulDsNum,
+			unsigned int ulDsCfg);
+
+static void p660_serdes_lane_reset(struct hisi_hba *hisi_hba, int phy_id)
+{
+	int ds_api = 0;
+	int hilink_id;
+	int cpu_node = 0;
+	if (hisi_hba->id == 0) {
+		hilink_id = 2;
+		ds_api = phy_id;
+		SRE_CommonSerdesLaneReset(cpu_node, hilink_id, ds_api, 6);
+	} else if (hisi_hba->id == 1) {
+		if (phy_id < 4)
+			hilink_id = 5;
+		else
+			hilink_id = 6;
+		ds_api = phy_id %4;
+		SRE_CommonSerdesLaneReset(cpu_node, hilink_id, ds_api, 6);
+	} else
+		BUG();
+}
+#endif
+
 static int p660_reset_hw(struct hisi_hba *hisi_hba)
 {
 	int i;
@@ -793,9 +845,11 @@ static void p660_stop_phy(struct hisi_hba *hisi_hba, int phy)
 static void p660_hard_phy_reset(struct hisi_hba *hisi_hba, int phy)
 {
 	p660_stop_phy(hisi_hba, phy);
-	// j00310691 add serdes lane reset
 	msleep(100);
 	p660_start_phy(hisi_hba, phy);
+	#ifdef SAS_12G
+	p660_serdes_lane_reset(hisi_hba, phy);
+	#endif
 }
 
 static void p660_start_phys(unsigned long data)
@@ -1215,33 +1269,6 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 	return 0;
 
 }
-
-#ifdef SAS_12G
-extern void SRE_CommonSerdesEnableCTLEDFE(unsigned int node,
-		unsigned int macro,
-		unsigned int lane,
-		unsigned int ulDsCfg);
-
-static void p660_serdes_enable_ctledfe(struct hisi_hba *hisi_hba, int phy_id)
-{
-	int ds_api = 0;
-	int hilink_id;
-	int cpu_node = 0;
-	if (hisi_hba->id == 0) {
-		hilink_id = 2;
-		ds_api = phy_id;
-		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 9);
-	} else if (hisi_hba->id == 1) {
-		if (phy_id < 4)
-			hilink_id = 5;
-		else
-			hilink_id = 6;
-		ds_api = phy_id %4;
-		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 9);
-	} else
-		BUG();
-}
-#endif
 
 // by default, task resp is complete
 static void p660_slot_err(struct hisi_hba *hisi_hba,
