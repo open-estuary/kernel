@@ -4343,7 +4343,7 @@ static unsigned int SRE_Serdes6LaneReset(unsigned int node,
 }
 
 
-static unsigned int SRE_CommonSerdesLaneReset(unsigned int node,
+unsigned int SRE_CommonSerdesLaneReset(unsigned int node,
 					unsigned int ulMacroId,
 					unsigned int ulDsNum,
 					unsigned int ulDsCfg)
