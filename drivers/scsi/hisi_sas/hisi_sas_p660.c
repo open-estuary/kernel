@@ -1490,8 +1490,6 @@ static int p660_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *s
 		struct ssp_response_iu *iu = slot->status_buffer +
 			sizeof(struct hisi_sas_err_record);
 		sas_ssp_task_response(hisi_hba->dev, task, iu);
-
-		tstat->stat = SAM_STAT_GOOD;
 		break;
 	}
 	case SAS_PROTOCOL_SMP:
