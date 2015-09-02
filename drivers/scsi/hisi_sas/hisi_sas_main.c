@@ -997,25 +997,35 @@ out:
 
 int hisi_sas_abort_task_set(struct domain_device *dev, u8 *lun)
 {
-	pr_info("%s fixme\n", __func__);
-	BUG();
+	int rc = TMF_RESP_FUNC_FAILED;
+	struct hisi_sas_tmf_task tmf_task;
 
-	return 0;
+	tmf_task.tmf = TMF_ABORT_TASK_SET;
+	rc = hisi_sas_debug_issue_ssp_tmf(dev, lun, &tmf_task);
+
+	return rc;
 }
 
 int hisi_sas_clear_aca(struct domain_device *dev, u8 *lun)
 {
-	pr_info("%s\n", __func__);
-	BUG();
+	int rc = TMF_RESP_FUNC_FAILED;
+	struct hisi_sas_tmf_task tmf_task;
 
-	return 0;
+	tmf_task.tmf = TMF_CLEAR_ACA;
+	rc = hisi_sas_debug_issue_ssp_tmf(dev, lun, &tmf_task);
+
+	return rc;
 }
 
 int hisi_sas_clear_task_set(struct domain_device *dev, u8 *lun)
 {
-	pr_info("%s fixme\n", __func__);
+	int rc = TMF_RESP_FUNC_FAILED;
+	struct hisi_sas_tmf_task tmf_task;
 
-	return 0;
+	tmf_task.tmf = TMF_CLEAR_TASK_SET;
+	rc = hisi_sas_debug_issue_ssp_tmf(dev, lun, &tmf_task);
+
+	return rc;
 }
 
 static int hisi_sas_debug_I_T_nexus_reset(struct domain_device *dev)
