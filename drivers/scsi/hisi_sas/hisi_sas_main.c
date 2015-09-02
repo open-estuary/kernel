@@ -554,16 +554,16 @@ void hisi_sas_scan_start(struct Scsi_Host *shost)
 	hisi_hba_priv->scan_finished = 1;
 }
 
-void hisi_sas_phy_init(struct hisi_hba *hisi_hba, int i)
+void hisi_sas_phy_init(struct hisi_hba *hisi_hba, int phy_id)
 {
-	struct hisi_sas_phy *phy = &hisi_hba->phy[i];
+	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_id];
 	struct asd_sas_phy *sas_phy = &phy->sas_phy;
 
 	phy->hisi_hba = hisi_hba;
 	phy->port = NULL;
 	init_timer(&phy->serdes_timer);
 	init_timer(&phy->dma_status_timer);
-	sas_phy->enabled = (i < hisi_hba->n_phy) ? 1 : 0;
+	sas_phy->enabled = (phy_id < hisi_hba->n_phy) ? 1 : 0;
 	sas_phy->class = SAS;
 	sas_phy->iproto = SAS_PROTOCOL_ALL;
 	sas_phy->tproto = 0;
@@ -571,7 +571,7 @@ void hisi_sas_phy_init(struct hisi_hba *hisi_hba, int i)
 	sas_phy->role = PHY_ROLE_INITIATOR;
 	sas_phy->oob_mode = OOB_NOT_CONNECTED;
 	sas_phy->linkrate = SAS_LINK_RATE_UNKNOWN;
-	sas_phy->id = i;
+	sas_phy->id = phy_id;
 	sas_phy->sas_addr = &hisi_hba->sas_addr[0];
 	sas_phy->frame_rcvd = &phy->frame_rcvd[0];
 	sas_phy->ha = (struct sas_ha_struct *)hisi_hba->shost->hostdata;

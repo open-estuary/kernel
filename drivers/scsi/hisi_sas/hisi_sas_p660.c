@@ -514,16 +514,59 @@ static void p660_serdes_enable_ctledfe(struct hisi_hba *hisi_hba, int phy_id)
 	if (hisi_hba->id == 0) {
 		hilink_id = 2;
 		ds_api = phy_id;
-		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 6);
+		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 9);
 	} else if (hisi_hba->id == 1) {
 		if (phy_id < 4)
 			hilink_id = 5;
 		else
 			hilink_id = 6;
 		ds_api = phy_id %4;
-		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 6);
+		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 9);
 	} else
 		BUG();
+}
+
+void p660_config_serdes_12G_timer_handler(unsigned long arg)
+{
+	struct hisi_sas_phy *phy = (struct hisi_sas_phy *)arg;
+	struct hisi_hba *hisi_hba = phy->hisi_hba;
+	struct asd_sas_phy *sas_phy = &phy->sas_phy;
+	int phy_id = sas_phy->id;
+	u32 val;
+
+	/* End training */
+	val = hisi_sas_phy_read32(hisi_hba, phy_id, PHY_CONFIG2);
+	if (!(val & PHY_CONFIG2_TX_TRAIN_COMP_MSK)) {
+		val |= PHY_CONFIG2_TX_TRAIN_COMP_MSK;
+		hisi_sas_phy_write32(hisi_hba, phy_id, PHY_CONFIG2, val);
+	}
+
+	udelay(1);
+
+	/* Clear training */
+	val = hisi_sas_phy_read32(hisi_hba, phy_id, PHY_CONFIG2);
+	if (val & PHY_CONFIG2_TX_TRAIN_COMP_MSK) {
+		val &= ~PHY_CONFIG2_TX_TRAIN_COMP_MSK;
+		hisi_sas_phy_write32(hisi_hba, phy_id, PHY_CONFIG2, val);
+	}
+}
+
+void p660_phy_rx_eye_diag_done(struct hisi_hba *hisi_hba, int phy_id)
+{
+	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_id];
+	struct timer_list *timer = &phy->serdes_timer;
+
+	p660_serdes_enable_ctledfe(hisi_hba, phy_id);
+
+	if (!timer_pending(timer)) {
+		init_timer(timer);
+		timer->data = (unsigned long)phy;
+		timer->expires = jiffies + msecs_to_jiffies(160);
+		timer->function = p660_config_serdes_12G_timer_handler;
+		add_timer(timer);
+	} else {
+		mod_timer(timer, jiffies + msecs_to_jiffies(160));
+	}
 }
 
 extern unsigned int SRE_CommonSerdesLaneReset(unsigned int node,
@@ -690,7 +733,7 @@ static void p660_init_reg(struct hisi_hba *hisi_hba)
 //	hisi_sas_write32(hisi_hba, MAX_BURST_BYTES, 0);
 //	hisi_sas_write32(hisi_hba, SMP_TIMEOUT_TIMER, 0);
 //	hisi_sas_write32(hisi_hba, MAX_CON_TIME_LIMIT_TIME, 0);
-	hisi_sas_write32(hisi_hba, HGC_SAS_TXFAIL_RETRY_CTRL, 0x211ff);
+	hisi_sas_write32(hisi_hba, HGC_SAS_TXFAIL_RETRY_CTRL, 0x1ff);
 	hisi_sas_write32(hisi_hba, HGC_ERR_STAT_EN, 0x401);
 	hisi_sas_write32(hisi_hba, CFG_1US_TIMER_TRSH, 0x64);
 	hisi_sas_write32(hisi_hba, HGC_GET_ITV_TIME, 0x1);
@@ -719,7 +762,7 @@ static void p660_init_reg(struct hisi_hba *hisi_hba)
 		/* see g_astPortRegConfig */
 		#ifdef SAS_12G
 		hisi_sas_phy_write32(hisi_hba, i, PROG_PHY_LINK_RATE, 0x0000088a);
-		hisi_sas_phy_write32(hisi_hba, i, PHY_CONFIG2, 0x80c7c084);
+		hisi_sas_phy_write32(hisi_hba, i, PHY_CONFIG2, 0x8085cc8c);
 		hisi_sas_phy_write32(hisi_hba, i, PHY_RATE_NEGO, 0x415ee00);
 		hisi_sas_phy_write32(hisi_hba, i, PHY_PCN, 0x80aa0001);
 		#else
@@ -1785,7 +1828,7 @@ static irqreturn_t p660_int_int1(int phy_no, void *p)
 		irq_mask |= CHL_INT2_MSK_RXEYEDIAG_DONE_MSK;
 		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT2_MSK, irq_mask);
 		#ifdef SAS_12G
-		p660_serdes_enable_ctledfe(hisi_hba, phy_no);
+		p660_phy_rx_eye_diag_done(hisi_hba, phy_no);
 		#endif
 		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT2, irq_value2);
 	}
