@@ -44,8 +44,8 @@
 #define HGC_DFX_CFG2			0xc0
 #define CFG_1US_TIMER_TRSH		0xcc
 #define HGC_INVLD_DQE_INFO		0x148
-#define HGC_INVLD_DQE_INFO_FB_CH0_OFF 	9
-#define HGC_INVLD_DQE_INFO_FB_CH0_MSK 	0x200
+#define HGC_INVLD_DQE_INFO_FB_CH0_OFF	9
+#define HGC_INVLD_DQE_INFO_FB_CH0_MSK	0x200
 #define INT_COAL_EN			0x19c
 #define OQ_INT_COAL_TIME		0x1a0
 #define OQ_INT_COAL_CNT			0x1a4
@@ -258,6 +258,7 @@ static void config_phy_opt_mode(struct hisi_hba *hisi_hba, int phy)
 {
 	/* j00310691 assume not optical cable for now */
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+
 	cfg &= ~PHY_CFG_DC_OPT_MSK;
 	cfg |= 1 << PHY_CFG_DC_OPT_OFF;
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
@@ -317,9 +318,6 @@ static void init_reg(struct hisi_hba *hisi_hba)
 		(u32)((1ULL << hisi_hba->queue_count) - 1));
 	hisi_sas_write32(hisi_hba, HGC_TRANS_TASK_CNT_LIMIT, 0x11);
 	hisi_sas_write32(hisi_hba, DEVICE_MSG_WORK_MODE, 0x1);
-//	hisi_sas_write32(hisi_hba, MAX_BURST_BYTES, 0);
-//	hisi_sas_write32(hisi_hba, SMP_TIMEOUT_TIMER, 0);
-//	hisi_sas_write32(hisi_hba, MAX_CON_TIME_LIMIT_TIME, 0);
 	hisi_sas_write32(hisi_hba, HGC_SAS_TXFAIL_RETRY_CTRL, 0x211ff);
 	hisi_sas_write32(hisi_hba, HGC_ERR_STAT_EN, 0x401);
 	hisi_sas_write32(hisi_hba, CFG_1US_TIMER_TRSH, 0x64);
@@ -427,6 +425,7 @@ static int hw_init(struct hisi_hba *hisi_hba)
 static void enable_phy(struct hisi_hba *hisi_hba, int phy)
 {
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+
 	cfg |= PHY_CFG_ENA_MSK;
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
 }
@@ -781,6 +780,7 @@ static int hisi_sas_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slo
 	enum exec_status sts;
 	struct hisi_sas_complete_hdr *complete_queue = hisi_hba->complete_hdr[slot->cmplt_queue];
 	struct hisi_sas_complete_hdr *complete_hdr;
+
 	complete_hdr = &complete_queue[slot->cmplt_queue_slot];
 
 	if (unlikely(!task || !task->lldd_task || !task->dev))
@@ -960,18 +960,20 @@ static int prep_ata(struct hisi_hba *hisi_hba,
 	case DMA_TO_DEVICE:
 		dw1->dir = DIR_TO_DEVICE;
 		has_data = 1;
+		break;
 	case DMA_FROM_DEVICE:
 		dw1->dir = DIR_TO_INI;
 		has_data = 1;
+		break;
 	default:
 		pr_warn("%s unhandled direction, task->data_dir=%d\n", __func__, task->data_dir);
 		dw1->dir = DIR_RESERVED;
 	}
 
 	/* j00310691 for IT code SOFT RESET MACRO is 0, but I am unsure if this is a valid command */
-	if (0 == task->ata_task.fis.command) {
+	if (0 == task->ata_task.fis.command)
 		dw1->reset = 1;
-	}
+
 	/* hdr->enable_tlr, ->pir_pres not applicable to stp */
 	/* dw1->verify_dtl not set in IT code for STP */
 	dw1->frame_type = get_ata_protocol(task->ata_task.fis.command,
@@ -1225,13 +1227,11 @@ static irqreturn_t int_chnl_int(int phy_no, void *p)
 			u32 irq_value1 = hisi_sas_phy_read32(hisi_hba, phy_no, CHL_INT1);
 			u32 irq_value2 = hisi_sas_phy_read32(hisi_hba, phy_no, CHL_INT2);
 
-			if (irq_value1) {
+			if (irq_value1)
 				hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT1, 1);
-			}
 
-			if (irq_value2) {
+			if (irq_value2)
 				hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT2, 1);
-			}
 
 			if (irq_value0 & CHL_INT0_SL_RX_BCST_ACK_MSK) {
 				if (phy_bcast(phy_no, hisi_hba)) {
@@ -1353,6 +1353,7 @@ static irqreturn_t sata_int(int phy_no, void *p)
 
 	for (i = 0; i < 6; i++) {
 		u32 *ptr = (u32 *)fis;
+
 		pr_info("%s %d: 0x%x\n", __func__, i, *(ptr + i));
 	}
 

@@ -185,8 +185,8 @@
 
 /* phy intr registers */
 #define CHL_INT0			(PORT_BASE + 0x1b0)
-#define CHL_INT0_PHYCTRL_NOTRDY_OFF 	0
-#define CHL_INT0_PHYCTRL_NOTRDY_MSK 	0x1
+#define CHL_INT0_PHYCTRL_NOTRDY_OFF	0
+#define CHL_INT0_PHYCTRL_NOTRDY_MSK	0x1
 #define CHL_INT0_SN_FAIL_NGR_OFF	2
 #define CHL_INT0_SN_FAIL_NGR_MSK	0x4
 #define CHL_INT0_DWS_LOST_OFF		4
@@ -244,101 +244,102 @@ enum {
 	TRANS_RX_FAIL_BASE = 0x300,
 
 	/* dma tx */
-	DMA_TX_DIF_CRC_ERR = DMA_TX_ERR_BASE, //0x0
-	DMA_TX_DIF_APP_ERR, //0x1
-	DMA_TX_DIF_RPP_ERR, //0x2
-	DMA_TX_AXI_BUS_ERR, //0x3
-	DMA_TX_DATA_SGL_OVERFLOW_ERR, //0x4
-	DMA_TX_DIF_SGL_OVERFLOW_ERR, //0x5
-	DMA_TX_UNEXP_XFER_RDY_ERR, //0x6
-	DMA_TX_XFER_RDY_OFFSET_ERR, //0x7
-	DMA_TX_DATA_UNDERFLOW_ERR, //0x8
-	DMA_TX_XFER_RDY_LENGTH_OVERFLOW_ERR, //0x9
+	DMA_TX_DIF_CRC_ERR = DMA_TX_ERR_BASE, /* 0x0 */
+	DMA_TX_DIF_APP_ERR, /* 0x1 */
+	DMA_TX_DIF_RPP_ERR, /* 0x2 */
+	DMA_TX_AXI_BUS_ERR, /* 0x3 */
+	DMA_TX_DATA_SGL_OVERFLOW_ERR, /* 0x4 */
+	DMA_TX_DIF_SGL_OVERFLOW_ERR, /* 0x5 */
+	DMA_TX_UNEXP_XFER_RDY_ERR, /* 0x6 */
+	DMA_TX_XFER_RDY_OFFSET_ERR, /* 0x7 */
+	DMA_TX_DATA_UNDERFLOW_ERR, /* 0x8 */
+	DMA_TX_XFER_RDY_LENGTH_OVERFLOW_ERR, /* 0x9 */
 
 	/* dma rx */
-	DMA_RX_BUFFER_ECC_ERR = DMA_RX_ERR_BASE, //0x100
-	DMA_RX_DIF_CRC_ERR, //0x101
-	DMA_RX_DIF_APP_ERR, //0x102
-	DMA_RX_DIF_RPP_ERR, //0x103
-	DMA_RX_RESP_BUFFER_OVERFLOW_ERR, //0x104
-	DMA_RX_AXI_BUS_ERR, //0x105
-	DMA_RX_DATA_SGL_OVERFLOW_ERR, //0x106
-	DMA_RX_DIF_SGL_OVERFLOW_ERR, //0x107
-	DMA_RX_DATA_OFFSET_ERR, //0x108
-	DMA_RX_UNEXP_RX_DATA_ERR, //0x109
-	DMA_RX_DATA_OVERFLOW_ERR, //0x10a
-	DMA_RX_DATA_UNDERFLOW_ERR, //0x10b
-	DMA_RX_UNEXP_RETRANS_RESP_ERR, //0x10c
+	DMA_RX_BUFFER_ECC_ERR = DMA_RX_ERR_BASE, /* 0x100 */
+	DMA_RX_DIF_CRC_ERR, /* 0x101 */
+	DMA_RX_DIF_APP_ERR, /* 0x102 */
+	DMA_RX_DIF_RPP_ERR, /* 0x103 */
+	DMA_RX_RESP_BUFFER_OVERFLOW_ERR, /* 0x104 */
+	DMA_RX_AXI_BUS_ERR, /* 0x105 */
+	DMA_RX_DATA_SGL_OVERFLOW_ERR, /* 0x106 */
+	DMA_RX_DIF_SGL_OVERFLOW_ERR, /* 0x107 */
+	DMA_RX_DATA_OFFSET_ERR, /* 0x108 */
+	DMA_RX_UNEXP_RX_DATA_ERR, /* 0x109 */
+	DMA_RX_DATA_OVERFLOW_ERR, /* 0x10a */
+	DMA_RX_DATA_UNDERFLOW_ERR, /* 0x10b */
+	DMA_RX_UNEXP_RETRANS_RESP_ERR, /* 0x10c */
 
 	/* trans tx */
-	TRANS_TX_RSVD0_ERR = TRANS_TX_FAIL_BASE, //0x200
-	TRANS_TX_PHY_NOT_ENABLE_ERR, //0x201
-	TRANS_TX_OPEN_REJCT_WRONG_DEST_ERR, //0x202
-	TRANS_TX_OPEN_REJCT_ZONE_VIOLATION_ERR, //0x203
-	TRANS_TX_OPEN_REJCT_BY_OTHER_ERR, //0x204
-	TRANS_TX_RSVD1_ERR, //0x205
-	TRANS_TX_OPEN_REJCT_AIP_TIMEOUT_ERR, //0x206
-	TRANS_TX_OPEN_REJCT_STP_BUSY_ERR, //0x207
-	TRANS_TX_OPEN_REJCT_PROTOCOL_NOT_SUPPORT_ERR, //0x208
-	TRANS_TX_OPEN_REJCT_RATE_NOT_SUPPORT_ERR, //0x209
-	TRANS_TX_OPEN_REJCT_BAD_DEST_ERR, //0x20a
-	TRANS_TX_OPEN_BREAK_RECEIVE_ERR, //0x20b
-	TRANS_TX_LOW_PHY_POWER_ERR, //0x20c
-	TRANS_TX_OPEN_REJCT_PATHWAY_BLOCKED_ERR, //0x20d
-	TRANS_TX_OPEN_TIMEOUT_ERR, //0x20e
-	TRANS_TX_OPEN_REJCT_NO_DEST_ERR, //0x20f
-	TRANS_TX_OPEN_RETRY_ERR, //0x210
-	TRANS_TX_RSVD2_ERR, //0x211
-	TRANS_TX_BREAK_TIMEOUT_ERR, //0x212
-	TRANS_TX_BREAK_REQUEST_ERR, //0x213
-	TRANS_TX_BREAK_RECEIVE_ERR, //0x214
-	TRANS_TX_CLOSE_TIMEOUT_ERR, //0x215
-	TRANS_TX_CLOSE_NORMAL_ERR, //0x216
-	TRANS_TX_CLOSE_PHYRESET_ERR, //0x217
-	TRANS_TX_WITH_CLOSE_DWS_TIMEOUT_ERR, //0x218
-	TRANS_TX_WITH_CLOSE_COMINIT_ERR, //0x219
-	TRANS_TX_NAK_RECEIVE_ERR, //0x21a
-	TRANS_TX_ACK_NAK_TIMEOUT_ERR, //0x21b
-	TRANS_TX_CREDIT_TIMEOUT_ERR, //0x21c
-	TRANS_TX_IPTT_CONFLICT_ERR, //0x21d
-	TRANS_TX_TXFRM_TYPE_ERR, //0x21e
-	TRANS_TX_TXSMP_LENGTH_ERR, //0x21f
+	TRANS_TX_RSVD0_ERR = TRANS_TX_FAIL_BASE, /* 0x200 */
+	TRANS_TX_PHY_NOT_ENABLE_ERR, /* 0x201 */
+	TRANS_TX_OPEN_REJCT_WRONG_DEST_ERR, /* 0x202 */
+	TRANS_TX_OPEN_REJCT_ZONE_VIOLATION_ERR, /* 0x203 */
+	TRANS_TX_OPEN_REJCT_BY_OTHER_ERR, /* 0x204 */
+	TRANS_TX_RSVD1_ERR, /* 0x205 */
+	TRANS_TX_OPEN_REJCT_AIP_TIMEOUT_ERR, /* 0x206 */
+	TRANS_TX_OPEN_REJCT_STP_BUSY_ERR, /* 0x207 */
+	TRANS_TX_OPEN_REJCT_PROTOCOL_NOT_SUPPORT_ERR, /* 0x208 */
+	TRANS_TX_OPEN_REJCT_RATE_NOT_SUPPORT_ERR, /* 0x209 */
+	TRANS_TX_OPEN_REJCT_BAD_DEST_ERR, /* 0x20a */
+	TRANS_TX_OPEN_BREAK_RECEIVE_ERR, /* 0x20b */
+	TRANS_TX_LOW_PHY_POWER_ERR, /* 0x20c */
+	TRANS_TX_OPEN_REJCT_PATHWAY_BLOCKED_ERR, /* 0x20d */
+	TRANS_TX_OPEN_TIMEOUT_ERR, /* 0x20e */
+	TRANS_TX_OPEN_REJCT_NO_DEST_ERR, /* 0x20f */
+	TRANS_TX_OPEN_RETRY_ERR, /* 0x210 */
+	TRANS_TX_RSVD2_ERR, /* 0x211 */
+	TRANS_TX_BREAK_TIMEOUT_ERR, /* 0x212 */
+	TRANS_TX_BREAK_REQUEST_ERR, /* 0x213 */
+	TRANS_TX_BREAK_RECEIVE_ERR, /* 0x214 */
+	TRANS_TX_CLOSE_TIMEOUT_ERR, /* 0x215 */
+	TRANS_TX_CLOSE_NORMAL_ERR, /* 0x216 */
+	TRANS_TX_CLOSE_PHYRESET_ERR, /* 0x217 */
+	TRANS_TX_WITH_CLOSE_DWS_TIMEOUT_ERR, /* 0x218 */
+	TRANS_TX_WITH_CLOSE_COMINIT_ERR, /* 0x219 */
+	TRANS_TX_NAK_RECEIVE_ERR, /* 0x21a */
+	TRANS_TX_ACK_NAK_TIMEOUT_ERR, /* 0x21b */
+	TRANS_TX_CREDIT_TIMEOUT_ERR, /* 0x21c */
+	TRANS_TX_IPTT_CONFLICT_ERR, /* 0x21d */
+	TRANS_TX_TXFRM_TYPE_ERR, /* 0x21e */
+	TRANS_TX_TXSMP_LENGTH_ERR, /* 0x21f */
 
 	/* trans rx */
-	TRANS_RX_FRAME_CRC_ERR = TRANS_RX_FAIL_BASE, //0x300
-	TRANS_RX_FRAME_DONE_ERR, //0x301
-	TRANS_RX_FRAME_ERRPRM_ERR, //0x302
-	TRANS_RX_FRAME_NO_CREDIT_ERR, //0x303
-	TRANS_RX_RSVD0_ERR, //0x304
-	TRANS_RX_FRAME_OVERRUN_ERR, //0x305
-	TRANS_RX_FRAME_NO_EOF_ERR, //0x306
-	TRANS_RX_LINK_BUF_OVERRUN_ERR, //0x307
-	TRANS_RX_BREAK_TIMEOUT_ERR, //0x308
-	TRANS_RX_BREAK_REQUEST_ERR, //0x309
-	TRANS_RX_BREAK_RECEIVE_ERR, //0x30a
-	TRANS_RX_CLOSE_TIMEOUT_ERR, //0x30b
-	TRANS_RX_CLOSE_NORMAL_ERR, //0x30c
-	TRANS_RX_CLOSE_PHYRESET_ERR, //0x30d
-	TRANS_RX_WITH_CLOSE_DWS_TIMEOUT_ERR, //0x30e
-	TRANS_RX_WITH_CLOSE_COMINIT_ERR, //0x30f
-	TRANS_RX_DATA_LENGTH0_ERR, //0x310
-	TRANS_RX_BAD_HASH_ERR, //0x311
-	TRANS_RX_XRDY_ZERO_ERR, //0x312
-	TRANS_RX_SSP_FRAME_LEN_ERR, //0x313
-	TRANS_RX_TRANS_RX_RSVD1_ERR, //0x314
-	TRANS_RX_NO_BALANCE_ERR, //0x315
-	TRANS_RX_TRANS_RX_RSVD2_ERR, //0x316
-	TRANS_RX_TRANS_RX_RSVD3_ERR, //0x317
-	TRANS_RX_BAD_FRAME_TYPE_ERR, //0x318
-	TRANS_RX_SMP_FRAME_LEN_ERR, //0x319
-	TRANS_RX_SMP_RESP_TIMEOUT_ERR //0x31a
+	TRANS_RX_FRAME_CRC_ERR = TRANS_RX_FAIL_BASE, /* 0x300 */
+	TRANS_RX_FRAME_DONE_ERR, /* 0x301 */
+	TRANS_RX_FRAME_ERRPRM_ERR, /* 0x302 */
+	TRANS_RX_FRAME_NO_CREDIT_ERR, /* 0x303 */
+	TRANS_RX_RSVD0_ERR, /* 0x304 */
+	TRANS_RX_FRAME_OVERRUN_ERR, /* 0x305 */
+	TRANS_RX_FRAME_NO_EOF_ERR, /* 0x306 */
+	TRANS_RX_LINK_BUF_OVERRUN_ERR, /* 0x307 */
+	TRANS_RX_BREAK_TIMEOUT_ERR, /* 0x308 */
+	TRANS_RX_BREAK_REQUEST_ERR, /* 0x309 */
+	TRANS_RX_BREAK_RECEIVE_ERR, /* 0x30a */
+	TRANS_RX_CLOSE_TIMEOUT_ERR, /* 0x30b */
+	TRANS_RX_CLOSE_NORMAL_ERR, /* 0x30c */
+	TRANS_RX_CLOSE_PHYRESET_ERR, /* 0x30d */
+	TRANS_RX_WITH_CLOSE_DWS_TIMEOUT_ERR, /* 0x30e */
+	TRANS_RX_WITH_CLOSE_COMINIT_ERR, /* 0x30f */
+	TRANS_RX_DATA_LENGTH0_ERR, /* 0x310 */
+	TRANS_RX_BAD_HASH_ERR, /* 0x311 */
+	TRANS_RX_XRDY_ZERO_ERR, /* 0x312 */
+	TRANS_RX_SSP_FRAME_LEN_ERR, /* 0x313 */
+	TRANS_RX_TRANS_RX_RSVD1_ERR, /* 0x314 */
+	TRANS_RX_NO_BALANCE_ERR, /* 0x315 */
+	TRANS_RX_TRANS_RX_RSVD2_ERR, /* 0x316 */
+	TRANS_RX_TRANS_RX_RSVD3_ERR, /* 0x317 */
+	TRANS_RX_BAD_FRAME_TYPE_ERR, /* 0x318 */
+	TRANS_RX_SMP_FRAME_LEN_ERR, /* 0x319 */
+	TRANS_RX_SMP_RESP_TIMEOUT_ERR /* 0x31a */
 };
 
 #define HISI_SAS_PHY_MAX_INT_NR (HISI_SAS_PHY_INT_NR * HISI_SAS_MAX_PHYS)
 #define HISI_SAS_CQ_MAX_INT_NR (HISI_SAS_MAX_QUEUES)
 #define HISI_SAS_FATAL_INT_NR (2)
 
-#define HISI_SAS_MAX_INT_NR (HISI_SAS_PHY_MAX_INT_NR + HISI_SAS_CQ_MAX_INT_NR + HISI_SAS_FATAL_INT_NR)
+#define HISI_SAS_MAX_INT_NR \
+	(HISI_SAS_PHY_MAX_INT_NR + HISI_SAS_CQ_MAX_INT_NR + HISI_SAS_FATAL_INT_NR)
 
 struct hisi_sas_cmd_hdr_dw0 {
 	u32 abort_flag:2;
@@ -444,6 +445,7 @@ static void p660_config_phy_opt_mode(struct hisi_hba *hisi_hba, int phy)
 {
 	/* j00310691 assume not optical cable for now */
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+
 	cfg &= ~PHY_CFG_DC_OPT_MSK;
 	cfg |= 1 << PHY_CFG_DC_OPT_OFF;
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
@@ -452,6 +454,7 @@ static void p660_config_phy_opt_mode(struct hisi_hba *hisi_hba, int phy)
 static void p660_config_tx_tfe_autoneg(struct hisi_hba *hisi_hba, int phy)
 {
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CONFIG2);
+
 	cfg &= ~PHY_CONFIG2_FORCE_TXDEEMPH_MSK;
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CONFIG2, cfg);
 }
@@ -511,6 +514,7 @@ static void p660_serdes_enable_ctledfe(struct hisi_hba *hisi_hba, int phy_id)
 	int ds_api = 0;
 	int hilink_id;
 	int cpu_node = 0;
+
 	if (hisi_hba->id == 0) {
 		hilink_id = 2;
 		ds_api = phy_id;
@@ -520,7 +524,7 @@ static void p660_serdes_enable_ctledfe(struct hisi_hba *hisi_hba, int phy_id)
 			hilink_id = 5;
 		else
 			hilink_id = 6;
-		ds_api = phy_id %4;
+		ds_api = phy_id % 4;
 		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 9);
 	} else
 		BUG();
@@ -579,6 +583,7 @@ static void p660_serdes_lane_reset(struct hisi_hba *hisi_hba, int phy_id)
 	int ds_api = 0;
 	int hilink_id;
 	int cpu_node = 0;
+
 	if (hisi_hba->id == 0) {
 		hilink_id = 2;
 		ds_api = phy_id;
@@ -588,7 +593,7 @@ static void p660_serdes_lane_reset(struct hisi_hba *hisi_hba, int phy_id)
 			hilink_id = 5;
 		else
 			hilink_id = 6;
-		ds_api = phy_id %4;
+		ds_api = phy_id % 4;
 		SRE_CommonSerdesLaneReset(cpu_node, hilink_id, ds_api, 6);
 	} else
 		BUG();
@@ -730,9 +735,6 @@ static void p660_init_reg(struct hisi_hba *hisi_hba)
 		(u32)((1ULL << hisi_hba->queue_count) - 1));
 	hisi_sas_write32(hisi_hba, HGC_TRANS_TASK_CNT_LIMIT, 0x11);
 	hisi_sas_write32(hisi_hba, DEVICE_MSG_WORK_MODE, 0x1);
-//	hisi_sas_write32(hisi_hba, MAX_BURST_BYTES, 0);
-//	hisi_sas_write32(hisi_hba, SMP_TIMEOUT_TIMER, 0);
-//	hisi_sas_write32(hisi_hba, MAX_CON_TIME_LIMIT_TIME, 0);
 	hisi_sas_write32(hisi_hba, HGC_SAS_TXFAIL_RETRY_CTRL, 0x1ff);
 	hisi_sas_write32(hisi_hba, HGC_ERR_STAT_EN, 0x401);
 	hisi_sas_write32(hisi_hba, CFG_1US_TIMER_TRSH, 0x64);
@@ -856,6 +858,7 @@ static int p660_hw_init(struct hisi_hba *hisi_hba)
 static void p660_enable_phy(struct hisi_hba *hisi_hba, int phy)
 {
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+
 	cfg |= PHY_CFG_ENA_MSK;
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
 }
@@ -863,6 +866,7 @@ static void p660_enable_phy(struct hisi_hba *hisi_hba, int phy)
 static void p660_disable_phy(struct hisi_hba *hisi_hba, int phy)
 {
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+
 	cfg &= ~PHY_CFG_ENA_MSK;
 	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
 }
@@ -1252,9 +1256,8 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 	/* dw4 */
 	if (!is_tmf)
 		hdr->data_transfer_len = scsi_bufflen(scsi_cmnd);
-	else {
+	else
 		hdr->data_transfer_len = 0;
-	}
 
 	/* dw5 */
 	/* hdr->first_burst_num not set in Higgs code */
@@ -1313,7 +1316,7 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 
 }
 
-// by default, task resp is complete
+/* by default, task resp is complete */
 static void p660_slot_err(struct hisi_hba *hisi_hba,
 		struct sas_task *task, struct hisi_sas_slot *slot)
 {
@@ -1343,11 +1346,9 @@ static void p660_slot_err(struct hisi_hba *hisi_hba,
 		case DMA_TX_DATA_UNDERFLOW_ERR:
 		case DMA_RX_DATA_UNDERFLOW_ERR:
 		{
-			tstat->residual = 0; //fixme j00310691 get the sense data (if any)
+			tstat->residual = 0; /* fixme j00310691 get the sense data (if any) */
 			tstat->stat = SAS_DATA_UNDERRUN;
-		//	pr_info("%s SAS_DATA_UNDERRUN error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
-		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
-		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
+
 			break;
 		}
 		case DMA_TX_DATA_SGL_OVERFLOW_ERR:
@@ -1357,18 +1358,12 @@ static void p660_slot_err(struct hisi_hba *hisi_hba,
 		case TRANS_RX_FRAME_OVERRUN_ERR:
 		case TRANS_RX_LINK_BUF_OVERRUN_ERR:
 		{
-		//	pr_info("%s SAS_DATA_OVERRUN error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
-		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
-		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
 			tstat->stat = SAS_DATA_OVERRUN;
 			tstat->residual = 0;
 			break;
 		}
 		case TRANS_TX_PHY_NOT_ENABLE_ERR:
 		{
-		//	pr_info("%s SAS_PHY_DOWN error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
-		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
-		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
 			tstat->stat = SAS_PHY_DOWN;
 			tstat->resp = SAS_TASK_UNDELIVERED;
 			break;
@@ -1386,35 +1381,23 @@ static void p660_slot_err(struct hisi_hba *hisi_hba,
 		case TRANS_TX_OPEN_REJCT_NO_DEST_ERR:
 		case TRANS_TX_OPEN_RETRY_ERR:
 		{
-		//	pr_info("%s SAS_DATA_UNDERRUN error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
-		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
-		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
 			tstat->stat = SAS_OPEN_REJECT;
-			// fixme add open_rej_reason
+			/* fixme add open_rej_reason */
 			break;
 		}
 		case TRANS_TX_OPEN_TIMEOUT_ERR:
 		{
-		//	pr_info("%s SAS_OPEN_TO error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
-		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
-		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
 			tstat->stat = SAS_OPEN_TO;
 			break;
 		}
 		case TRANS_TX_NAK_RECEIVE_ERR:
 		case TRANS_TX_ACK_NAK_TIMEOUT_ERR:
 		{
-		//	pr_info("%s SAS_NAK_R_ERR error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
-		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
-		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
 			tstat->stat = SAS_NAK_R_ERR;
 			break;
 		}
 		default:
 		{
-		//	pr_info("%s default error=0x%x dma tx/rx=0x%x/0x%x trans tx/rx=0x%x/0x%x\n", __func__, error,
-		//		err_record->dma_tx_err_type, err_record->dma_rx_err_type,
-		//		err_record->trans_tx_fail_type, err_record->trans_rx_fail_type);
 			tstat->stat = SAM_STAT_CHECK_CONDITION;
 			break;
 		}
@@ -1449,6 +1432,7 @@ static int p660_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *s
 	enum exec_status sts;
 	struct hisi_sas_complete_hdr *complete_queue = hisi_hba->complete_hdr[slot->cmplt_queue];
 	struct hisi_sas_complete_hdr *complete_hdr;
+
 	complete_hdr = &complete_queue[slot->cmplt_queue_slot];
 
 	if (unlikely(!task || !task->lldd_task || !task->dev))
@@ -1510,15 +1494,15 @@ static int p660_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *s
 				__func__, slot->cmplt_queue, slot->cmplt_queue_slot);
 
 		tstat->resp = SAS_TASK_UNDELIVERED;
-		tstat->stat = SAS_OPEN_REJECT; //fixme add open_rej_reason
+		tstat->stat = SAS_OPEN_REJECT; /* fixme add open_rej_reason */
 		goto out;
 	}
 
 	if (!complete_hdr->err_rcrd_xfrd) {
-		if (!complete_hdr->cmd_complt || !complete_hdr->rspns_xfrd) { //fixme j00310691
+		if (!complete_hdr->cmd_complt || !complete_hdr->rspns_xfrd) { /* fixme j00310691 */
 			tstat->stat = SAS_DATA_OVERRUN;
-			//j00310691 in IT we get DID_ERROR, but in sas_end_task we need to use overrun to get DID_ERROR
-			//tstat->buf_valid_size = 0;
+			/* j00310691 in IT we get DID_ERROR, but in sas_end_task we need to use overrun to get DID_ERROR */
+			/* tstat->buf_valid_size = 0; */
 			goto out;
 		}
 	} else {
@@ -1545,9 +1529,9 @@ static int p660_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *s
 
 		/*for expander*/
 		dma_unmap_sg(hisi_hba->dev, &task->smp_task.smp_resp, 1,
-			DMA_FROM_DEVICE);/*fixme*/
+			DMA_FROM_DEVICE); /*fixme*/
 		dma_unmap_sg(hisi_hba->dev, &task->smp_task.smp_req, 1,
-			DMA_TO_DEVICE);/*fixme*/
+			DMA_TO_DEVICE); /*fixme*/
 		memcpy(to + sg_resp->offset,
 			slot->status_buffer + sizeof(struct hisi_sas_err_record),
 			sg_dma_len(sg_resp));
@@ -1589,6 +1573,7 @@ static irqreturn_t p660_int_ctrlrdy(int phy, void *p)
 	struct hisi_hba *hisi_hba = p;
 	u32 irq_value;
 	u32 context = hisi_sas_read32(hisi_hba, PHY_CONTEXT);
+
 	dev_err(hisi_hba->dev, "%s phy%d context=0x%x\n", __func__, phy, context);
 	irq_value = hisi_sas_phy_read32(hisi_hba, phy, CHL_INT2);
 
@@ -1633,12 +1618,12 @@ static irqreturn_t p660_int_phyup(int phy_no, void *p)
 
 	port_id = (hisi_sas_read32(hisi_hba, PHY_PORT_NUM_MA) >> (4 * phy_no)) & 0xf;
 	if (port_id == 0xf) {
-		dev_err(hisi_hba->dev, "%s phy = %d, invalid portid\n", __func__, phy_no);
+		dev_err(hisi_hba->dev, "%s phy%d, invalid portid\n", __func__, phy_no);
 		res = IRQ_NONE;
 		goto end;
 	}
 
-	dev_err(hisi_hba->dev, "%s phy = %d portid=0x%x\n", __func__, phy_no, port_id);
+	dev_err(hisi_hba->dev, "%s phy%d portid=0x%x\n", __func__, phy_no, port_id);
 
 	/* j00310691 todo stop serdes fw timer */
 	for (i = 0; i < 6; i++) {
@@ -1688,6 +1673,7 @@ end:
 	if (irq_value & CHL_INT2_SL_PHY_ENA_MSK) {
 		/* Higgs_BypassChipBugUnmaskAbnormalIntr */
 		u32 chl_int0 = hisi_sas_phy_read32(hisi_hba, phy_no, CHL_INT0);
+
 		chl_int0 &= ~CHL_INT0_PHYCTRL_NOTRDY_MSK;
 		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0, chl_int0);
 		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0_MSK, 0x003ce3ee);
@@ -1736,7 +1722,7 @@ static irqreturn_t p660_int_statuscg(int phy_no, void *p)
 		dev_err(hisi_hba->dev, "%s irq_value = %x not set enable bit",
 			__func__, irq_value);
 
-	dev_info(hisi_hba->dev, "%s phy = %d, irq_value = %x\n",
+	dev_info(hisi_hba->dev, "%s phy%d, irq_value = %x\n",
 		 __func__, phy_no, irq_value);
 
 	hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT2,
@@ -1776,28 +1762,31 @@ static irqreturn_t p660_int_abnormal(int phy_no, void *p)
 		} else {
 			/* Disabled */
 			/* Ignore phydown event if disabled */
-			pr_warn("%s phy = %d phydown event and already disabled\n", __func__, phy_no);
+			pr_warn("%s phy%d phydown event and already disabled\n", __func__, phy_no);
 		}
 
 	} else if (irq_value & CHL_INT0_ID_TIMEOUT_MSK) {
 		pr_info("%s phy%d identify timeout todo\n", __func__, phy_no);
 	} else {
-		if (irq_value & CHL_INT0_DWS_LOST_MSK) {
-			pr_info("%s phy%d dws lost\n", __func__, phy_no);
-		}
+		if (irq_value & CHL_INT0_DWS_LOST_MSK)
+			pr_info("%s phy%d dws lost\n",
+				__func__,
+				phy_no);
 
-		if (irq_value & CHL_INT0_SN_FAIL_NGR_MSK) {
-			pr_info("%s phy%d sn fail ngr\n", __func__, phy_no);
-		}
+		if (irq_value & CHL_INT0_SN_FAIL_NGR_MSK)
+			pr_info("%s phy%d sn fail ngr\n",
+				__func__,
+				phy_no);
 
 		if (irq_value & CHL_INT0_SL_IDAF_FAIL_MSK ||
 			irq_value & CHL_INT0_SL_OPAF_FAIL_MSK) {
-			pr_info("%s phy%d check address frame err\n", __func__, phy_no);
+			pr_info("%s phy%d check address frame err\n",
+				__func__,
+				phy_no);
 		}
 
-		if (irq_value & CHL_INT0_SL_PS_FAIL_OFF) {
+		if (irq_value & CHL_INT0_SL_PS_FAIL_OFF)
 			pr_debug("%s phy%d ps req fail\n", __func__, phy_no);
-		}
 	}
 
 	/* write to zero */
@@ -1844,7 +1833,8 @@ static irqreturn_t p660_cq_interrupt(const int queue, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	struct hisi_sas_slot *slot;
-	struct hisi_sas_complete_hdr *const complete_queue = hisi_hba->complete_hdr[queue];
+	struct hisi_sas_complete_hdr *const complete_queue =
+			hisi_hba->complete_hdr[queue];
 	u32 irq_value;
 	u32 rd_point, wr_point;
 
@@ -1852,8 +1842,10 @@ static irqreturn_t p660_cq_interrupt(const int queue, void *p)
 
 	hisi_sas_write32(hisi_hba, OQ_INT_SRC, 1 << queue);
 
-	rd_point = hisi_sas_read32(hisi_hba, COMPL_Q_0_RD_PTR + (0x14 * queue));
-	wr_point = hisi_sas_read32(hisi_hba, COMPL_Q_0_WR_PTR + (0x14 * queue));
+	rd_point = hisi_sas_read32(hisi_hba,
+			COMPL_Q_0_RD_PTR + (0x14 * queue));
+	wr_point = hisi_sas_read32(hisi_hba,
+			COMPL_Q_0_WR_PTR + (0x14 * queue));
 
 	while (rd_point != wr_point) {
 		struct hisi_sas_complete_hdr *complete_hdr;
@@ -1864,7 +1856,7 @@ static irqreturn_t p660_cq_interrupt(const int queue, void *p)
 		slot_idx = iptt;
 		slot = &hisi_hba->slot_info[slot_idx];
 		if (slot->tmf_idx != -1) {
-			//BUG();
+			/* BUG(); */
 			slot = &hisi_hba->slot_info[slot->tmf_idx];
 		}
 
