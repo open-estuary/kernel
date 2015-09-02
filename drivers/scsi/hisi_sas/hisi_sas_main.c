@@ -795,8 +795,10 @@ int hisi_sas_control_phy(struct asd_sas_phy *sas_phy,
 		HISI_SAS_DISP->hard_phy_reset(hisi_hba, phy_id);
 		break;
 
-	case PHY_FUNC_SET_LINK_RATE:
 	case PHY_FUNC_DISABLE:
+		HISI_SAS_DISP->phy_disable(hisi_hba, phy_id);
+		break;
+	case PHY_FUNC_SET_LINK_RATE:
 	case PHY_FUNC_RELEASE_SPINUP_HOLD:
 	default:
 		rc = -ENOSYS;
