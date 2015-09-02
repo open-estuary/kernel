@@ -503,9 +503,9 @@ struct hisi_sas_command_table_smp {
 };
 
 struct hisi_sas_command_table_stp {
-	struct	host_to_dev_fis command_fis; //20
-	u8	dummy[12]; //12
-	u8	atapi_cdb[ATAPI_CDB_LEN]; //16
+	struct	host_to_dev_fis command_fis; /* 20 */
+	u8	dummy[12]; /* 12 */
+	u8	atapi_cdb[ATAPI_CDB_LEN]; /* 16 */
 };
 
 union hisi_sas_command_table {
@@ -531,7 +531,7 @@ struct ssp_task_iu {
 	u8     _r_b;
 	__be16 tag;		  /* BE */
 	u8     _r_c[14];
-} __attribute__ ((packed));
+} __packed;
 
 /* from SAS spec 1.1; table 119 */
 struct ssp_command_iu {
