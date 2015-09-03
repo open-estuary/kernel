@@ -663,19 +663,18 @@ static int prep_smp(struct hisi_hba *hisi_hba,
 		return -ENOMEM;
 	req_len = sg_dma_len(sg_req);
 	req_dma_addr = sg_dma_address(sg_req);
-	pr_info("%s sg_req=%p elem=%d req_len=%d\n", __func__, sg_req, elem, req_len);
 
 	/* resp */
 	sg_resp = &task->smp_task.smp_resp; /* this is the response frame - see alloc_smp_resp() */
 	elem = dma_map_sg(hisi_hba->dev, sg_resp, 1, DMA_FROM_DEVICE);
 	if (!elem) {
 		rc = -ENOMEM;
-		goto err_out;
+		goto err_out_req;
 	}
 	resp_len = sg_dma_len(sg_resp);
 	if ((req_len & 0x3) || (resp_len & 0x3)) {
 		rc = -EINVAL;
-		goto err_out;
+		goto err_out_resp;
 	}
 
 	/* create header */
@@ -729,8 +728,12 @@ static int prep_smp(struct hisi_hba *hisi_hba,
 
 	return 0;
 
-err_out:
-	/* fix error conditions j00310691 */
+err_out_resp:
+	dma_unmap_sg(hisi_hba->dev, &tei->task->smp_task.smp_resp, 1,
+		     DMA_FROM_DEVICE);
+err_out_req:
+	dma_unmap_sg(hisi_hba->dev, &tei->task->smp_task.smp_req, 1,
+		     DMA_TO_DEVICE);
 	return rc;
 }
 
