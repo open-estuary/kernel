@@ -110,7 +110,7 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 
 	for (i = 0; i < hisi_hba->queue_count; i++) {
 		/* Delivery queue */
-		s = sizeof(struct hisi_sas_cmd_hdr) * HISI_SAS_QUEUE_SLOTS;
+		s = HISI_SAS_DQ_ENTRY_SZ * HISI_SAS_QUEUE_SLOTS;
 		hisi_hba->cmd_hdr[i] = dma_alloc_coherent(dev, s,
 					&hisi_hba->cmd_hdr_dma[i], GFP_KERNEL);
 		if (!hisi_hba->cmd_hdr[i])
@@ -118,7 +118,7 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 		memset(hisi_hba->cmd_hdr[i], 0, s);
 
 		/* Completion queue */
-		s = sizeof(struct hisi_sas_complete_hdr) * HISI_SAS_QUEUE_SLOTS;
+		s = HISI_SAS_CQ_ENTRY_SZ * HISI_SAS_QUEUE_SLOTS;
 		hisi_hba->complete_hdr[i] = dma_alloc_coherent(dev, s,
 				&hisi_hba->complete_hdr_dma[i], GFP_KERNEL);
 		if (!hisi_hba->complete_hdr[i])
@@ -206,13 +206,13 @@ static void hisi_sas_free(struct hisi_hba *hisi_hba)
 	int i, s;
 
 	for (i = 0; i < hisi_hba->queue_count; i++) {
-		s = sizeof(struct hisi_sas_cmd_hdr) * HISI_SAS_QUEUE_SLOTS;
+		s = HISI_SAS_DQ_ENTRY_SZ * HISI_SAS_QUEUE_SLOTS;
 		if (hisi_hba->cmd_hdr[i])
 			dma_free_coherent(hisi_hba->dev, s,
 					  hisi_hba->cmd_hdr[i],
 					  hisi_hba->cmd_hdr_dma[i]);
 
-		s = sizeof(struct hisi_sas_complete_hdr) * HISI_SAS_QUEUE_SLOTS;
+		s = HISI_SAS_CQ_ENTRY_SZ * HISI_SAS_QUEUE_SLOTS;
 		if (hisi_hba->complete_hdr[i])
 			dma_free_coherent(hisi_hba->dev, s,
 					  hisi_hba->complete_hdr[i],
@@ -264,7 +264,9 @@ int hisi_sas_ioremap(struct hisi_hba *hisi_hba)
 
 static const struct of_device_id sas_core_of_match[] = {
 	{ .compatible = "hisilicon,p660-sas-core",
-	.data = &hisi_sas_p660_dispatch},
+	.data = &hisi_sas_p660_hba_info},
+	{ .compatible = "hisilicon,hi1610-sas-core",
+	.data = &hisi_sas_hi1610_hba_info},
 	{},
 };
 
@@ -308,7 +310,7 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 	if (!hisi_hba->int_names)
 		goto err_out;
 
-	hisi_hba->dispatch = match->data;
+	hisi_hba->hba_info = match->data;
 
 	INIT_LIST_HEAD(&hisi_hba->wq_list);
 
@@ -482,6 +484,7 @@ static int hisi_sas_remove(struct platform_device *pdev)
 
 static const struct of_device_id sas_of_match[] = {
 	{ .compatible = "hisilicon,p660-sas",},
+	{ .compatible = "hisilicon,hi1610-sas",},
 	{},
 };
 

@@ -36,8 +36,10 @@
 
 #define HISI_SAS_ID_NOT_MAPPED 0x7f
 
-#define HISI_SAS_ITCT_ENTRY_SZ 128
-#define HISI_SAS_IOST_ENTRY_SZ 32
+#define HISI_SAS_ITCT_ENTRY_SZ (sizeof(struct hisi_sas_itct))
+#define HISI_SAS_IOST_ENTRY_SZ (sizeof(struct hisi_sas_iost))
+#define HISI_SAS_DQ_ENTRY_SZ (sizeof(struct hisi_sas_cmd_hdr))
+#define HISI_SAS_CQ_ENTRY_SZ (hisi_hba->hba_info->cq_hdr_sz)
 #define HISI_SAS_STATUS_BUF_SZ (sizeof(struct hisi_sas_err_record) + 1024)
 #define HISI_SAS_BREAKPOINT_ENTRY_SZ (sizeof(struct hisi_sas_breakpoint))
 #define HISI_SAS_COMMAND_TABLE_SZ (((sizeof(union hisi_sas_command_table)+3)/4)*4)
@@ -170,7 +172,29 @@ struct hisi_sas_tei {
 	int	iptt;
 };
 
-struct hisi_sas_dispatch;
+struct hisi_hba;
+
+struct hisi_sas_dispatch {
+	int (*hw_init)(struct hisi_hba *hisi_hba);
+	int (*phys_init)(struct hisi_hba *hisi_hba);
+	int (*interrupt_init)(struct hisi_hba *hisi_hba);
+	int (*interrupt_openall)(struct hisi_hba *hisi_hba);
+	void (*setup_itct)(struct hisi_hba *hisi_hba, struct hisi_sas_device *device);
+	int (*get_free_slot)(struct hisi_hba *hisi_hba, int *q, int *s);
+	void (*start_delivery)(struct hisi_hba *hisi_hba);
+	int (*prep_ssp)(struct hisi_hba *hisi_hba,
+			struct hisi_sas_tei *tei, int is_tmf,
+			struct hisi_sas_tmf_task *tmf);
+	int (*prep_smp)(struct hisi_hba *hisi_hba,
+			struct hisi_sas_tei *tei);
+	int (*prep_stp)(struct hisi_hba *hisi_hba,
+			struct hisi_sas_tei *tei);
+	int (*slot_complete)(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, u32 abort);
+	int (*is_phy_ready)(struct hisi_hba *hisi_hba, int phy_no);
+	void (*phy_enable)(struct hisi_hba *hisi_hba, int phy_no);
+	void (*phy_disable)(struct hisi_hba *hisi_hba, int phy_no);
+	void (*hard_phy_reset)(struct hisi_hba *hisi_hba, int phy_no);
+};
 
 struct hisi_fatal_stat {
 	/* ecc */
@@ -183,6 +207,14 @@ struct hisi_fatal_stat {
 
 	/* axi */
 	u32	overfl_axi_err_cnt;
+};
+
+struct hisi_sas_hba_info {
+	/* We only descibe sizes of structures which */
+	/* are different between IP revisions to simplify */
+	/* the code. */
+	int cq_hdr_sz;
+	const struct hisi_sas_dispatch *dispatch;
 };
 
 struct hisi_hba {
@@ -206,7 +238,7 @@ struct hisi_hba {
 
 	int	n_phy;
 
-	const struct hisi_sas_dispatch *dispatch;
+	const struct hisi_sas_hba_info *hba_info;
 	struct hisi_fatal_stat fatal_stat;
 
 	int slot_index_count;
@@ -243,28 +275,6 @@ struct hisi_hba {
 	struct dentry *dbg_dir;
 };
 
-struct hisi_sas_dispatch {
-	int (*hw_init)(struct hisi_hba *hisi_hba);
-	int (*phys_init)(struct hisi_hba *hisi_hba);
-	int (*interrupt_init)(struct hisi_hba *hisi_hba);
-	int (*interrupt_openall)(struct hisi_hba *hisi_hba);
-	int (*get_free_slot)(struct hisi_hba *hisi_hba, int *q, int *s);
-	void (*start_delivery)(struct hisi_hba *hisi_hba);
-	int (*prep_ssp)(struct hisi_hba *hisi_hba,
-			struct hisi_sas_tei *tei, int is_tmf,
-			struct hisi_sas_tmf_task *tmf);
-	int (*prep_smp)(struct hisi_hba *hisi_hba,
-			struct hisi_sas_tei *tei);
-	int (*prep_stp)(struct hisi_hba *hisi_hba,
-			struct hisi_sas_tei *tei);
-	int (*slot_complete)(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, u32 abort);
-	int (*is_phy_ready)(struct hisi_hba *hisi_hba, int phy_no);
-	void (*phy_enable)(struct hisi_hba *hisi_hba, int phy_no);
-	void (*phy_disable)(struct hisi_hba *hisi_hba, int phy_no);
-	void (*hard_phy_reset)(struct hisi_hba *hisi_hba, int phy_no);
-};
-
-
 struct hisi_hba_priv {
 	struct hisi_hba	*hisi_hba[HISI_SAS_MAX_CORE];
 	struct tasklet_struct *hisi_sas_tasklet;
@@ -274,10 +284,10 @@ struct hisi_hba_priv {
 	/* To be completed, j00310691 */
 };
 
-#define HISI_SAS_DISP	(hisi_hba->dispatch)
+#define HISI_SAS_DISP	(hisi_hba->hba_info->dispatch)
 
-extern const struct hisi_sas_dispatch hisi_sas_p660_dispatch;
-extern const struct hisi_sas_dispatch hisi_sas_hi1610_dispatch;
+extern const struct hisi_sas_hba_info hisi_sas_p660_hba_info;
+extern const struct hisi_sas_hba_info hisi_sas_hi1610_hba_info;
 
 /* HW structures */
 /* Delivery queue header */
@@ -335,79 +345,8 @@ struct hisi_sas_cmd_hdr {
 	u32 dif_prd_table_addr_hi;
 };
 
-/* Completion queue header */
-struct hisi_sas_complete_hdr {
-	u32 iptt:16;
-	u32 rsvd0:1;
-	u32 cmd_complt:1;
-	u32 err_rcrd_xfrd:1;
-	u32 rspns_xfrd:1;
-	u32 attention:1;
-	u32 cmd_rcvd:1;
-	u32 slot_rst_cmplt:1;
-	u32 rspns_good:1;
-	u32 abort_status:3;
-	u32 io_cfg_err:1;
-	u32 rsvd1:4;
-};
-
 struct hisi_sas_itct {
-	/* qw0 */
-	u64 dev_type:2;
-	u64 valid:1;
-	u64 break_reply_ena:1;
-	u64 awt_control:1;
-	u64 max_conn_rate:4;
-	u64 valid_link_number:4;
-	u64 port_id:3;
-	u64 smp_timeout:16;
-	u64 max_burst_byte:32;
-
-	/* qw1 */
-	u64 sas_addr;
-
-	/* qw2 */
-	u64 IT_nexus_loss_time:16;
-	u64 bus_inactive_time_limit:16;
-	u64 max_conn_time_limit:16;
-	u64 reject_open_time_limit:16;
-
-	/* qw3 */
-	u64 curr_pathway_blk_cnt:8;
-	u64 curr_transmit_dir:2;
-	u64 tx_pri:2;
-	u64 rsvd0:3;
-	u64 awt_cont:1;
-	u64 curr_awt:16;
-	u64 curr_IT_nexus_loss_val:16;
-	u64 tlr_enable:1;
-	u64 catap:4;
-	u64 curr_ncq_tag:5;
-	u64 cpn:4;
-	u64 cb:1;
-	u64 rsvd1:1;
-
-	/* qw4 */
-	u64 sata_active_reg:32;
-	u64 rsvd2:9;
-	u64 ata_status:8;
-	u64 eb:1;
-	u64 rpn:4;
-	u64 rb:1;
-	u64 sata_tx_ata_p:4;
-	u64 tpn:4;
-	u64 tb:1;
-
-	/* sw5-12 */
-	u16 ncq_tag[32];
-
-	/* qw13 */
-	u64 non_ncq_iptt:16;
-	u64 rsvd3:48;
-
-	/* qw14-15 */
-	u64 rsvd4;
-	u64 rsvd5;
+	u64 data[16];
 };
 
 struct hisi_sas_iost {

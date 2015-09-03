@@ -432,45 +432,6 @@ struct hisi_sas_device *hisi_sas_alloc_dev(struct hisi_hba *hisi_hba)
 	return NULL;
 }
 
-void hisi_sas_setup_itct(struct hisi_hba *hisi_hba, struct hisi_sas_device *device)
-{
-	struct domain_device *dev = device->sas_device;
-	u32 device_id = device->device_id;
-	struct hisi_sas_itct *itct = &hisi_hba->itct[device_id];
-
-	memset(itct, 0, sizeof(*itct));
-
-	/* qw0 */
-	switch (dev->dev_type) {
-	case SAS_END_DEVICE:
-	case SAS_EDGE_EXPANDER_DEVICE:
-	case SAS_FANOUT_EXPANDER_DEVICE:
-		itct->dev_type = HISI_SAS_DEV_TYPE_SSP;
-		break;
-	default:
-		dev_warn(hisi_hba->dev, "%s unsupported dev type (%d)\n", __func__, dev->dev_type);
-	}
-
-	itct->valid = 1;
-	itct->break_reply_ena = 0;
-	itct->awt_control = 1;
-	itct->max_conn_rate = dev->max_linkrate; /* j00310691 todo doublecheck, see enum sas_linkrate */
-	itct->valid_link_number = 1;
-	itct->port_id = dev->port->id;
-	itct->smp_timeout = 0;
-	itct->max_burst_byte = 0;
-
-	/* qw1 */
-	memcpy(&itct->sas_addr, dev->sas_addr, SAS_ADDR_SIZE);
-	itct->sas_addr = __swab64(itct->sas_addr);
-
-	/* qw2 */
-	itct->IT_nexus_loss_time = 500;
-	itct->bus_inactive_time_limit = 0xff00;
-	itct->max_conn_time_limit = 0xff00;
-	itct->reject_open_time_limit = 0xff00;
-}
-
 int hisi_sas_dev_found_notify(struct domain_device *dev, int lock)
 {
 	unsigned long flags = 0;
@@ -495,7 +456,7 @@ int hisi_sas_dev_found_notify(struct domain_device *dev, int lock)
 	hisi_sas_device->dev_type = dev->dev_type;
 	hisi_sas_device->hisi_hba = hisi_hba;
 	hisi_sas_device->sas_device = dev;
-	hisi_sas_setup_itct(hisi_hba, hisi_sas_device);
+	HISI_SAS_DISP->setup_itct(hisi_hba, hisi_sas_device);
 
 	if (parent_dev && DEV_IS_EXPANDER(parent_dev->dev_type)) {
 		int phy_id;
