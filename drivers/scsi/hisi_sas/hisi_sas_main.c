@@ -235,7 +235,7 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 					task->data_dir);
 			if (!n_elem) {
 				rc = -ENOMEM;
-				goto err_out;
+				goto prep_out;
 			}
 		}
 	} else {
@@ -247,7 +247,7 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 		goto err_out;
 	rc = HISI_SAS_DISP->get_free_slot(hisi_hba, &dlvry_queue, &dlvry_queue_slot);
 	if (rc)
-		goto err_out;
+		goto err_out_tag;
 
 	slot = &hisi_hba->slot_info[slot_idx];
 	memset(slot, 0, sizeof(struct hisi_sas_slot));
@@ -270,13 +270,13 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 	slot->status_buffer = dma_pool_alloc(hisi_hba->status_buffer_pool,
 					GFP_ATOMIC, &slot->status_buffer_dma);
 	if (!slot->status_buffer)
-		goto err_out;
+		goto err_out_slot_buf;
 	memset(slot->status_buffer, 0, HISI_SAS_STATUS_BUF_SZ);
 
 	slot->command_table = dma_pool_alloc(hisi_hba->command_table_pool, GFP_ATOMIC,
 				&slot->command_table_dma);
 	if (!slot->command_table)
-		goto err_out;
+		goto err_out_status_buf;
 	memset(slot->command_table, 0, HISI_SAS_COMMAND_TABLE_SZ);
 
 	tei.hdr = slot->cmd_hdr;
@@ -303,8 +303,12 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 		break;
 	}
 
-	if (rc)
-		goto err_out;
+	if (rc) {
+		dev_err(hisi_hba->dev, "%s rc = 0x%x\n", __func__, rc);
+		if (slot->sge_page)
+			goto err_out_sge;
+		goto err_out_command_table;
+	}
 
 	slot->task = task;
 	slot->port = tei.port;
@@ -321,8 +325,27 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 
 	return rc;
 
+err_out_sge:
+	dma_pool_free(hisi_hba->sge_page_pool, slot->sge_page,
+		slot->sge_page_dma);
+
+err_out_command_table:
+	dma_pool_free(hisi_hba->command_table_pool, slot->command_table,
+		slot->command_table_dma);
+err_out_status_buf:
+	dma_pool_free(hisi_hba->status_buffer_pool, slot->status_buffer,
+		slot->status_buffer_dma);
+err_out_slot_buf:
+	/* Nothing to be done */
+err_out_tag:
+	hisi_sas_slot_index_free(hisi_hba, slot_idx);
 err_out:
-	/* Add proper labels j00310691 */
+	dev_err(hisi_hba->dev, "%s failed[%d]!\n", __func__, rc);
+	if (!sas_protocol_ata(task->task_proto))
+		if (n_elem)
+			dma_unmap_sg(hisi_hba->dev, task->scatter, n_elem,
+				     task->data_dir);
+prep_out:
 	return rc;
 }
 
