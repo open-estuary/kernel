@@ -1744,8 +1744,6 @@ static irqreturn_t p660_int_phyup(int phy_no, void *p)
 		goto end;
 	}
 
-	dev_err(hisi_hba->dev, "%s phy%d portid=0x%x\n", __func__, phy_no, port_id);
-
 	/* j00310691 todo stop serdes fw timer */
 	for (i = 0; i < 6; i++) {
 		u32 idaf = hisi_sas_phy_read32(hisi_hba, phy_no,
