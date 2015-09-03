@@ -341,7 +341,7 @@ enum {
 #define HISI_SAS_MAX_INT_NR \
 	(HISI_SAS_PHY_MAX_INT_NR + HISI_SAS_CQ_MAX_INT_NR + HISI_SAS_FATAL_INT_NR)
 
-struct hisi_sas_cmd_hdr_dw0 {
+struct hisi_sas_cmd_hdr_dw0_p660 {
 	u32 abort_flag:2;
 	u32 rsvd0:2;
 	u32 t10_flds_pres:1;
@@ -356,7 +356,7 @@ struct hisi_sas_cmd_hdr_dw0 {
 	u32 cmd:3;
 };
 
-struct hisi_sas_cmd_hdr_dw1 {
+struct hisi_sas_cmd_hdr_dw1_p660 {
 	u32 port_multiplier:4;
 	u32 bist_activate:1;
 	u32 atapi:1;
@@ -371,7 +371,7 @@ struct hisi_sas_cmd_hdr_dw1 {
 	u32 device_id:16;
 };
 
-struct hisi_sas_cmd_hdr_dw2 {
+struct hisi_sas_cmd_hdr_dw2_p660 {
 	u32 cmd_frame_len:9;
 	u32 leave_affil_open:1;
 	u32 rsvd2:5;
@@ -379,6 +379,81 @@ struct hisi_sas_cmd_hdr_dw2 {
 	u32 sg_mode:1;
 	u32 first_burst:1;
 	u32 rsvd3:6;
+};
+
+/* Completion queue header */
+struct hisi_sas_complete_hdr_p660 {
+	u32 iptt:16;
+	u32 rsvd0:1;
+	u32 cmd_complt:1;
+	u32 err_rcrd_xfrd:1;
+	u32 rspns_xfrd:1;
+	u32 attention:1;
+	u32 cmd_rcvd:1;
+	u32 slot_rst_cmplt:1;
+	u32 rspns_good:1;
+	u32 abort_status:3;
+	u32 io_cfg_err:1;
+	u32 rsvd1:4;
+};
+
+struct hisi_sas_itct_p660 {
+	/* qw0 */
+	u64 dev_type:2;
+	u64 valid:1;
+	u64 break_reply_ena:1;
+	u64 awt_control:1;
+	u64 max_conn_rate:4;
+	u64 valid_link_number:4;
+	u64 port_id:3;
+	u64 smp_timeout:16;
+	u64 max_burst_byte:32;
+
+	/* qw1 */
+	u64 sas_addr;
+
+	/* qw2 */
+	u64 IT_nexus_loss_time:16;
+	u64 bus_inactive_time_limit:16;
+	u64 max_conn_time_limit:16;
+	u64 reject_open_time_limit:16;
+
+	/* qw3 */
+	u64 curr_pathway_blk_cnt:8;
+	u64 curr_transmit_dir:2;
+	u64 tx_pri:2;
+	u64 rsvd0:3;
+	u64 awt_cont:1;
+	u64 curr_awt:16;
+	u64 curr_IT_nexus_loss_val:16;
+	u64 tlr_enable:1;
+	u64 catap:4;
+	u64 curr_ncq_tag:5;
+	u64 cpn:4;
+	u64 cb:1;
+	u64 rsvd1:1;
+
+	/* qw4 */
+	u64 sata_active_reg:32;
+	u64 rsvd2:9;
+	u64 ata_status:8;
+	u64 eb:1;
+	u64 rpn:4;
+	u64 rb:1;
+	u64 sata_tx_ata_p:4;
+	u64 tpn:4;
+	u64 tb:1;
+
+	/* sw5-12 */
+	u16 ncq_tag[32];
+
+	/* qw13 */
+	u64 non_ncq_iptt:16;
+	u64 rsvd3:48;
+
+	/* qw14-15 */
+	u64 rsvd4;
+	u64 rsvd5;
 };
 
 static inline u32 hisi_sas_read32(struct hisi_hba *hisi_hba, u32 off)
@@ -501,6 +576,47 @@ static void p660_init_id_frame(struct hisi_hba *hisi_hba)
 	*sas_identify_frame the same as the structure in IT code*/
 	for (i = 0; i < hisi_hba->n_phy; i++)
 		p660_config_id_frame(hisi_hba, i);
+}
+
+
+void p660_hisi_sas_setup_itct(struct hisi_hba *hisi_hba, struct hisi_sas_device *device)
+{
+	struct domain_device *dev = device->sas_device;
+	u32 device_id = device->device_id;
+	struct hisi_sas_itct_p660 *itct =
+		(struct hisi_sas_itct_p660 *)&hisi_hba->itct[device_id];
+
+	memset(itct, 0, sizeof(*itct));
+
+	/* qw0 */
+	switch (dev->dev_type) {
+	case SAS_END_DEVICE:
+	case SAS_EDGE_EXPANDER_DEVICE:
+	case SAS_FANOUT_EXPANDER_DEVICE:
+		itct->dev_type = HISI_SAS_DEV_TYPE_SSP;
+		break;
+	default:
+		dev_warn(hisi_hba->dev, "%s unsupported dev type (%d)\n", __func__, dev->dev_type);
+	}
+
+	itct->valid = 1;
+	itct->break_reply_ena = 0;
+	itct->awt_control = 1;
+	itct->max_conn_rate = dev->max_linkrate; /* j00310691 todo doublecheck, see enum sas_linkrate */
+	itct->valid_link_number = 1;
+	itct->port_id = dev->port->id;
+	itct->smp_timeout = 0;
+	itct->max_burst_byte = 0;
+
+	/* qw1 */
+	memcpy(&itct->sas_addr, dev->sas_addr, SAS_ADDR_SIZE);
+	itct->sas_addr = __swab64(itct->sas_addr);
+
+	/* qw2 */
+	itct->IT_nexus_loss_time = 500;
+	itct->bus_inactive_time_limit = 0xff00;
+	itct->max_conn_time_limit = 0xff00;
+	itct->reject_open_time_limit = 0xff00;
 }
 
 #ifdef SAS_12G
@@ -1025,10 +1141,10 @@ static int p660_prep_prd_sge(struct hisi_hba *hisi_hba,
 {
 	struct scatterlist *sg;
 	int i;
-	struct hisi_sas_cmd_hdr_dw0 *dw0 =
-		(struct hisi_sas_cmd_hdr_dw0 *)&hdr->dw0;
-	struct hisi_sas_cmd_hdr_dw1 *dw1 =
-		(struct hisi_sas_cmd_hdr_dw1 *)&hdr->dw1;
+	struct hisi_sas_cmd_hdr_dw0_p660 *dw0 =
+		(struct hisi_sas_cmd_hdr_dw0_p660 *)&hdr->dw0;
+	struct hisi_sas_cmd_hdr_dw1_p660 *dw1 =
+		(struct hisi_sas_cmd_hdr_dw1_p660 *)&hdr->dw1;
 
 	if (n_elem > HISI_SAS_SGE_PAGE_CNT) {
 		dev_err(hisi_hba->dev, "%s n_elem(%d) > HISI_SAS_SGE_PAGE_CNT",
@@ -1075,12 +1191,12 @@ static int p660_prep_smp(struct hisi_hba *hisi_hba,
 	unsigned int req_len, resp_len;
 	int elem, rc;
 	struct hisi_sas_slot *slot = tei->slot;
-	struct hisi_sas_cmd_hdr_dw0 *dw0 =
-		(struct hisi_sas_cmd_hdr_dw0 *)&hdr->dw0;
-	struct hisi_sas_cmd_hdr_dw1 *dw1 =
-		(struct hisi_sas_cmd_hdr_dw1 *)&hdr->dw1;
-	struct hisi_sas_cmd_hdr_dw2 *dw2 =
-		(struct hisi_sas_cmd_hdr_dw2 *)&hdr->dw2;
+	struct hisi_sas_cmd_hdr_dw0_p660 *dw0 =
+		(struct hisi_sas_cmd_hdr_dw0_p660 *)&hdr->dw0;
+	struct hisi_sas_cmd_hdr_dw1_p660 *dw1 =
+		(struct hisi_sas_cmd_hdr_dw1_p660 *)&hdr->dw1;
+	struct hisi_sas_cmd_hdr_dw2_p660 *dw2 =
+		(struct hisi_sas_cmd_hdr_dw2_p660 *)&hdr->dw2;
 
 	/*
 	* DMA-map SMP request, response buffers
@@ -1181,12 +1297,12 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 	int has_data = 0, rc;
 	struct hisi_sas_slot *slot = tei->slot;
 	u8 *buf_cmd, fburst = 0;
-	struct hisi_sas_cmd_hdr_dw0 *dw0 =
-		(struct hisi_sas_cmd_hdr_dw0 *)&hdr->dw0;
-	struct hisi_sas_cmd_hdr_dw1 *dw1 =
-		(struct hisi_sas_cmd_hdr_dw1 *)&hdr->dw1;
-	struct hisi_sas_cmd_hdr_dw2 *dw2 =
-		(struct hisi_sas_cmd_hdr_dw2 *)&hdr->dw2;
+	struct hisi_sas_cmd_hdr_dw0_p660 *dw0 =
+		(struct hisi_sas_cmd_hdr_dw0_p660 *)&hdr->dw0;
+	struct hisi_sas_cmd_hdr_dw1_p660 *dw1 =
+		(struct hisi_sas_cmd_hdr_dw1_p660 *)&hdr->dw1;
+	struct hisi_sas_cmd_hdr_dw2_p660 *dw2 =
+		(struct hisi_sas_cmd_hdr_dw2_p660 *)&hdr->dw2;
 
 	/* create header */
 	/* dw0 */
@@ -1433,8 +1549,10 @@ static int p660_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *s
 	struct task_status_struct *tstat;
 	struct domain_device *dev;
 	enum exec_status sts;
-	struct hisi_sas_complete_hdr *complete_queue = hisi_hba->complete_hdr[slot->cmplt_queue];
-	struct hisi_sas_complete_hdr *complete_hdr;
+	struct hisi_sas_complete_hdr_p660 *complete_queue =
+			(struct hisi_sas_complete_hdr_p660 *)
+			hisi_hba->complete_hdr[slot->cmplt_queue];
+	struct hisi_sas_complete_hdr_p660 *complete_hdr;
 
 	complete_hdr = &complete_queue[slot->cmplt_queue_slot];
 
@@ -1836,7 +1954,8 @@ static irqreturn_t p660_cq_interrupt(const int queue, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
 	struct hisi_sas_slot *slot;
-	struct hisi_sas_complete_hdr *const complete_queue =
+	struct hisi_sas_complete_hdr_p660 *complete_queue =
+			(struct hisi_sas_complete_hdr_p660 *)
 			hisi_hba->complete_hdr[queue];
 	u32 irq_value;
 	u32 rd_point, wr_point;
@@ -1851,7 +1970,7 @@ static irqreturn_t p660_cq_interrupt(const int queue, void *p)
 			COMPL_Q_0_WR_PTR + (0x14 * queue));
 
 	while (rd_point != wr_point) {
-		struct hisi_sas_complete_hdr *complete_hdr;
+		struct hisi_sas_complete_hdr_p660 *complete_hdr;
 		int iptt, slot_idx;
 
 		complete_hdr = &complete_queue[rd_point];
@@ -2201,11 +2320,12 @@ static int p660_interrupt_openall(struct hisi_hba *hisi_hba)
 }
 
 
-const struct hisi_sas_dispatch hisi_sas_p660_dispatch = {
+static const struct hisi_sas_dispatch hisi_sas_p660_dispatch = {
 	.hw_init = p660_hw_init,
 	.phys_init = p660_phys_init,
 	.interrupt_init = p660_interrupt_init,
 	.interrupt_openall = p660_interrupt_openall,
+	.setup_itct = p660_hisi_sas_setup_itct,
 	.get_free_slot = p660_get_free_slot,
 	.start_delivery = p660_start_delivery,
 	.prep_ssp = p660_prep_ssp,
@@ -2217,3 +2337,9 @@ const struct hisi_sas_dispatch hisi_sas_p660_dispatch = {
 	.hard_phy_reset = p660_hard_phy_reset,
 	/* p660 does not support STP */
 };
+
+const struct hisi_sas_hba_info hisi_sas_p660_hba_info = {
+	.cq_hdr_sz = sizeof(struct hisi_sas_complete_hdr_p660),
+	.dispatch = &hisi_sas_p660_dispatch,
+};
+
