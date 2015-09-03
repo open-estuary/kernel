@@ -328,7 +328,6 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 err_out_sge:
 	dma_pool_free(hisi_hba->sge_page_pool, slot->sge_page,
 		slot->sge_page_dma);
-
 err_out_command_table:
 	dma_pool_free(hisi_hba->command_table_pool, slot->command_table,
 		slot->command_table_dma);
