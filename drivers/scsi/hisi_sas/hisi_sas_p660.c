@@ -827,6 +827,12 @@ static void p660_init_reg(struct hisi_hba *hisi_hba)
 			 DMA_ADDR_HI(hisi_hba->breakpoint_dma));
 }
 
+#ifdef SAS_12G
+extern void hilink_reg_init(void);
+extern void HRD_SubDsafInit(void);
+extern void HRD_SubPcieInit(void);
+#endif
+
 static int p660_hw_init(struct hisi_hba *hisi_hba)
 {
 	int rc;
@@ -844,9 +850,6 @@ static int p660_hw_init(struct hisi_hba *hisi_hba)
 	p660_init_id_frame(hisi_hba);
 
 	#ifdef SAS_12G
-	extern void hilink_reg_init(void);
-	extern void HRD_SubDsafInit(void);
-	extern void HRD_SubPcieInit(void);
 	hilink_reg_init();
 	HRD_SubDsafInit();
 	HRD_SubPcieInit();

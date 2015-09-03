@@ -259,83 +259,10 @@ enum LINERATE_CFG_ENUM {
 	INVALID_LINERATE_CFG
 };
 
-/**/
 struct LINE_RATE_CFG {
 	/*LINERATE_CFG_ENUM rate;*/
 	unsigned int number;
 };
-
-
-static void SRE_SdsRegWrite(unsigned int ulMacroId,
-	unsigned int ulRegAddrOffset,
-	unsigned int ulRegValue);
-static void SRE_SdsRegBitsWrite(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulRegAddrOffset,
-	unsigned int ulHigtBit,
-	unsigned int ulLowBit,
-	unsigned int ulRegValue);
-static unsigned int SRE_SdsRegBitsRead(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulRegAddrOffset,
-	unsigned int ulHigtBit,
-	unsigned int ulLowBit);
-static void SRE_SerdesCsCfg(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulCsNum,
-	unsigned int CsCfg);
-static unsigned int SRE_SerdesCsCalib(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulCsNum);
-static void SRE_SerdesDsCfg(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulDsNum,
-	unsigned int ulDsCfg,
-	unsigned int ulCsSrc);
-static unsigned int SRE_SerdesDsCalib(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulDsNum,
-	unsigned int ulDsCfg);
-static void Custom_Wave(unsigned int macro,
-	unsigned int lane,
-	unsigned int mode);
-static void SRE_DsCalibAdjust(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulDsNum);
-static unsigned int RegBitsRead(unsigned int node,
-	unsigned int addr,
-	unsigned int ulHigtBit,
-	unsigned int ulLowBit);
-static void RegBitsWrite(unsigned int node,
-	unsigned int addr,
-	unsigned int ulHigtBit,
-	unsigned int ulLowBit,
-	unsigned int ulRegValue);
-/*void Serdes_Delay_Us(UINT32 time);*/
-static void SRE_SdsRegWriteByCSR(unsigned int macro,
-	unsigned int module,
-	unsigned int lane,
-	unsigned int CSR,
-	unsigned int data);
-static void SRE_DsHwCalibrationInit(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulDsNum);
-static unsigned int SRE_DsHwCalibrationExec(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulDsNum);
-static void SRE_DsHwCalibrationAdjust(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulDsNum);
-static void SRE_DsConfigurationAfterCalibration(unsigned int node,
-	unsigned int ulMacroId,
-	unsigned int ulDsNum,
-	unsigned int ulDsCfg,
-	unsigned int ulCoupleFlag);
-static void SRE_HilinkFirmwareRun(unsigned int node,
-	unsigned int macro,
-	unsigned int lane,
-	unsigned int ulDsCfg);
-static void SRE_RunFirmware(unsigned int node, unsigned int macro);
 
 /* begin:2P arm server */
 #define HILINK_REG_BASE_OFFSET		(0x40000000000ULL)
@@ -583,14 +510,13 @@ static void SRE_RunFirmware(unsigned int node, unsigned int macro);
 #define SRE_HILINK0_MACRO_LOS_REG\
 
 
-static unsigned char sUseSSC;
+//static unsigned char sUseSSC;
 /*0-Normal CDR(default), 1-SSCDR*/
 static unsigned char sCDRMode;
-static u8 s_hilink1_8G;
 /*static board_type_e ebord_type = EM_16CORE_EVB_BOARD;*/
-
 static u8 g_serdes_tx_polarity[2][7][8] = {{{0 } } };
 static u8 g_serdes_rx_polarity[2][7][8] = {{{0 } } };
+
 
 #define DSAF_SUB_BASE (0xC0000000)
 #define PCIE_SUB_BASE (0xB0000000)
@@ -620,22 +546,30 @@ static unsigned long long IOMAP_HILINK_SLAVE_MACRO5_BASE_ADDR = 0;
 static unsigned long long IOMAP_HILINK_SLAVE_MACRO6_BASE_ADDR = 0;
 
 /*----------------------------------------------*
- *									 *
+ *						*
  *----------------------------------------------*/
 static unsigned long long sub_pcie_base_addr = 0;
+#ifdef MODULE
 static unsigned long long sub_pcie_pa_addr = 0;
+#endif
 
 /*add by chenqilin*/
 static unsigned long long sub_pcie_base_addr_slavecpu = 0;
+#ifdef MODULE
 static unsigned long long sub_pcie_pa_addr_slavecpu = 0;
+#endif
 /*end*/
 
 static unsigned long long sub_dsaf_base_addr = 0;
+#ifdef MODULE
 static unsigned long long sub_dsaf_pa_addr = 0;
+#endif
 
 /*add by chenqilin*/
 static unsigned long long sub_dsaf_base_addr_slavecpu = 0;
+#ifdef MODULE
 static unsigned long long sub_dsaf_pa_addr_slavecpu = 0;
+#endif
 /*end*/
 
 
@@ -1245,7 +1179,6 @@ void hilink_reg_exit(void)
 	(void)hilink0_reg_exit();
 }
 
-
 static void Serdes_Delay_Us(unsigned int time)
 {
 
@@ -1258,7 +1191,8 @@ static void Serdes_Delay_Us(unsigned int time)
 		udelay(time);
 }
 
-static unsigned int HRD_SubDsafInit(void)
+#ifdef MODULE
+unsigned int HRD_SubDsafInit(void)
 {
 	sub_dsaf_pa_addr = DSAF_SUB_BASE;
 
@@ -1295,7 +1229,7 @@ static unsigned int HRD_SubDsafInit(void)
 
 	return OS_SUCCESS;
 }
-
+#endif
 
 /*****************************************************************************
     : HRD_SubAlgExit
@@ -1312,6 +1246,7 @@ static unsigned int HRD_SubDsafInit(void)
 	 :
 
 *****************************************************************************/
+#if 0
 static void HRD_SubDsafExit(void)
 {
 	/* SUB dsaf  */
@@ -1324,6 +1259,7 @@ static void HRD_SubDsafExit(void)
 		/* DSAF_SUB_BASE_SIZE);*/
 		iounmap((void *)sub_dsaf_base_addr_slavecpu);
 }
+#endif
 
 static unsigned long long HRD_CommonSubDsafGetBase(unsigned int node)
 {
@@ -1350,7 +1286,8 @@ static unsigned long long HRD_CommonSubDsafGetBase(unsigned int node)
 	 :
 
 *****************************************************************************/
-static unsigned int HRD_SubPcieInit(void)
+#ifdef MODULE
+unsigned int HRD_SubPcieInit(void)
 {
 	sub_pcie_pa_addr = PCIE_SUB_BASE;
 
@@ -1385,7 +1322,7 @@ static unsigned int HRD_SubPcieInit(void)
 	/* end */
 	return OS_SUCCESS;
 }
-
+#endif
 
 /*****************************************************************************
     : HRD_SubPcieExit
@@ -1402,6 +1339,7 @@ static unsigned int HRD_SubPcieInit(void)
 	 :
 
 *****************************************************************************/
+#if 0
 static void HRD_SubPcieExit(void)
 {
 	/* POU */
@@ -1415,7 +1353,7 @@ static void HRD_SubPcieExit(void)
 		/* PCIE_SUB_BASE_SIZE);*/
 		iounmap((void *)sub_pcie_base_addr_slavecpu);
 }
-
+#endif
 static unsigned long long HRD_CommonSubPcieGetBase(unsigned int node)
 {
 	/* node=0 */
@@ -1630,6 +1568,7 @@ History		:
  Modification : adapt to hi1381
 
 ***********************************************************/
+#if 0
 static void SRE_SdsRegWrite(unsigned int ulMacroId,
 				unsigned int ulRegAddrOffset,
 				unsigned int ulRegValue)
@@ -1658,9 +1597,10 @@ static void SRE_SdsRegWrite(unsigned int ulMacroId,
 	if (ulMacroId == 6)
 		uwRegAddr = HILINKMACRO6+ulRegAddrOffset;
 
-	/**/
+
 	SYSTEM_REG_WRITE(MASTER_CPU_NODE, uwRegAddr, ulRegValue);
 }
+#endif
 
 static void SRE_InternalSdsRegWrite(unsigned int node,
 	unsigned int ulMacroId,
@@ -1693,6 +1633,7 @@ static void SRE_InternalSdsRegWrite(unsigned int node,
 	/**/
 	SYSTEM_REG_WRITE(node, uwRegAddr, ulRegValue);
 }
+
 /*************************************************************
 Prototype	: SRE_SdsRegBitsWrite
 Description :serdes
@@ -1814,7 +1755,6 @@ static unsigned int SRE_SdsRegBitsRead(unsigned int node,
 	return	final;
 }
 
-
 static unsigned int serdes_check_param(unsigned int macro, unsigned int lane)
 {
 	switch (macro) {
@@ -1853,8 +1793,6 @@ static unsigned int serdes_check_param(unsigned int macro, unsigned int lane)
 	return EM_SERDES_SUCCESS;
 }
 
-
-
 /*************************************************************
 Prototype	: SRE_SerdesCsCfg
 Description :serdes CS
@@ -1873,11 +1811,13 @@ History		:
  Modification : adapt to hi1381
 
 ***********************************************************/
+#if 0
 static void SRE_SerdesCsCfg(unsigned int node,
 					unsigned int ulMacroId,
 					unsigned int ulCsNum,
 					unsigned int CsCfg)
 {
+
 	/* Select correct clock source for */
 	/* Serviceslice (if this macro contains Serviceslice)*/
 	SRE_SdsRegBitsWrite(node,
@@ -2373,9 +2313,9 @@ static void SRE_SerdesCsCfg(unsigned int node,
 
 	}
 }
+#endif
 
-
-
+#if 0
 static void SRE_CsHwCalibrationOptionV2Init(unsigned int node,
 	unsigned int ulMacroId,
 	unsigned int ulCsNum)
@@ -2465,7 +2405,8 @@ static void SRE_CsHwCalibrationOptionV2Init(unsigned int node,
 		2,
 		0x1);/*CS_CALIB_SOFT_RST_N*/
 }
-
+#endif
+#if 0
 static unsigned int SRE_CsHwCalibrationOptionV2Exec(unsigned int node,
 	unsigned int ulMacroId,
 	unsigned int ulCsNum,
@@ -2540,8 +2481,9 @@ static unsigned int SRE_CsHwCalibrationOptionV2Exec(unsigned int node,
 	return result;
 
 }
+#endif
 
-
+#if 0
 static unsigned int SRE_SerdesCsHwCalibrationOptionV2(unsigned int node,
 			unsigned int ulMacroId,
 			unsigned int ulCsNum)
@@ -2590,9 +2532,8 @@ static unsigned int SRE_SerdesCsHwCalibrationOptionV2(unsigned int node,
 
 	return result;
 }
-
-
-
+#endif
+#if 0
 static unsigned int SRE_SerdesCsCalib(unsigned int node,
 	unsigned int ulMacroId,
 	unsigned int ulCsNum)
@@ -2611,6 +2552,7 @@ static unsigned int SRE_SerdesCsCalib(unsigned int node,
 		result = SRE_Hilink_CS_Calib_ERROR;
 	return result;
 }
+#endif
 /*************************************************************
 Prototype	: SRE_SerdesDsCfg
 Description :serdes DS
@@ -3333,7 +3275,6 @@ static void SRE_SerdesDsCfg(unsigned int node,
 		0x1);
 }
 
-
 /* DS Configuration after DS calibration*/
 static void SRE_DsConfigurationAfterCalibration(unsigned int node,
 					unsigned int ulMacroId,
@@ -3621,9 +3562,6 @@ static void SRE_DsConfigurationAfterCalibration(unsigned int node,
 	/* support team for extra settings*/
 }
 
-
-
-
 static void SRE_DsHwCalibrationInit(unsigned int node,
 		unsigned int ulMacroId,
 		unsigned int ulDsNum)
@@ -3761,7 +3699,6 @@ static unsigned int SRE_DsHwCalibrationExec(unsigned int node,
 
 }
 
-
 void SRE_DsHwCalibrationAdjust(unsigned int node,
 			unsigned int ulMacroId,
 			unsigned int ulDsNum)
@@ -3855,7 +3792,6 @@ void SRE_DsHwCalibrationAdjust(unsigned int node,
 		0x1);
 }
 
-
 /*************************************************************
 Prototype	: SRE_SerdesDsCalib
 Description :serdes DS
@@ -3915,7 +3851,6 @@ static unsigned int SRE_SerdesDsCalib(unsigned int node,
 		ulDsNum);
 	return SRE_Hilink_DS_Calibration_ERROR; /* calibration false*/
 }
-
 
 /*************************************************************
 Prototype	: SRE_PMAInit
@@ -4057,7 +3992,6 @@ static void SRE_PMAInit(unsigned int node,
 		0x1);
 }
 
-
 static unsigned int SRE_Serdes2LaneReset(unsigned int node,
 	unsigned int ulDsNum,
 	unsigned int ulDsCfg)
@@ -4151,8 +4085,6 @@ static unsigned int SRE_Serdes2LaneReset(unsigned int node,
 	return EM_SERDES_SUCCESS;
 }
 
-
-
 static unsigned int SRE_Serdes5LaneReset(unsigned int node,
 	unsigned int ulDsNum,
 	unsigned int ulDsCfg)
@@ -4245,7 +4177,6 @@ static unsigned int SRE_Serdes5LaneReset(unsigned int node,
 
 	return EM_SERDES_SUCCESS;
 }
-
 
 static unsigned int SRE_Serdes6LaneReset(unsigned int node,
 					unsigned int ulDsNum,
@@ -4341,7 +4272,6 @@ static unsigned int SRE_Serdes6LaneReset(unsigned int node,
 				PMA_MODE_SAS);
 	return EM_SERDES_SUCCESS;
 }
-
 
 unsigned int SRE_CommonSerdesLaneReset(unsigned int node,
 					unsigned int ulMacroId,
@@ -4454,7 +4384,7 @@ void SRE_CommonSerdesEnableCTLEDFE(unsigned int node,
 	}
 }
 
-
+#if 0
 void Higgs_SerdesEnableCTLEDFE(struct HIGGS_CARD_S *v_pstLLCard,
 	uint32_t v_uiPhyId)
 {
@@ -4516,3 +4446,7 @@ void Higgs_SerdesEnableCTLEDFE(struct HIGGS_CARD_S *v_pstLLCard,
 	HIGGS_REF(uiDsApi);
 #endif
 }
+#endif
+
+
+
