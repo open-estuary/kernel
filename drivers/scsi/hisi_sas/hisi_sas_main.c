@@ -1034,6 +1034,10 @@ int hisi_sas_I_T_nexus_reset(struct domain_device *dev)
 		return TMF_RESP_FUNC_COMPLETE;
 	else
 		hisi_sas_dev->dev_status = MVS_DEV_NORMAL; */
+	if (hisi_sas_dev->dev_status != HISI_SAS_DEV_EH)
+		return TMF_RESP_FUNC_FAILED;
+	hisi_sas_dev->dev_status = HISI_SAS_DEV_NORMAL;
+
 	rc = hisi_sas_debug_I_T_nexus_reset(dev);
 
 	spin_lock_irqsave(&hisi_hba->lock, flags);

@@ -402,6 +402,12 @@ static int hisi_sas_probe(struct platform_device *pdev)
 	}
 	platform_set_drvdata(pdev, SHOST_TO_SAS_HA(shost));
 
+	/*l00293075 bug http://hulk.huawei.com/bugzilla/show_bug.cgi?id=731*/
+	if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64))) {
+		rc = -ENOMEM;
+		goto err_out_ha;
+	}
+
 	rc = hisi_sas_prep_ha_init(&pdev->dev, shost, n_core);
 	if (rc)
 		goto err_out_ha;
@@ -431,7 +437,6 @@ static int hisi_sas_probe(struct platform_device *pdev)
 			goto err_out_ha;
 
 		HISI_SAS_DISP->phys_init(hisi_hba);
-
 #ifdef CONFIG_DEBUG_FS
 		rc = hisi_sas_debugfs_init(hisi_hba);
 		if (rc)
