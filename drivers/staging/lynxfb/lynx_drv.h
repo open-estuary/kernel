@@ -33,7 +33,7 @@ typedef int pm_message_t;
 /* below code also works ok,but there must be no KERN_INFO prefix */
 //#define inf_msg(...) printk(__VA_ARGS__)
 
-#ifdef CONFIG_FB_LYNXFB_DEBUG
+#if (DEBUG == 1)
 /* debug level == 1 */
 #define dbg_msg(fmt,args...) printk(KERN_DEBUG PFX fmt, ## args)
 #define ENTER()	printk(KERN_DEBUG PFX "%*c %s\n",smi_indent++,'>',__func__)
@@ -42,6 +42,21 @@ typedef int pm_message_t;
 	printk(KERN_DEBUG PFX "%*c %s\n",--smi_indent,'<',__func__); \
 	return __VA_ARGS__; \
 	}while(0)
+
+#elif (DEBUG == 2)
+/* debug level == 2*/
+#define dbg_msg(fmt,args...) printk(KERN_ERR PFX fmt, ## args)
+#define ENTER()	printk(KERN_ERR PFX "%*c %s\n",smi_indent++,'>',__func__)
+
+#define LEAVE(...)	\
+	do{				\
+	printk(KERN_ERR PFX "%*c %s\n",--smi_indent,'<',__func__); \
+	return __VA_ARGS__; \
+	}while(0)
+
+#ifdef inf_msg
+#undef inf_msg
+#endif
 
 #define inf_msg(fmt,args...) printk(KERN_ERR PFX fmt, ## args)
 #else

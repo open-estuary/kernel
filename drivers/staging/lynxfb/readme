@@ -1,0 +1,84 @@
+--+=================================================================+--
+			Kernel Driver Manul Spec
+						07/08/2011 by monk.liu
+--+=================================================================+--
+1,How to build the kernel with driver source code
+	assume you have a kernel source folder named "linux-2.6.30" 
+	and the driver folder named "electra". below are the steps:
+
+	1.type "cp ./electra linux-2.6.30/driver/video/lynxfb -r" to 
+	copy driver souce code beneath kernel folder.	 
+
+	Notes: 	for not picking up the wrong driver folder, be aware that
+		the files under folder electra should contains 
+		"lynx_drv.c","lynx_hw750.c","ddk750","ddk712",etc...
+
+	2.add below section into linux-2.6.30/driver/video/Kconfig
+	( recommend to add to tail of "FB_INTEL_I2C" section):
+
+#**********************************************************************
+config FB_LYNXFB
+	tristate "SMI lynx sm750/718/712/722/502 display support"
+	depends on FB && PCI
+	select FB_CFB_IMAGEBLIT
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	---help---
+	  This driver supports graphic board with the siliconmotion
+	  sm750/sm718/sm712/sm722/sm502. Say Y if you have such a 
+	  graphic board.
+	  To compile this driver as a module, choose M here: the 
+	  module will be called lynxfb.
+	 
+#***********************************************************************
+
+
+	3.add below line into linux-2.6.30/driver/video/Makefile :
+		obj-$(CONFIG_FB_LYNXFB)	+= lynxfb/
+
+2,How to build the driver without kernel source code  (we prefer this 
+	method)
+
+	assume you have the electra source folder,just goto that folder 
+	and type "make" will get you the kernel module named "lynxfb.ko"
+	driver will be built according to the kernel version you are cu-
+	rrently running. use modinfo ./lynxfb.ko to check it.
+
+	*NOTE*:
+	If you are running a v2.6.32 linux and you also got v2.6.38 header
+	files under "/lib/modules/2.6.38/build" folder.
+	You can type "make kernel=2.6.38" to build the driver based on
+	the specific "2.6.38" version kernel (instead of previous method,
+	which will always build the driver based on the kernel version
+	you are running).	
+
+3,About the parameter of make:
+	"make debug=2" will generate all debug information to console/tty
+	"make debug=1" wil generate all debug information to dmesg
+	"make" will not generate any debug information
+
+4,About the kernel module paramter of driver
+	For lynxfb kernel modulem, the paramters are all wrapped with 
+	a string passed to the lynxfb.ko, for example:
+
+	A,Use 1280,8bpp index color and 60 hz mode:
+	insmod ./lynxfb.ko g_option="1280x1024-8@60" 
+
+	B,Disable MTRR,Disable 2d acceleration,Disable hardware cursor,
+	and use a 800x600 mode :
+	insmod ./lynxfb.ko g_option="noaccel,nomtrr,nohwc,800x600"
+
+	Notes#1:If you build the driver with built-in method, the paramter 
+		you edited in the grub config file will be also the 
+		same format as above module method
+		just add "video=lynxfb:" before the parameter string
+e.g.:
+linux /vmlinuz-2.6.30 root=uuid=xxx video=lynxfb:noaccel,1024x768-32@60
+
+
+	Notes#2:if you put 800x600 into the paramter without bpp and 
+		refresh rate, kernel driver will defaulty use 16bpp and 60hz
+
+	Notes#3:hardware cursor has been closed by default for SM712/SM722.
+		User can enable it by use option "usehwc".
+5,The specific driver parameter depends on chip will be explained in furture.

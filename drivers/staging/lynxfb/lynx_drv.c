@@ -1723,6 +1723,13 @@ int __init lynxfb_setup(char * options)
 
 static void claim(void){
 	inf_msg("+-------------SMI Driver Information------------+\n");
+	inf_msg("Release type : " RELEASE_TYPE "\n");
+	inf_msg("Driver version: v" _version_ "\n");
+	inf_msg("Support products:\n"
+	SUPPORT_CHIP);	
+	inf_msg("Support OS:\n"
+	SUPPORT_OS);
+	inf_msg("Support ARCH: " SUPPORT_ARCH "\n");
 	inf_msg("+-----------------------------------------------+\n");
 }
 

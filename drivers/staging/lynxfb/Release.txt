@@ -1,0 +1,131 @@
+-+===============================+-
+08/26/2015 Release version 4.0.4
+-+===============================+-
+feature add:
+1.Support kernel 3.19.
+2.Support ARM64 architect build.
+3.support sm750HS sm750HS_F
+
+-+===============================+-
+09/27/2011 Release version 4.0.3
+-+===============================+-
+feature add:
+1.support rhel 4.3 and sles 9 (x86_64 and i386)
+2.add modedb.c into source for preventing kernel panic (the panic happend in rhel4.x,which proved to be caused by null address reference from modedb)
+
+
+-+===============================+-
+09/27/2011 Release version 4.0.2
+-+===============================+-
+Support Chipset
+1.sm750LE
+
+Support OS/kernel/arch:
+1.support OS under x86 and x86_64: SLES 10/11
+
+Bug fixed:
+1.some common mode set failed,such as 1280x960,1152x864,fixed and cordinate the root cuase  in abuse of fb_find_mode
+2.suspend/resume of sm750le failed,fixed by adding ch7301 setup in hwInit routine
+
+Feature add:
+1.add extra mode "1280x768@60"
+
+
+-+===============================+-
+08/11/2011 Release version 4.0.1
+-+===============================+-
+Support Chipset
+1.sm750LE
+
+Support OS/kernel/arch:
+1.support OS under x86 and x86_64: RHEL 5.5/6.0
+
+Bug fixed:
+1.some common mode set failed,such as 1280x960,1152x864,fixed and cordinate the root cuase  in abuse of fb_find_mode
+2.suspend/resume of sm750le failed,fixed by adding ch7301 setup in hwInit routine
+
+Feature add:
+1.add extra mode "1280x768@60"
+
+-+===============================+-
+08/11/2011 
+-+===============================+-
+Bug fixed:
+1.Fixed the bug that many standard or vesa mode can not be set,like 1280x960
+2.rewrite the mode finding section of driver,to make it more smart and reliable
+
+-+===============================+-
+08/11/2011 
+-+===============================+-
+
+Bug fixed:
+1. Fixed the bug that Electra can not been compiled and worked in RHEL5.5 and SLES 10-sp3.
+
+-+===============================+-
+07/28/2011 
+-+===============================+-
+Features added:
+1.support hardware cursor for sm712/722
+2.support kerne version below 2.6.30 and above 2.6.12
+3.support 64bit 
+
+Bug fixed:
+1.parameter passed to g_option can't handle the case like "nohwc,1280x1024-16@60"
+  the mode request will get lost,driver will boot with default mode.the root cause is
+  located in the string process routine,it's always wrong when nohwc is ahead of mode 
+  parameter.
+
+Known issues:
+1.8bpp mode will encounter bug when used by plymouth (ubuntu 10.04)
+  root cause if because tty7 use by plymouth to output log message
+  will alter the mode to 8bpp beneath the knowledge of plymouth
+  and plymouth still draw 16/32bpp data image to frame buffer
+2.cursor color of sm712/722 incorrect,won't fix due to the hardware limitation
+  (712 cursor can only present 3:3:2 color)
+3.disable cursor of sm712/722 by default. It can be enable by set option "usehwc".
+
+-+===============================+-
+07/21/2011 Release version 4.0.0
+-+===============================+-
+Features added:
+1.support sm502 alsa audio
+2.support 2.6.31 ~ 2.6.39 kernel
+3.support hardware cursor for sm502/718/750
+4.support 2d accel
+
+Bug fixed:
+1.fix bug #6132:cursor image messed up after resume
+2.fix bug #6133:no timing signal after resume of sm712/722
+Known issue:
+
+1.8bpp mode will encounter bug when used by plymouth (ubuntu 10.04)
+  root cause if because tty7 use by plymouth to output log message
+  will alter the mode to 8bpp beneath the knowledge of plymouth
+  and plymouth still draw 16/32bpp data image to frame buffer
+2.hardware cursor for sm712/722 not supported yet.
+
+-+===============================+-
+05/04/2011 
+-+===============================+-
+Features:
+1.all vesa mode
+2.8/16/24/32 bpp (24 bpp only for sm750/718/502)
+3.2D acceleration supported 
+4.hardware cursor supported for 502/718/750
+5.MTRR supported
+
+Support Chipset
+1.sm502
+2.sm712
+3.sm718
+4.sm722
+5.sm750
+
+Support OS/kernel/arch:
+1.support OS under x86 and x86_64: fedora 12,ubuntu 9.10/10.04
+2.support kernel version:see kernel version of above distro
+3.support arch: x86 and x86_64
+
+
+
+
