@@ -549,27 +549,19 @@ static unsigned long long IOMAP_HILINK_SLAVE_MACRO6_BASE_ADDR = 0;
  *						*
  *----------------------------------------------*/
 static unsigned long long sub_pcie_base_addr = 0;
-#ifdef MODULE
 static unsigned long long sub_pcie_pa_addr = 0;
-#endif
 
 /*add by chenqilin*/
 static unsigned long long sub_pcie_base_addr_slavecpu = 0;
-#ifdef MODULE
 static unsigned long long sub_pcie_pa_addr_slavecpu = 0;
-#endif
 /*end*/
 
 static unsigned long long sub_dsaf_base_addr = 0;
-#ifdef MODULE
 static unsigned long long sub_dsaf_pa_addr = 0;
-#endif
 
 /*add by chenqilin*/
 static unsigned long long sub_dsaf_base_addr_slavecpu = 0;
-#ifdef MODULE
 static unsigned long long sub_dsaf_pa_addr_slavecpu = 0;
-#endif
 /*end*/
 
 
@@ -1191,7 +1183,6 @@ static void Serdes_Delay_Us(unsigned int time)
 		udelay(time);
 }
 
-#ifdef MODULE
 unsigned int HRD_SubDsafInit(void)
 {
 	sub_dsaf_pa_addr = DSAF_SUB_BASE;
@@ -1229,7 +1220,7 @@ unsigned int HRD_SubDsafInit(void)
 
 	return OS_SUCCESS;
 }
-#endif
+
 
 /*****************************************************************************
     : HRD_SubAlgExit
@@ -1286,7 +1277,6 @@ static unsigned long long HRD_CommonSubDsafGetBase(unsigned int node)
 	 :
 
 *****************************************************************************/
-#ifdef MODULE
 unsigned int HRD_SubPcieInit(void)
 {
 	sub_pcie_pa_addr = PCIE_SUB_BASE;
@@ -1322,7 +1312,7 @@ unsigned int HRD_SubPcieInit(void)
 	/* end */
 	return OS_SUCCESS;
 }
-#endif
+
 
 /*****************************************************************************
     : HRD_SubPcieExit
