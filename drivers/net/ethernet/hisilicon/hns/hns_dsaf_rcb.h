@@ -47,7 +47,7 @@ struct rcb_common_cb;
 
 #define HNS_RCB_COMMON_DUMP_REG_NUM 80
 #define HNS_RCB_RING_DUMP_REG_NUM 40
-#define HNS_RING_STATIC_REG_NUM 30
+#define HNS_RING_STATIC_REG_NUM 28
 
 #define HNS_DUMP_REG_NUM			500
 #define HNS_STATIC_REG_NUM			12
@@ -111,6 +111,7 @@ void hns_rcb_int_clr_hw(struct hnae_queue *q, u32 flag);
 void hns_rcb_int_ctrl_hw(struct hnae_queue *q, u32 flag, u32 enable);
 void hns_rcb_init_hw(struct ring_pair_cb *ring);
 void hns_rcb_reset_ring_hw(struct hnae_queue *q);
+void hns_rcb_wait_fbd_clean(struct hnae_queue **qs, int q_num, u32 flag);
 
 u32 hns_rcb_get_coalesced_frames(struct dsaf_device *dsaf_dev, int comm_index);
 u32 hns_rcb_get_coalesce_usecs(struct dsaf_device *dsaf_dev, int comm_index);

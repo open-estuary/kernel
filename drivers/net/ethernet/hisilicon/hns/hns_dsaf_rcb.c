@@ -33,6 +33,36 @@
 #define RCB_RESET_TRY_TIMES 10
 
 /**
+ *hns_rcb_wait_fbd_clean - clean fbd
+ *@qs: ring struct pointer array
+ *@qnum: num of array
+ *@flag: tx or rx flag
+ */
+void hns_rcb_wait_fbd_clean(struct hnae_queue **qs, int q_num, u32 flag)
+{
+	int i, wait_cnt;
+	u32 fbd_num;
+
+	for (wait_cnt = 0, i = 0; (i < q_num) && (wait_cnt < 10000);
+	     wait_cnt++) {
+		usleep_range(200, 300);
+		fbd_num = 0;
+		if (flag & RCB_INT_FLAG_TX)
+			fbd_num += dsaf_read_dev(qs[i],
+						 RCB_RING_TX_RING_FBDNUM_REG);
+		if (flag & RCB_INT_FLAG_RX)
+			fbd_num += dsaf_read_dev(qs[i],
+						 RCB_RING_RX_RING_FBDNUM_REG);
+		if (!fbd_num)
+			i++;
+	}
+
+	if (i < q_num)
+		dev_err(qs[i]->handle->owner_dev,
+			"queue(%d) wait fbd(%d) clean fail!!\n", i, fbd_num);
+}
+
+/**
  *hns_rcb_reset_ring_hw - ring reset
  *@q: ring struct pointer
  */
@@ -42,22 +72,38 @@ void hns_rcb_reset_ring_hw(struct hnae_queue *q)
 	u32 try_cnt = 0;
 	u32 could_ret;
 
-	do {
+	u32 tx_fbd_num;
+
+	while (try_cnt++ < RCB_RESET_TRY_TIMES) {
+		usleep_range(100, 200);
+		tx_fbd_num = dsaf_read_dev(q, RCB_RING_TX_RING_FBDNUM_REG);
+		if (tx_fbd_num)
+			continue;
+
+		dsaf_write_dev(q, RCB_RING_PREFETCH_EN_REG, 0);
+
 		dsaf_write_dev(q, RCB_RING_T0_BE_RST, 1);
 
-		wait_cnt = 0;
+		msleep(20);
 		could_ret = dsaf_read_dev(q, RCB_RING_COULD_BE_RST);
+
+		wait_cnt = 0;
 		while (!could_ret && (wait_cnt < RCB_RESET_WAIT_TIMES)) {
-			usleep_range(100, 200);
+			dsaf_write_dev(q, RCB_RING_T0_BE_RST, 0);
+
+			dsaf_write_dev(q, RCB_RING_T0_BE_RST, 1);
+
+			msleep(20);
 			could_ret = dsaf_read_dev(q, RCB_RING_COULD_BE_RST);
+
 			wait_cnt++;
 		}
 
 		dsaf_write_dev(q, RCB_RING_T0_BE_RST, 0);
-		if (could_ret)
-			return;
 
-	} while (try_cnt++ < RCB_RESET_TRY_TIMES);
+		if (could_ret)
+			break;
+	}
 
 	if (try_cnt >= RCB_RESET_TRY_TIMES)
 		dev_err(q->dev->dev, "port%d reset ring fail\n",
@@ -708,35 +754,34 @@ void hns_rcb_get_stats(struct hnae_queue *queue, u64 *data)
 	regs_buff[3] =
 		dsaf_read_dev(queue, RCB_RING_TX_RING_FBDNUM_REG);
 
-	regs_buff[4] = queue->tx_ring.stats.pkts.tx_pkts;
-	regs_buff[5] = queue->tx_ring.stats.bytes.tx_bytes;
-	regs_buff[6] = queue->tx_ring.stats.err_cnt.tx_err_cnt;
+	regs_buff[4] = queue->tx_ring.stats.tx_pkts;
+	regs_buff[5] = queue->tx_ring.stats.tx_bytes;
+	regs_buff[6] = queue->tx_ring.stats.tx_err_cnt;
 	regs_buff[7] = queue->tx_ring.stats.io_err_cnt;
 	regs_buff[8] = queue->tx_ring.stats.sw_err_cnt;
 	regs_buff[9] = queue->tx_ring.stats.seg_pkt_cnt;
-	regs_buff[10] = queue->tx_ring.stats.reuse_pg_cnt;
-	regs_buff[11] = queue->tx_ring.stats.err_pkt_len;
-	regs_buff[12] = queue->tx_ring.stats.non_vld_descs;
-	regs_buff[13] = queue->tx_ring.stats.err_bd_num;
-	regs_buff[14] = queue->tx_ring.stats.csum_err;
+	regs_buff[10] = queue->tx_ring.stats.restart_queue;
+	regs_buff[11] = queue->tx_ring.stats.tx_busy;
 
-	regs_buff[15] = hw_stats->rx_pkts;
-	regs_buff[16] = hw_stats->ppe_rx_ok_pkts;
-	regs_buff[17] = hw_stats->ppe_rx_drop_pkts;
-	regs_buff[18] =
+	regs_buff[12] = hw_stats->rx_pkts;
+	regs_buff[13] = hw_stats->ppe_rx_ok_pkts;
+	regs_buff[14] = hw_stats->ppe_rx_drop_pkts;
+	regs_buff[15] =
 		dsaf_read_dev(queue, RCB_RING_RX_RING_FBDNUM_REG);
 
-	regs_buff[19] = queue->rx_ring.stats.pkts.rx_pkts;
-	regs_buff[20] = queue->rx_ring.stats.bytes.rx_bytes;
-	regs_buff[21] = queue->rx_ring.stats.err_cnt.rx_err_cnt;
-	regs_buff[22] = queue->rx_ring.stats.io_err_cnt;
-	regs_buff[23] = queue->rx_ring.stats.sw_err_cnt;
-	regs_buff[24] = queue->rx_ring.stats.seg_pkt_cnt;
-	regs_buff[25] = queue->rx_ring.stats.reuse_pg_cnt;
-	regs_buff[26] = queue->rx_ring.stats.err_pkt_len;
-	regs_buff[27] = queue->rx_ring.stats.non_vld_descs;
-	regs_buff[28] = queue->rx_ring.stats.err_bd_num;
-	regs_buff[29] = queue->rx_ring.stats.csum_err;
+	regs_buff[16] = queue->rx_ring.stats.rx_pkts;
+	regs_buff[17] = queue->rx_ring.stats.rx_bytes;
+	regs_buff[18] = queue->rx_ring.stats.rx_err_cnt;
+	regs_buff[19] = queue->rx_ring.stats.io_err_cnt;
+	regs_buff[20] = queue->rx_ring.stats.sw_err_cnt;
+	regs_buff[21] = queue->rx_ring.stats.seg_pkt_cnt;
+	regs_buff[22] = queue->rx_ring.stats.reuse_pg_cnt;
+	regs_buff[23] = queue->rx_ring.stats.err_pkt_len;
+	regs_buff[24] = queue->rx_ring.stats.non_vld_descs;
+	regs_buff[25] = queue->rx_ring.stats.err_bd_num;
+	regs_buff[26] = queue->rx_ring.stats.l2_err;
+	regs_buff[27] = queue->rx_ring.stats.l3l4_csum_err;
+
 }
 
 /**
@@ -804,15 +849,9 @@ void hns_rcb_get_strings(int stringset, u8 *data, int index)
 	buff = buff + ETH_GSTRING_LEN;
 	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_seg_pkt", index);
 	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_reuse_pg", index);
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_restart_queue", index);
 	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_len_err", index);
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_non_vld_desc_err", index);
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_bd_num_err", index);
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_csumerr", index);
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_tx_busy", index);
 	buff = buff + ETH_GSTRING_LEN;
 
 	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_rcb_pkt_num", index);
@@ -844,7 +883,9 @@ void hns_rcb_get_strings(int stringset, u8 *data, int index)
 	buff = buff + ETH_GSTRING_LEN;
 	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_bd_num_err", index);
 	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_csum_err", index);
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_l2_err", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_l3l4csum_err", index);
 }
 
 void hns_rcb_get_common_regs(struct rcb_common_cb *rcb_com, void *data)

@@ -36,7 +36,7 @@
 #define DSAF_TOTAL_QUEUE_NUM	(129)
 
 #define DSAF_TCAM_SUM		(512)
-#define DSAF_LINE_SUM		(2048*14)
+#define DSAF_LINE_SUM		(2048 * 14)
 
 #define DSAF_SUB_SC_NT_SRAM_CLK_SEL_REG                (0x100)
 #define DSAF_SUB_SC_HILINK3_CRG_CTRL0_REG              (0x180)

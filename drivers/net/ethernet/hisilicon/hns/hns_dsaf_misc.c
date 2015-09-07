@@ -66,12 +66,18 @@ int cpld_set_led_id(struct hns_mac_cb *mac_cb,
 		mac_cb->cpld_led_value = dsaf_read_b(mac_cb->cpld_vaddr);
 		return 2;
 	case HNAE_LED_ON:
-		dsaf_write_b(mac_cb->cpld_vaddr, CPLD_LED_ON_VALUE);
+		dsaf_set_bit(mac_cb->cpld_led_value, DSAF_LED_ANCHOR_B,
+			     CPLD_LED_ON_VALUE);
+		dsaf_write_b(mac_cb->cpld_vaddr, mac_cb->cpld_led_value);
 		break;
 	case HNAE_LED_OFF:
-		dsaf_write_b(mac_cb->cpld_vaddr, CPLD_LED_DEFAULT_VALUE);
+		dsaf_set_bit(mac_cb->cpld_led_value, DSAF_LED_ANCHOR_B,
+			     CPLD_LED_DEFAULT_VALUE);
+		dsaf_write_b(mac_cb->cpld_vaddr, mac_cb->cpld_led_value);
 		break;
 	case HNAE_LED_INACTIVE:
+		dsaf_set_bit(mac_cb->cpld_led_value, DSAF_LED_ANCHOR_B,
+			     CPLD_LED_DEFAULT_VALUE);
 		dsaf_write_b(mac_cb->cpld_vaddr, mac_cb->cpld_led_value);
 		break;
 	default:

@@ -173,12 +173,8 @@ static void hns_ae_fini_queue(struct hnae_queue *q)
 {
 	struct hnae_port_cb *port_cb = hns_ae_get_port_cb(q->handle);
 
-	if (port_cb->mac_cb->mac_type == HNAE_PORT_SERVICE) {
+	if (port_cb->mac_cb->mac_type == HNAE_PORT_SERVICE)
 		hns_rcb_reset_ring_hw(q);
-	} else {
-		hns_mac_reset(port_cb->mac_cb);
-		hns_ppe_reset(port_cb->dsaf_dev);
-	}
 }
 
 static int hns_ae_set_mac_address(struct hnae_handle *handle, void *p)
@@ -208,6 +204,9 @@ static int hns_ae_set_multicast_one(struct hnae_handle *handle, void *addr)
 	struct hns_mac_cb *mac_cb = hns_get_mac_cb(handle);
 
 	assert(mac_cb);
+
+	if (mac_cb->mac_type != HNAE_PORT_SERVICE)
+		return 0;
 
 	ret = hns_mac_set_multi(mac_cb, mac_cb->mac_id, mac_addr, ENABLE);
 	if (ret) {
@@ -255,27 +254,31 @@ void hns_ae_stop(struct hnae_handle *handle)
 {
 	struct hns_mac_cb *mac_cb = hns_get_mac_cb(handle);
 
+	/* just clean tx fbd, neednot rx fbd*/
+	hns_rcb_wait_fbd_clean(handle->qs, handle->q_num, RCB_INT_FLAG_TX);
+
+	msleep(20);
+
 	hns_mac_stop(mac_cb);
 
 	usleep_range(10000, 20000);
 
 	hns_ae_ring_enable_all(handle, 0);
-	msleep(100);
 
 	(void)hns_mac_vm_config_bc_en(mac_cb, 0, DISABLE);
 }
 
 static void hns_ae_reset(struct hnae_handle *handle)
 {
-	int i;
 	struct hnae_port_cb *port_cb = hns_ae_get_port_cb(handle);
 
-	if (port_cb->mac_cb->mac_type == HNAE_PORT_SERVICE) {
-		for (i = 0; i < handle->q_num; i++)
-			hns_rcb_reset_ring_hw(handle->qs[i]);
-	} else {
+	if (port_cb->mac_cb->mac_type == HNAE_PORT_DEBUG) {
+		u8 ppe_common_index =
+			port_cb->index - DSAF_SERVICE_PORT_NUM_PER_DSAF + 1;
+
 		hns_mac_reset(port_cb->mac_cb);
-		hns_ppe_reset(port_cb->dsaf_dev);
+		hns_ppe_reset_common(port_cb->dsaf_dev,
+				     ppe_common_index);
 	}
 }
 
@@ -313,14 +316,6 @@ static int hns_ae_get_mac_info(struct hnae_handle *handle,
 	struct hns_mac_cb *mac_cb = hns_get_mac_cb(handle);
 
 	return hns_mac_get_port_info(mac_cb, auto_neg, speed, duplex);
-}
-
-static int hns_ae_set_mac_info(struct hnae_handle *handle,
-			       u8 auto_neg, u16 speed, u8 duplex)
-{
-	struct hns_mac_cb *mac_cb = hns_get_mac_cb(handle);
-
-	return hns_mac_set_port_info(mac_cb, auto_neg, speed, duplex);
 }
 
 static void hns_ae_adjust_link(struct hnae_handle *handle, int speed,
@@ -461,19 +456,18 @@ void hns_ae_update_stats(struct hnae_handle *handle,
 		queue = handle->qs[idx];
 		hns_rcb_update_stats(queue);
 
-		tx_bytes += queue->tx_ring.stats.bytes.tx_bytes;
-		tx_packets += queue->tx_ring.stats.pkts.tx_pkts;
-		rx_bytes += queue->tx_ring.stats.bytes.rx_bytes;
-		rx_packets += queue->rx_ring.stats.pkts.rx_pkts;
+		tx_bytes += queue->tx_ring.stats.tx_bytes;
+		tx_packets += queue->tx_ring.stats.tx_pkts;
+		rx_bytes += queue->rx_ring.stats.rx_bytes;
+		rx_packets += queue->rx_ring.stats.rx_pkts;
 
 		rx_errors += queue->rx_ring.stats.err_pkt_len
-				+ queue->rx_ring.stats.csum_err;
+				+ queue->rx_ring.stats.l2_err
+				+ queue->rx_ring.stats.l3l4_csum_err;
 	}
 
 	hns_ppe_update_stats(ppe_cb);
 	rx_missed_errors = ppe_cb->hw_stats.rx_drop_no_buf;
-	rx_errors += ppe_cb->hw_stats.rx_drop_no_buf
-		+ ppe_cb->hw_stats.rx_err_fifo_full;
 	tx_errors += ppe_cb->hw_stats.tx_err_checksum
 		+ ppe_cb->hw_stats.tx_err_fifo_empty;
 
@@ -481,8 +475,8 @@ void hns_ae_update_stats(struct hnae_handle *handle,
 		hns_dsaf_update_stats(dsaf_dev, port);
 		/* for port upline direction, i.e., rx. */
 		rx_missed_errors += dsaf_dev->hw_stats[port].bp_drop;
-		rx_errors += dsaf_dev->hw_stats[port].pad_drop;
-		rx_errors += dsaf_dev->hw_stats[port].crc_false;
+		rx_missed_errors += dsaf_dev->hw_stats[port].pad_drop;
+		rx_missed_errors += dsaf_dev->hw_stats[port].crc_false;
 
 		/* for port downline direction, i.e., tx. */
 		port = port + DSAF_PPE_INODE_BASE;
@@ -496,16 +490,10 @@ void hns_ae_update_stats(struct hnae_handle *handle,
 	}
 
 	hns_mac_update_stats(mac_cb);
-	rx_errors += mac_cb->hw_stats.rx_fcs_err
-		+ mac_cb->hw_stats.rx_align_err
-		+ mac_cb->hw_stats.rx_fifo_overrun_err
-		+ mac_cb->hw_stats.rx_len_err;
+	rx_errors += mac_cb->hw_stats.rx_fifo_overrun_err;
+
 	tx_errors += mac_cb->hw_stats.tx_bad_pkts
 		+ mac_cb->hw_stats.tx_fragment_err
-		+ mac_cb->hw_stats.tx_jabber_err
-		+ mac_cb->hw_stats.tx_underrun_err
-		+ mac_cb->hw_stats.tx_crc_err;
-	tx_dropped += mac_cb->hw_stats.tx_fragment_err
 		+ mac_cb->hw_stats.tx_jabber_err
 		+ mac_cb->hw_stats.tx_underrun_err
 		+ mac_cb->hw_stats.tx_crc_err;
@@ -513,6 +501,7 @@ void hns_ae_update_stats(struct hnae_handle *handle,
 	net_stats->tx_bytes = tx_bytes;
 	net_stats->tx_packets = tx_packets;
 	net_stats->rx_bytes = rx_bytes;
+	net_stats->rx_dropped = 0;
 	net_stats->rx_packets = rx_packets;
 	net_stats->rx_errors = rx_errors;
 	net_stats->tx_errors = tx_errors;
@@ -705,7 +694,6 @@ static struct hnae_ae_ops hns_dsaf_ops = {
 	.toggle_queue_status = hns_ae_toggle_queue_status,
 	.get_status = hns_ae_get_link_status,
 	.get_info = hns_ae_get_mac_info,
-	.set_info = hns_ae_set_mac_info,
 	.adjust_link = hns_ae_adjust_link,
 	.set_loopback = hns_ae_config_loopback,
 	.get_ring_bdnum_limit = hns_ae_get_ring_bdnum_limit,

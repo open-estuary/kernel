@@ -92,7 +92,7 @@ int hns_ppe_init(struct dsaf_device *dsaf_dev);
 
 void hns_ppe_uninit(struct dsaf_device *dsaf_dev);
 
-void hns_ppe_reset(struct dsaf_device *dsaf_dev);
+void hns_ppe_reset_common(struct dsaf_device *dsaf_dev, u8 ppe_common_index);
 
 void hns_ppe_update_stats(struct hns_ppe_cb *ppe_cb);
 

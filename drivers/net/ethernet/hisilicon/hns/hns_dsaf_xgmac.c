@@ -79,7 +79,7 @@ static const struct mac_stats_string g_xgmac_stats_string[] = {
 	{"xgmac_rx_pfc_per_6pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc6)},
 	{"xgmac_rx_pfc_per_7pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc7)},
 	{"xgmac_rx_mac_control", MAC_STATS_FIELD_OFF(rx_unknown_ctrl)},
-	{"xgmac_rx_good_pkt_todsaf", MAC_STATS_FIELD_OFF(tx_good_to_sw)},
+	{"xgmac_tx_good_pkt_todsaf", MAC_STATS_FIELD_OFF(tx_good_to_sw)},
 	{"xgmac_tx_bad_pkt_todsaf", MAC_STATS_FIELD_OFF(tx_bad_to_sw)},
 	{"xgmac_rx_1731_pkt", MAC_STATS_FIELD_OFF(rx_1731_pkts)},
 	{"xgmac_rx_symbol_err_pkt", MAC_STATS_FIELD_OFF(rx_symbol_err)},
@@ -155,8 +155,8 @@ static void hns_xgmac_disable(void *mac_drv, enum mac_commom_mode mode)
 		hns_xgmac_rx_enable(drv, 0);
 	}
 
-	hns_dsaf_xge_core_srst_by_port(dsaf_dev, port, 0);
 	mdelay(10);
+	hns_dsaf_xge_core_srst_by_port(dsaf_dev, port, 0);
 }
 
 /**

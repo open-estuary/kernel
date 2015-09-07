@@ -192,23 +192,26 @@ struct ring_stats {
 	u64 io_err_cnt;
 	u64 sw_err_cnt;
 	u64 seg_pkt_cnt;
-	u64 reuse_pg_cnt;
-	u64 err_pkt_len;
-	u64 non_vld_descs;
-	u64 err_bd_num;
-	u64 csum_err;
 	union {
-		u64 tx_pkts;
-		u64 rx_pkts;
-	} pkts;
-	union {
-		u64 tx_bytes;
-		u64 rx_bytes;
-	} bytes;
-	union {
-		u64 tx_err_cnt;
-		u64 rx_err_cnt;
-	} err_cnt;
+		struct {
+			u64 tx_pkts;
+			u64 tx_bytes;
+			u64 tx_err_cnt;
+			u64 restart_queue;
+			u64 tx_busy;
+		};
+		struct {
+			u64 rx_pkts;
+			u64 rx_bytes;
+			u64 rx_err_cnt;
+			u64 reuse_pg_cnt;
+			u64 err_pkt_len;
+			u64 non_vld_descs;
+			u64 err_bd_num;
+			u64 l2_err;
+			u64 l3l4_csum_err;
+		};
+	};
 };
 
 struct hnae_queue;
@@ -404,8 +407,6 @@ struct hnae_ae_ops {
 	int (*get_status)(struct hnae_handle *handle);
 	int (*get_info)(struct hnae_handle *handle,
 			u8 *auto_neg, u16 *speed, u8 *duplex);
-	int (*set_info)(struct hnae_handle *handle,
-			u8 auto_neg, u16 speed, u8 duplex);
 	void (*toggle_ring_irq)(struct hnae_ring *ring, u32 val);
 	void (*toggle_queue_status)(struct hnae_queue *queue, u32 val);
 	void (*adjust_link)(struct hnae_handle *handle, int speed, int duplex);

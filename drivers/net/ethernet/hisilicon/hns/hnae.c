@@ -291,6 +291,9 @@ int hnae_reinit_handle(struct hnae_handle *handle)
 	for (i = 0; i < handle->q_num; i++) /* free ring*/
 		hnae_fini_queue(handle->qs[i]);
 
+	if (handle->dev->ops->reset)
+		handle->dev->ops->reset(handle);
+
 	for (i = 0; i < handle->q_num; i++) {/* reinit ring*/
 		ret = hnae_init_queue(handle, handle->qs[i], handle->dev);
 		if (ret)
@@ -361,6 +364,9 @@ void hnae_put_handle(struct hnae_handle *h)
 
 	for (i = 0; i < h->q_num; i++)
 		hnae_fini_queue(h->qs[i]);
+
+	if (h->dev->ops->reset)
+		h->dev->ops->reset(h);
 
 	hnae_list_del(&dev->lock, &h->node);
 

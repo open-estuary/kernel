@@ -27,7 +27,7 @@
 #define HNS_LED_FORCE_OFF	8
 
 #define HNS_CHIP_VERSION 660
-#define HNS_NET_STATS_CNT 25
+#define HNS_NET_STATS_CNT 26
 
 #define PHY_MDIX_CTRL_S		(5)
 #define PHY_MDIX_CTRL_M		(3 << PHY_MDIX_CTRL_S)
@@ -126,7 +126,7 @@ static int hns_nic_get_settings(struct net_device *net_dev,
 	struct hnae_handle *h;
 	u32 link_stat;
 	int ret;
-	u8 auto_neg, duplex;
+	u8 duplex;
 	u16 speed;
 
 	if (!priv || !priv->ae_handle)
@@ -136,13 +136,14 @@ static int hns_nic_get_settings(struct net_device *net_dev,
 	if (!h->dev || !h->dev->ops || !h->dev->ops->get_info)
 		return -ESRCH;
 
-	ret = h->dev->ops->get_info(h, &auto_neg, &speed, &duplex);
+	ret = h->dev->ops->get_info(h, NULL, &speed, &duplex);
 	if (ret < 0) {
 		netdev_err(net_dev, "%s get_info error!\n", __func__);
 		return -EINVAL;
 	}
 
-	cmd->autoneg = auto_neg;
+	/* When there is no phy, autoneg is off. */
+	cmd->autoneg = false;
 	ethtool_cmd_speed_set(cmd, speed);
 	cmd->duplex = duplex;
 
@@ -191,40 +192,65 @@ static int hns_nic_get_settings(struct net_device *net_dev,
 static int hns_nic_set_settings(struct net_device *net_dev,
 				struct ethtool_cmd *cmd)
 {
-	struct hns_nic_priv *priv       = netdev_priv(net_dev);
-	struct hnae_handle  *h;
-	int                 ret;
-
-	if (!priv || !priv->ae_handle)
-		return -ENODEV;
-
-	h = priv->ae_handle;
-
-	if (!h->dev->ops->set_info)
-		return -ENODEV;
+	struct hns_nic_priv *priv = netdev_priv(net_dev);
+	struct hnae_handle *h;
+	int link_stat;
+	u32 speed;
+	u8 duplex, autoneg;
 
 	if (!netif_running(net_dev))
 		return -ESRCH;
 
-	ret = h->dev->ops->set_info(h, cmd->autoneg, cmd->speed, cmd->duplex);
-	if (ret) {
-		netdev_err(net_dev,
-			   "set settings error!\n");
-		return ret;
+	if (!priv || !priv->ae_handle || !priv->ae_handle->dev ||
+	    !priv->ae_handle->dev->ops)
+		return -ENODEV;
+
+	h = priv->ae_handle;
+	link_stat = hns_nic_get_link(net_dev);
+	duplex = cmd->duplex;
+	speed = ethtool_cmd_speed(cmd);
+	autoneg = cmd->autoneg;
+
+	if (!link_stat) {
+		if (duplex != (u8)DUPLEX_UNKNOWN || speed != (u32)SPEED_UNKNOWN)
+			return -EINVAL;
+
+		if (h->phy_if == PHY_INTERFACE_MODE_SGMII && h->phy_node) {
+			priv->phy->autoneg = autoneg;
+			return phy_start_aneg(priv->phy);
+		}
+	}
+
+	if (h->phy_if == PHY_INTERFACE_MODE_XGMII) {
+		if (autoneg != AUTONEG_DISABLE)
+			return -EINVAL;
+
+		if (speed != SPEED_10000 || duplex != DUPLEX_FULL)
+			return -EINVAL;
+	} else if (h->phy_if == PHY_INTERFACE_MODE_SGMII) {
+		if (!h->phy_node && autoneg != AUTONEG_DISABLE)
+			return -EINVAL;
+
+		if (speed == SPEED_1000 && duplex == DUPLEX_HALF)
+			return -EINVAL;
+
+		if (speed != SPEED_10 && speed != SPEED_100 &&
+		    speed != SPEED_1000)
+			return -EINVAL;
+	} else {
+		netdev_err(net_dev, "Not supported!");
+		return -ENOTSUPP;
 	}
 
 	if (priv->phy) {
-		(void)phy_ethtool_sset(priv->phy, cmd);
+		return phy_ethtool_sset(priv->phy, cmd);
+	} else if (h->dev->ops->adjust_link && link_stat) {
+		h->dev->ops->adjust_link(h, speed, duplex);
 		return 0;
+	} else {
+		netdev_err(net_dev, "Not supported!");
+		return -ENOTSUPP;
 	}
-
-	/* Adjust the current link if link up. */
-	if (h->dev->ops->adjust_link && hns_nic_get_link(net_dev))
-		h->dev->ops->adjust_link(h, cmd->speed, cmd->duplex);
-	else
-		netdev_err(net_dev, "%s: not support setting!\n", __func__);
-
-	return 0;
 }
 
 static const char hns_nic_test_strs[][ETH_GSTRING_LEN] = {
@@ -589,8 +615,6 @@ static void hns_nic_self_test(struct net_device *ndev,
 	int i;
 	int test_index = 0;
 
-	set_bit(NIC_STATE_TESTING, &priv->state);
-
 	st_param[0][0] = MAC_INTERNALLOOP_MAC; /* XGE not supported lb */
 	st_param[0][1] = (priv->ae_handle->phy_if != PHY_INTERFACE_MODE_XGMII);
 	st_param[1][0] = MAC_INTERNALLOOP_SERDES;
@@ -600,6 +624,8 @@ static void hns_nic_self_test(struct net_device *ndev,
 		(priv->ae_handle->phy_if != PHY_INTERFACE_MODE_XGMII));
 
 	if (eth_test->flags == ETH_TEST_FL_OFFLINE) {
+		set_bit(NIC_STATE_TESTING, &priv->state);
+
 		if (if_running)
 			(void)dev_close(ndev);
 
@@ -623,12 +649,12 @@ static void hns_nic_self_test(struct net_device *ndev,
 
 		hns_nic_net_reset(priv->netdev);
 
+		clear_bit(NIC_STATE_TESTING, &priv->state);
+
 		if (if_running)
 			(void)dev_open(ndev);
 	}
 	/* Online tests aren't run; pass by default */
-
-	clear_bit(NIC_STATE_TESTING, &priv->state);
 
 	(void)msleep_interruptible(4 * 1000);
 }
@@ -725,10 +751,8 @@ static int hns_set_pauseparam(struct net_device *net_dev,
 	if (!ops->set_pauseparam)
 		return -ESRCH;
 
-	(void)ops->set_pauseparam(priv->ae_handle, param->autoneg,
-				  param->rx_pause, param->tx_pause);
-
-	return 0;
+	return ops->set_pauseparam(priv->ae_handle, param->autoneg,
+				   param->rx_pause, param->tx_pause);
 }
 
 /**
@@ -871,8 +895,10 @@ void hns_get_ethtool_stats(struct net_device *netdev,
 	p[23] = netdev->rx_dropped.counter;
 	p[24] = netdev->tx_dropped.counter;
 
+	p[25] = priv->tx_timeout_count;
+
 	/* get driver statistics */
-	h->dev->ops->get_stats(h, &p[25]);
+	h->dev->ops->get_stats(h, &p[26]);
 }
 
 /**
@@ -955,6 +981,9 @@ void hns_get_strings(struct net_device *netdev, u32 stringset, u8 *data)
 		snprintf(buff, ETH_GSTRING_LEN, "netdev_rx_dropped");
 		buff = buff + ETH_GSTRING_LEN;
 		snprintf(buff, ETH_GSTRING_LEN, "netdev_tx_dropped");
+		buff = buff + ETH_GSTRING_LEN;
+
+		snprintf(buff, ETH_GSTRING_LEN, "netdev_tx_timeout");
 		buff = buff + ETH_GSTRING_LEN;
 
 		h->dev->ops->get_strings(h, stringset, (u8 *)buff);
@@ -1165,13 +1194,13 @@ static int hns_nic_nway_reset(struct net_device *netdev)
 {
 	int ret = 0;
 	struct hns_nic_priv *priv = netdev_priv(netdev);
-	struct phy_device *phy_dev = priv->phy;
+	struct phy_device *phy = priv->phy;
 
 	if (netif_running(netdev)) {
-		hns_nic_net_reinit(netdev);
-		if (phy_dev)
-			ret = phy_start_aneg(phy_dev);
+		if (phy)
+			ret = genphy_restart_aneg(phy);
 	}
+
 	return ret;
 }
 

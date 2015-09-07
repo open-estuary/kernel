@@ -166,7 +166,7 @@ struct dsaf_drv_mac_multi_dest_entry {
 	u16 in_vlan_id;
 	/* this mac addr output port,*/
 	/*	bit0-bit5 means Port0-Port5(1bit is vld)**/
-	u32 port_mask[DSAF_DEST_PORT_NUM/DSAF_WORD_BIT_CNT];
+	u32 port_mask[DSAF_DEST_PORT_NUM / DSAF_WORD_BIT_CNT];
 
 	/* the vld input port num, dsaf-mode fix 0,*/
 	/*	non-dasf is the entry whitch port vld*/

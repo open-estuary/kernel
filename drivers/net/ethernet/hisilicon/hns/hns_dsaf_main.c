@@ -2238,7 +2238,7 @@ void hns_dsaf_get_regs(struct dsaf_device *ddev, u32 port, void *data)
 
 	p[227] = dsaf_read_dev(ddev, DSAF_INODE_GE_FC_EN_0_REG + port * 4);
 
-	for (i = 0; i < DSAF_INODE_NUM/DSAF_COMM_CHN; i++) {
+	for (i = 0; i < DSAF_INODE_NUM / DSAF_COMM_CHN; i++) {
 		j = i * DSAF_COMM_CHN + port;
 		p[228 + i] = dsaf_read_dev(ddev,
 				DSAF_INODE_VC0_IN_PKT_NUM_0_REG + j * 4);

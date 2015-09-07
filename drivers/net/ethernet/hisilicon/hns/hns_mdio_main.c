@@ -24,7 +24,7 @@
 
 #define MDIO_DRV_NAME "Hi-MDIO"
 #define MDIO_BUS_NAME "Hisilicon MII Bus"
-#define MDIO_DRV_VERSION "1.1.0"
+#define MDIO_DRV_VERSION "1.2.0"
 #define MDIO_COPYRIGHT "Copyright(c) 2015 - 2019 Huawei Corporation."
 #define MDIO_DRV_STRING MDIO_BUS_NAME
 #define MDIO_DEFAULT_DEVICE_DESCR MDIO_BUS_NAME

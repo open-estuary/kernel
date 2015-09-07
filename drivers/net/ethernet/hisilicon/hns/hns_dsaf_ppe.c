@@ -330,25 +330,25 @@ void hns_ppe_uninit(struct dsaf_device *dsaf_dev)
  * @dsaf_dev: dasf device
  * retuen void
  */
-void hns_ppe_reset(struct dsaf_device *dsaf_dev)
+void hns_ppe_reset_common(struct dsaf_device *dsaf_dev, u8 ppe_common_index)
 {
-	u32 i, j;
+	u32 i;
 	int ret;
+	struct ppe_common_cb *ppe_common;
 
-	for (i = 0; i < HNS_PPE_COM_NUM; i++) {
-		ret = hns_ppe_common_init_hw(dsaf_dev->ppe_common[i]);
-		if (ret)
-			return;
+	ppe_common = dsaf_dev->ppe_common[ppe_common_index];
+	ret = hns_ppe_common_init_hw(ppe_common);
+	if (ret)
+		return;
 
-		ret = hns_rcb_common_init_hw(dsaf_dev->rcb_common[i]);
-		if (ret)
-			return;
+	ret = hns_rcb_common_init_hw(dsaf_dev->rcb_common[ppe_common_index]);
+	if (ret)
+		return;
 
-		for (j = 0; j < dsaf_dev->ppe_common[i]->ppe_num; j++)
-			hns_ppe_init_hw(&dsaf_dev->ppe_common[i]->ppe_cb[j]);
+	for (i = 0; i < ppe_common->ppe_num; i++)
+		hns_ppe_init_hw(&ppe_common->ppe_cb[i]);
 
-		hns_rcb_common_init_commit_hw(dsaf_dev->rcb_common[i]);
-	}
+	hns_rcb_common_init_commit_hw(dsaf_dev->rcb_common[ppe_common_index]);
 }
 
 void hns_ppe_update_stats(struct hns_ppe_cb *ppe_cb)
@@ -475,7 +475,8 @@ int hns_ppe_init(struct dsaf_device *dsaf_dev)
 		hns_rcb_get_cfg(dsaf_dev->rcb_common[i]);
 	}
 
-	hns_ppe_reset(dsaf_dev);
+	for (i = 0; i < HNS_PPE_COM_NUM; i++)
+		hns_ppe_reset_common(dsaf_dev, i);
 
 	return 0;
 

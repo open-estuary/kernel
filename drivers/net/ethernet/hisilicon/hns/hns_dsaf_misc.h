@@ -20,8 +20,8 @@
 #define HS_LED_ON		0xE
 #define HS_LED_OFF		0xF
 
-#define CPLD_LED_ON_VALUE	0x20
-#define CPLD_LED_DEFAULT_VALUE	0x3
+#define CPLD_LED_ON_VALUE	1
+#define CPLD_LED_DEFAULT_VALUE	0
 
 #define MAC_SFP_PORT_OFFSET	0x2
 

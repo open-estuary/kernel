@@ -36,22 +36,22 @@ struct dsaf_device;
 #define ETH_STATIC_REG	 1
 #define ETH_DUMP_REG	 5
 /* check mac addr broadcast */
-#define MAC_IS_BROADCAST(p)	((*(p) == 0xff) && (*((p)+1) == 0xff) && \
-		(*((p)+2) == 0xff) &&  (*((p)+3) == 0xff)  && \
-		(*((p)+4) == 0xff) && (*((p)+5) == 0xff))
+#define MAC_IS_BROADCAST(p)	((*(p) == 0xff) && (*((p) + 1) == 0xff) && \
+		(*((p) + 2) == 0xff) &&  (*((p) + 3) == 0xff)  && \
+		(*((p) + 4) == 0xff) && (*((p) + 5) == 0xff))
 
 /* check mac addr is 01-00-5e-xx-xx-xx*/
-#define MAC_IS_L3_MULTICAST(p) ((*((p)+0) == 0x01) && \
-			(*((p)+1) == 0x00)   && \
-			(*((p)+2) == 0x5e))
+#define MAC_IS_L3_MULTICAST(p) ((*((p) + 0) == 0x01) && \
+			(*((p) + 1) == 0x00)   && \
+			(*((p) + 2) == 0x5e))
 
 /*check the mac addr is 0 in all bit*/
-#define MAC_IS_ALL_ZEROS(p)   ((*(p) == 0) && (*((p)+1) == 0)   && \
-	(*((p)+2) == 0) && (*((p)+3) == 0)	 && \
-	(*((p)+4) == 0) && (*((p)+5) == 0))
+#define MAC_IS_ALL_ZEROS(p)   ((*(p) == 0) && (*((p) + 1) == 0)   && \
+	(*((p) + 2) == 0) && (*((p) + 3) == 0)	 && \
+	(*((p) + 4) == 0) && (*((p) + 5) == 0))
 
 /*check mac addr multicast*/
-#define MAC_IS_MULTICAST(p)	((*((u8 *)((p)+0)) & 0x01) ? (1) : (0))
+#define MAC_IS_MULTICAST(p)	((*((u8 *)((p) + 0)) & 0x01) ? (1) : (0))
 
 /**< Number of octets (8-bit bytes) in an ethernet address */
 #define MAC_NUM_OCTETS_PER_ADDR 6
@@ -444,8 +444,6 @@ int hns_mac_set_pauseparam(struct hns_mac_cb *mac_cb, u32 rx_en, u32 tx_en);
 int hns_mac_set_mtu(struct hns_mac_cb *mac_cb, u32 new_mtu);
 int hns_mac_get_port_info(struct hns_mac_cb *mac_cb,
 			  u8 *auto_neg, u16 *speed, u8 *duplex);
-int hns_mac_set_port_info(struct hns_mac_cb *mac_cb,
-			  u8 auto_neg, u16 speed, u8 duplex);
 phy_interface_t hns_mac_get_phy_if(struct hns_mac_cb *mac_cb);
 int hns_mac_config_sds_loopback(struct hns_mac_cb *mac_cb, u8 en);
 int hns_mac_config_mac_loopback(struct hns_mac_cb *mac_cb,

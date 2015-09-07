@@ -133,52 +133,6 @@ int hns_mac_get_port_info(struct hns_mac_cb *mac_cb,
 	return 0;
 }
 
-static int hns_mac_verify_set_params(struct mac_info *info,
-				     u8 auto_neg, u16 speed, u8 duplex)
-{
-	if (info->speed == speed &&
-	    info->auto_neg == auto_neg &&
-	    info->duplex == duplex)
-		return 0;
-
-	if (speed != MAC_SPEED_10 && speed != MAC_SPEED_100 &&
-	    speed != MAC_SPEED_1000)
-		return -EINVAL;
-
-	if (info->speed == MAC_SPEED_10000)
-		return -EINVAL;
-
-	if ((speed == MAC_SPEED_1000) && (duplex == 0))
-		return -EINVAL;
-
-	if ((auto_neg == AUTONEG_ENABLE) &&
-	    ((speed != info->speed) || (duplex != info->duplex)))
-		return -EINVAL;
-
-	return 0;
-}
-
-int hns_mac_set_port_info(struct hns_mac_cb *mac_cb,
-			  u8 auto_neg, u16 speed, u8 duplex)
-{
-	struct mac_driver *mac_ctrl_drv;
-	struct mac_info info;
-	int ret;
-
-	mac_ctrl_drv = hns_mac_get_drv(mac_cb);
-
-	if (!mac_ctrl_drv->get_info)
-		return -EINVAL;
-
-	mac_ctrl_drv->get_info(mac_ctrl_drv, &info);
-
-	ret = hns_mac_verify_set_params(&info, auto_neg, speed, duplex);
-	if (ret)
-		return -EINVAL;
-
-	return hns_mac_set_autoneg(mac_cb, auto_neg);
-}
-
 void hns_mac_adjust_link(struct hns_mac_cb *mac_cb, int speed, int duplex)
 {
 	int ret;
@@ -619,6 +573,14 @@ void hns_mac_get_pauseparam(struct hns_mac_cb *mac_cb, u32 *rx_en, u32 *tx_en)
 		*rx_en = 0;
 		*tx_en = 0;
 	}
+
+	/* Due to the chip defect, the service mac's rx pause CAN'T be enabled.
+	 * We set the rx pause frm always be true (1), because DSAF deals with
+	 * the rx pause frm instead of service mac. After all, we still support
+	 * rx pause frm.
+	 */
+	if (mac_cb->mac_type == HNAE_PORT_SERVICE)
+		*rx_en = 1;
 }
 
 /**
