@@ -1978,10 +1978,7 @@ static irqreturn_t p660_cq_interrupt(const int queue, void *p)
 		iptt = complete_hdr->iptt;
 		slot_idx = iptt;
 		slot = &hisi_hba->slot_info[slot_idx];
-		if (slot->tmf_idx != -1) {
-			/* BUG(); */
-			slot = &hisi_hba->slot_info[slot->tmf_idx];
-		}
+
 
 
 		slot->cmplt_queue_slot = rd_point;

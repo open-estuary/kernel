@@ -255,11 +255,6 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 	task->lldd_task = NULL;
 	slot->idx = slot_idx;
 	slot->tmf_idx = -1;
-	if (is_tmf) {
-		struct hisi_sas_slot *slot2 = &hisi_hba->slot_info[tmf->tag_of_task_to_be_managed];
-
-		slot2->tmf_idx = slot_idx;
-	}
 	tei.iptt = slot_idx;
 	slot->n_elem = n_elem;
 	slot->dlvry_queue = dlvry_queue;
@@ -812,6 +807,8 @@ static int hisi_sas_exec_internal_tmf_task(struct domain_device *dev,
 			void *parameter, u32 para_len, struct hisi_sas_tmf_task *tmf)
 {
 	int res, retry;
+	struct hisi_sas_device *hisi_sas_dev = (struct hisi_sas_device *)dev->lldd_dev;
+	struct hisi_hba *hisi_hba = hisi_sas_dev->hisi_hba;
 	struct sas_task *task = NULL;
 
 	for (retry = 0; retry < 3; retry++) {
@@ -843,7 +840,13 @@ static int hisi_sas_exec_internal_tmf_task(struct domain_device *dev,
 		/* Even TMF timed out, return direct. */
 		if ((task->task_state_flags & SAS_TASK_STATE_ABORTED)) {
 			if (!(task->task_state_flags & SAS_TASK_STATE_DONE)) {
-				pr_err("TMF task[%x] timeout.\n", tmf->tag_of_task_to_be_managed);
+				pr_err("TMF task[%d] timeout.\n", tmf->tag_of_task_to_be_managed);
+				if (task->lldd_task) {
+					struct hisi_sas_slot *slot;
+					slot = (struct hisi_sas_slot *)task->lldd_task;
+					hisi_sas_slot_task_free(hisi_hba, task, slot);
+				}
+
 				goto ex_err;
 			}
 		}
@@ -946,9 +949,8 @@ int hisi_sas_abort_task(struct sas_task *task)
 
 		/* if successful, clear the task and callback forwards.*/
 		if (rc == TMF_RESP_FUNC_COMPLETE) {
-			struct hisi_sas_slot *slot;
-
 			if (task->lldd_task) {
+				struct hisi_sas_slot *slot;
 				slot = &hisi_hba->slot_info[tmf_task.tag_of_task_to_be_managed];
 				spin_lock_irqsave(&hisi_hba->lock, flags);
 				HISI_SAS_DISP->slot_complete(hisi_hba, slot, 1);
