@@ -1468,7 +1468,7 @@ static void p660_slot_err(struct hisi_hba *hisi_hba,
 		case DMA_TX_DATA_UNDERFLOW_ERR:
 		case DMA_RX_DATA_UNDERFLOW_ERR:
 		{
-			tstat->residual = 0; /* fixme j00310691 get the sense data (if any) */
+			tstat->residual = 0;
 			tstat->stat = SAS_DATA_UNDERRUN;
 
 			break;
@@ -1504,7 +1504,7 @@ static void p660_slot_err(struct hisi_hba *hisi_hba,
 		case TRANS_TX_OPEN_RETRY_ERR:
 		{
 			tstat->stat = SAS_OPEN_REJECT;
-			/* fixme add open_rej_reason */
+			tstat->open_rej_reason = SAS_OREJ_UNKNOWN;
 			break;
 		}
 		case TRANS_TX_OPEN_TIMEOUT_ERR:
@@ -1618,15 +1618,15 @@ static int p660_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *s
 				__func__, slot->cmplt_queue, slot->cmplt_queue_slot);
 
 		tstat->resp = SAS_TASK_UNDELIVERED;
-		tstat->stat = SAS_OPEN_REJECT; /* fixme add open_rej_reason */
+		tstat->stat = SAS_OPEN_REJECT;
+		tstat->open_rej_reason = SAS_OREJ_UNKNOWN;
 		goto out;
 	}
 
 	if (!complete_hdr->err_rcrd_xfrd) {
-		if (!complete_hdr->cmd_complt || !complete_hdr->rspns_xfrd) { /* fixme j00310691 */
+		if (!complete_hdr->cmd_complt || !complete_hdr->rspns_xfrd) {
 			tstat->stat = SAS_DATA_OVERRUN;
 			/* j00310691 in IT we get DID_ERROR, but in sas_end_task we need to use overrun to get DID_ERROR */
-			/* tstat->buf_valid_size = 0; */
 			goto out;
 		}
 	} else {
