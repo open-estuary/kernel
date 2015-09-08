@@ -275,7 +275,7 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 			struct Scsi_Host *shost,
 			struct device_node *np)
 {
-	int interrupt_count;
+	int interrupt_count, interrupt_cells;
 	struct hisi_hba *hisi_hba;
 	struct sas_ha_struct *sha = SHOST_TO_SAS_HA(shost);
 	const struct of_device_id *match = of_match_node(sas_core_of_match, np);
@@ -304,7 +304,10 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 	if (interrupt_count < 0)
 		goto err_out;
 
-	hisi_hba->int_names = devm_kcalloc(&pdev->dev, interrupt_count / 2,
+	if (of_property_read_u32(np->parent, "#interrupt-cells", &interrupt_cells))
+		goto err_out;
+
+	hisi_hba->int_names = devm_kcalloc(&pdev->dev, interrupt_count / interrupt_cells,
 				HISI_SAS_INT_NAME_LENGTH,
 				GFP_KERNEL);
 	if (!hisi_hba->int_names)
