@@ -39,6 +39,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20000>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20001 {
@@ -46,6 +47,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20001>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20002 {
@@ -53,6 +55,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20002>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20003 {
@@ -60,6 +63,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20003>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20100 {
@@ -67,6 +71,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20100>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20101 {
@@ -74,6 +79,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20101>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20102 {
@@ -81,6 +87,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20102>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20103 {
@@ -88,6 +95,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20103>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20200 {
@@ -95,6 +103,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20200>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20201 {
@@ -102,6 +111,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20201>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20202 {
@@ -109,6 +119,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20202>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20203 {
@@ -116,6 +127,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20203>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20300 {
@@ -123,6 +135,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20300>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20301 {
@@ -130,6 +143,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20301>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20302 {
@@ -137,6 +151,7 @@
 			compatible = "arm,armv8";
 			reg = <0x20302>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
 		};
 
 		cpu@20303 {
@@ -144,23 +159,28 @@
 			compatible = "arm,armv8";
 			reg = <0x20303>;
 			enable-method = "psci";
+			next-level-cache = <&L2_0>;
+		};
+
+		L2_0: l2-cache0 {
+			compatible = "cache";
 		};
 	};
 
 	gic: interrupt-controller@8d000000 {
 		compatible = "hisilicon,gic-v3";
-                #interrupt-cells = <3>;
-                #address-cells = <2>;
-                #size-cells = <2>;
-                ranges;
-                interrupt-controller;
-                #redistributor-regions = <1>;
-                redistributor-stride = <0x0 0x30000>;
+		#interrupt-cells = <3>;
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+		interrupt-controller;
+		#redistributor-regions = <1>;
+		redistributor-stride = <0x0 0x30000>;
 		reg = <0x0 0x8d000000 0 0x10000>,	/* GICD */
-		      <0x0 0x8d100000 0 0x300000>,	/* GICR c */
-		      <0x0 0xfe000000 0 0x10000>,	/* GICC */
-		      <0x0 0xfe010000 0 0x10000>,       /* GICH */
-		      <0x0 0xfe020000 0 0x10000>;       /* GICV */
+			<0x0 0x8d100000 0 0x300000>,	/* GICR c */
+			<0x0 0xfe000000 0 0x10000>,	/* GICC */
+			<0x0 0xfe010000 0 0x10000>,	/* GICH */
+			<0x0 0xfe020000 0 0x10000>;	/* GICV */
 		interrupts = <1 9 0xff04>;
 
 		its_pc: interrupt-controller@8c000000 {
