@@ -308,55 +308,6 @@ static inline u32 hisi_sas_phy_read32(struct hisi_hba *hisi_hba, int phy, u32 of
 	return readl(regs);
 }
 
-void hi1610_hisi_sas_setup_itct(struct hisi_hba *hisi_hba,
-		struct hisi_sas_device *device)
-{
-	struct domain_device *dev = device->sas_device;
-	u32 device_id = device->device_id;
-	struct hisi_sas_itct_hi1610 *itct =
-		(struct hisi_sas_itct_hi1610 *)&hisi_hba->itct[device_id];
-
-	memset(itct, 0, sizeof(*itct));
-
-	/*pr_info("hisi_sas setup_itct now\n");*/
-	/* qw0 */
-	switch (dev->dev_type) {
-	case SAS_END_DEVICE:
-	case SAS_EDGE_EXPANDER_DEVICE:
-	case SAS_FANOUT_EXPANDER_DEVICE:
-		itct->dev_type = HISI_SAS_DEV_TYPE_SSP;
-		break;
-	case SAS_SATA_DEV:
-		itct->dev_type = HISI_SAS_DEV_TYPE_SATA;
-		break;
-	default:
-		dev_warn(hisi_hba->dev, "%s unsupported dev type (%d)\n"
-				, __func__, dev->dev_type);
-	}
-
-	itct->valid = 1;
-	itct->break_reply_ena = 0;
-	itct->awt_control = 0;
-	/* j00310691 todo doublecheck, see enum sas_linkrate */
-	/*itct->max_conn_rate = dev->max_linkrate;*/
-	/*if (dev->phy->maximum_linkrate)*/
-	itct->max_conn_rate = dev->phy->negotiated_linkrate;
-	itct->valid_link_number = 1;
-	itct->port_id = dev->port->id;
-	itct->smp_timeout = 0;
-	itct->max_burst_byte = 0;
-
-	/* qw1 */
-	memcpy(&itct->sas_addr, dev->sas_addr, SAS_ADDR_SIZE);
-	itct->sas_addr = __swab64(itct->sas_addr);
-
-	/* qw2 */
-	itct->IT_nexus_loss_time = 500;
-	itct->bus_inactive_time_limit = 0xff00;
-	itct->max_conn_time_limit = 0xff00;
-	itct->reject_open_time_limit = 0xff00;
-}
-
 static void hi1610_config_phy_link_param(struct hisi_hba *hisi_hba,
 					int phy,
 					enum sas_linkrate linkrate)
@@ -451,134 +402,55 @@ static void hi1610_init_id_frame(struct hisi_hba *hisi_hba)
 }
 
 
-static void hi1610_init_reg(struct hisi_hba *hisi_hba)
+void hi1610_hisi_sas_setup_itct(struct hisi_hba *hisi_hba,
+		struct hisi_sas_device *device)
 {
-	int i;
+	struct domain_device *dev = device->sas_device;
+	u32 device_id = device->device_id;
+	struct hisi_sas_itct_hi1610 *itct =
+		(struct hisi_sas_itct_hi1610 *)&hisi_hba->itct[device_id];
 
-	/* Global registers init*/
-	hisi_sas_write32(hisi_hba,
-		DLVRY_QUEUE_ENABLE,
-		(u32)((1ULL << hisi_hba->queue_count) - 1));
-	hisi_sas_write32(hisi_hba, AXI_USER1, 0xc0000000);
-	hisi_sas_write32(hisi_hba, AXI_USER2, 0x10000);
-	hisi_sas_write32(hisi_hba, HGC_SAS_TXFAIL_RETRY_CTRL, 0x108);
-	hisi_sas_write32(hisi_hba, HGC_SAS_TX_OPEN_FAIL_RETRY_CTRL, 0x7FF);
-	hisi_sas_write32(hisi_hba, OPENA_WT_CONTI_TIME, 0x1);
-	hisi_sas_write32(hisi_hba, BUS_INACTIVE_LIMIT_TIME, 0x1);
-	hisi_sas_write32(hisi_hba, CFG_AGING_TIME, 0x1);
-	hisi_sas_write32(hisi_hba, HGC_ERR_STAT_EN, 0x1);
-	hisi_sas_write32(hisi_hba, HGC_GET_ITV_TIME, 0x1);
-	hisi_sas_write32(hisi_hba, INT_COAL_EN, 0x1);
-	hisi_sas_write32(hisi_hba, OQ_INT_COAL_TIME, 0x1);
-	hisi_sas_write32(hisi_hba, OQ_INT_COAL_CNT, 0x1);
-	hisi_sas_write32(hisi_hba, ENT_INT_COAL_TIME, 0x1);
-	hisi_sas_write32(hisi_hba, ENT_INT_COAL_CNT, 0x1);
-	hisi_sas_write32(hisi_hba, OQ_INT_SRC, 0x0);
-	hisi_sas_write32(hisi_hba, ENT_INT_SRC1, 0xffffffff);
-	hisi_sas_write32(hisi_hba, ENT_INT_SRC2, 0xffffffff);
-	hisi_sas_write32(hisi_hba, ENT_INT_SRC3, 0xffffffff);
-	hisi_sas_write32(hisi_hba, ENT_INT_SRC_MSK1, 0x7efefefe);
-	hisi_sas_write32(hisi_hba, ENT_INT_SRC_MSK2, 0x7efefefe);
-	hisi_sas_write32(hisi_hba, ENT_INT_SRC_MSK3, 0x7ffffffe);
-	hisi_sas_write32(hisi_hba, SAS_ECC_INTR_MSK, 0xfffff3c0);
-	for (i = 0; i < hisi_hba->queue_count; i++)
-		hisi_sas_write32(hisi_hba, OQ0_INT_SRC_MSK+0x4*i, 0);
+	memset(itct, 0, sizeof(*itct));
 
-	hisi_sas_write32(hisi_hba, AXI_AHB_CLK_CFG, 1);
-	hisi_sas_write32(hisi_hba, HYPER_STREAM_ID_EN_CFG, 1);
-
-	for (i = 0; i < hisi_hba->n_phy; i++) {
-		/*phy registers init set 12G - see g_astPortRegConfig */
-		hisi_sas_phy_write32(hisi_hba, i,
-				PROG_PHY_LINK_RATE, 0x00000855);
-		hisi_sas_phy_write32(hisi_hba, i, SAS_PHY_CTRL, 0x30B9908);
-		hisi_sas_phy_write32(hisi_hba, i, SL_TOUT_CFG, 0x7D7D7D7D);
-		hisi_sas_phy_write32(hisi_hba, i, DONE_RECEIVED_TIME, 0x10);
-		hisi_sas_phy_write32(hisi_hba, i, RXOP_CHECK_CFG_H, 0x1000);
-		hisi_sas_phy_write32(hisi_hba, i, CHL_INT1_MSK, 0xffffffff);
-		hisi_sas_phy_write32(hisi_hba, i, CHL_INT2_MSK, 0xffffffff);
-		hisi_sas_phy_write32(hisi_hba, i, SL_CFG, 0x23f801fc);
-		hisi_sas_phy_write32(hisi_hba, i, PHY_CTRL_RDY_MSK, 0x0);
-		hisi_sas_phy_write32(hisi_hba, i, PHYCTRL_NOT_RDY_MSK, 0x0);
-		hisi_sas_phy_write32(hisi_hba, i, PHYCTRL_PHY_ENA_MSK, 0x0);
-		hisi_sas_phy_write32(hisi_hba, i, SL_RX_BCAST_CHK_MSK, 0x0);
-		hisi_sas_phy_write32(hisi_hba, i, CHL_INT_COAL_EN, 0x0);
-		hisi_sas_phy_write32(hisi_hba, i, PHY_CTRL, 0x199B694);
+	/*pr_info("hisi_sas setup_itct now\n");*/
+	/* qw0 */
+	switch (dev->dev_type) {
+	case SAS_END_DEVICE:
+	case SAS_EDGE_EXPANDER_DEVICE:
+	case SAS_FANOUT_EXPANDER_DEVICE:
+		itct->dev_type = HISI_SAS_DEV_TYPE_SSP;
+		break;
+	case SAS_SATA_DEV:
+		itct->dev_type = HISI_SAS_DEV_TYPE_SATA;
+		break;
+	default:
+		dev_warn(hisi_hba->dev, "%s unsupported dev type (%d)\n"
+				, __func__, dev->dev_type);
 	}
 
-	for (i = 0; i < hisi_hba->queue_count; i++) {
-		/* Delivery queue */
-		hisi_sas_write32(hisi_hba, DLVRY_Q_0_BASE_ADDR_HI + (i * 0x14),
-				 DMA_ADDR_HI(hisi_hba->cmd_hdr_dma[i]));
+	itct->valid = 1;
+	itct->break_reply_ena = 0;
+	itct->awt_control = 0;
+	/* j00310691 todo doublecheck, see enum sas_linkrate */
+	/*itct->max_conn_rate = dev->max_linkrate;*/
+	/*if (dev->phy->maximum_linkrate)*/
+	itct->max_conn_rate = dev->phy->negotiated_linkrate;
+	itct->valid_link_number = 1;
+	itct->port_id = dev->port->id;
+	itct->smp_timeout = 0;
+	itct->max_burst_byte = 0;
 
-		hisi_sas_write32(hisi_hba, DLVRY_Q_0_BASE_ADDR_LO + (i * 0x14),
-				 DMA_ADDR_LO(hisi_hba->cmd_hdr_dma[i]));
+	/* qw1 */
+	memcpy(&itct->sas_addr, dev->sas_addr, SAS_ADDR_SIZE);
+	itct->sas_addr = __swab64(itct->sas_addr);
 
-		hisi_sas_write32(hisi_hba, DLVRY_Q_0_DEPTH + (i * 0x14),
-				 HISI_SAS_QUEUE_SLOTS);
-
-		/* Completion queue */
-		hisi_sas_write32(hisi_hba, COMPL_Q_0_BASE_ADDR_HI + (i * 0x14),
-				 DMA_ADDR_HI(hisi_hba->complete_hdr_dma[i]));
-
-		hisi_sas_write32(hisi_hba, COMPL_Q_0_BASE_ADDR_LO + (i * 0x14),
-				 DMA_ADDR_LO(hisi_hba->complete_hdr_dma[i]));
-
-		hisi_sas_write32(hisi_hba, COMPL_Q_0_DEPTH + (i * 0x14),
-				 HISI_SAS_QUEUE_SLOTS);
-	}
-
-	/* itct */
-	hisi_sas_write32(hisi_hba, ITCT_BASE_ADDR_LO,
-			 DMA_ADDR_LO(hisi_hba->itct_dma));
-
-	hisi_sas_write32(hisi_hba, ITCT_BASE_ADDR_HI,
-			 DMA_ADDR_HI(hisi_hba->itct_dma));
-
-	/* iost */
-	hisi_sas_write32(hisi_hba, IOST_BASE_ADDR_LO,
-			 DMA_ADDR_LO(hisi_hba->iost_dma));
-
-	hisi_sas_write32(hisi_hba, IOST_BASE_ADDR_HI,
-			 DMA_ADDR_HI(hisi_hba->iost_dma));
-
-	/* breakpoint */
-	hisi_sas_write32(hisi_hba, IO_BROKEN_MSG_ADDR_LO,
-			 DMA_ADDR_LO(hisi_hba->breakpoint_dma));
-
-	hisi_sas_write32(hisi_hba, IO_BROKEN_MSG_ADDR_HI,
-			 DMA_ADDR_HI(hisi_hba->breakpoint_dma));
-
-	/* SATA broken msg */
-	hisi_sas_write32(hisi_hba, IO_SATA_BROKEN_MSG_ADDR_LO,
-			 DMA_ADDR_LO(hisi_hba->sata_breakpoint_dma));
-
-	hisi_sas_write32(hisi_hba, IO_SATA_BROKEN_MSG_ADDR_HI,
-			 DMA_ADDR_HI(hisi_hba->sata_breakpoint_dma));
-
-	/* SATA initial fis */
-	hisi_sas_write32(hisi_hba, SATA_INITI_D2H_STORE_ADDR_LO,
-			 DMA_ADDR_LO(hisi_hba->initial_fis_dma));
-
-	hisi_sas_write32(hisi_hba, SATA_INITI_D2H_STORE_ADDR_HI,
-			 DMA_ADDR_HI(hisi_hba->initial_fis_dma));
+	/* qw2 */
+	itct->IT_nexus_loss_time = 500;
+	itct->bus_inactive_time_limit = 0xff00;
+	itct->max_conn_time_limit = 0xff00;
+	itct->reject_open_time_limit = 0xff00;
 }
 
-static void hi1610_enable_phy(struct hisi_hba *hisi_hba, int phy)
-{
-	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
-
-	cfg |= PHY_CFG_ENA_MSK;
-	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
-}
-
-static void hi1610_disable_phy(struct hisi_hba *hisi_hba, int phy)
-{
-	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
-
-	cfg &= ~PHY_CFG_ENA_MSK;
-	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
-}
 
 static int hi1610_reset_hw(struct hisi_hba *hisi_hba)
 {
@@ -723,6 +595,120 @@ static int hi1610_reset_hw(struct hisi_hba *hisi_hba)
 	return 0;
 }
 
+
+static void hi1610_init_reg(struct hisi_hba *hisi_hba)
+{
+	int i;
+
+	/* Global registers init*/
+	hisi_sas_write32(hisi_hba,
+		DLVRY_QUEUE_ENABLE,
+		(u32)((1ULL << hisi_hba->queue_count) - 1));
+	hisi_sas_write32(hisi_hba, AXI_USER1, 0xc0000000);
+	hisi_sas_write32(hisi_hba, AXI_USER2, 0x10000);
+	hisi_sas_write32(hisi_hba, HGC_SAS_TXFAIL_RETRY_CTRL, 0x108);
+	hisi_sas_write32(hisi_hba, HGC_SAS_TX_OPEN_FAIL_RETRY_CTRL, 0x7FF);
+	hisi_sas_write32(hisi_hba, OPENA_WT_CONTI_TIME, 0x1);
+	hisi_sas_write32(hisi_hba, BUS_INACTIVE_LIMIT_TIME, 0x1);
+	hisi_sas_write32(hisi_hba, CFG_AGING_TIME, 0x1);
+	hisi_sas_write32(hisi_hba, HGC_ERR_STAT_EN, 0x1);
+	hisi_sas_write32(hisi_hba, HGC_GET_ITV_TIME, 0x1);
+	hisi_sas_write32(hisi_hba, INT_COAL_EN, 0x1);
+	hisi_sas_write32(hisi_hba, OQ_INT_COAL_TIME, 0x1);
+	hisi_sas_write32(hisi_hba, OQ_INT_COAL_CNT, 0x1);
+	hisi_sas_write32(hisi_hba, ENT_INT_COAL_TIME, 0x1);
+	hisi_sas_write32(hisi_hba, ENT_INT_COAL_CNT, 0x1);
+	hisi_sas_write32(hisi_hba, OQ_INT_SRC, 0x0);
+	hisi_sas_write32(hisi_hba, ENT_INT_SRC1, 0xffffffff);
+	hisi_sas_write32(hisi_hba, ENT_INT_SRC2, 0xffffffff);
+	hisi_sas_write32(hisi_hba, ENT_INT_SRC3, 0xffffffff);
+	hisi_sas_write32(hisi_hba, ENT_INT_SRC_MSK1, 0x7efefefe);
+	hisi_sas_write32(hisi_hba, ENT_INT_SRC_MSK2, 0x7efefefe);
+	hisi_sas_write32(hisi_hba, ENT_INT_SRC_MSK3, 0x7ffffffe);
+	hisi_sas_write32(hisi_hba, SAS_ECC_INTR_MSK, 0xfffff3c0);
+	for (i = 0; i < hisi_hba->queue_count; i++)
+		hisi_sas_write32(hisi_hba, OQ0_INT_SRC_MSK+0x4*i, 0);
+
+	hisi_sas_write32(hisi_hba, AXI_AHB_CLK_CFG, 1);
+	hisi_sas_write32(hisi_hba, HYPER_STREAM_ID_EN_CFG, 1);
+
+	for (i = 0; i < hisi_hba->n_phy; i++) {
+		/*phy registers init set 12G - see g_astPortRegConfig */
+		hisi_sas_phy_write32(hisi_hba, i,
+				PROG_PHY_LINK_RATE, 0x00000855);
+		hisi_sas_phy_write32(hisi_hba, i, SAS_PHY_CTRL, 0x30B9908);
+		hisi_sas_phy_write32(hisi_hba, i, SL_TOUT_CFG, 0x7D7D7D7D);
+		hisi_sas_phy_write32(hisi_hba, i, DONE_RECEIVED_TIME, 0x10);
+		hisi_sas_phy_write32(hisi_hba, i, RXOP_CHECK_CFG_H, 0x1000);
+		hisi_sas_phy_write32(hisi_hba, i, CHL_INT1_MSK, 0xffffffff);
+		hisi_sas_phy_write32(hisi_hba, i, CHL_INT2_MSK, 0xffffffff);
+		hisi_sas_phy_write32(hisi_hba, i, SL_CFG, 0x23f801fc);
+		hisi_sas_phy_write32(hisi_hba, i, PHY_CTRL_RDY_MSK, 0x0);
+		hisi_sas_phy_write32(hisi_hba, i, PHYCTRL_NOT_RDY_MSK, 0x0);
+		hisi_sas_phy_write32(hisi_hba, i, PHYCTRL_PHY_ENA_MSK, 0x0);
+		hisi_sas_phy_write32(hisi_hba, i, SL_RX_BCAST_CHK_MSK, 0x0);
+		hisi_sas_phy_write32(hisi_hba, i, CHL_INT_COAL_EN, 0x0);
+		hisi_sas_phy_write32(hisi_hba, i, PHY_CTRL, 0x199B694);
+	}
+
+	for (i = 0; i < hisi_hba->queue_count; i++) {
+		/* Delivery queue */
+		hisi_sas_write32(hisi_hba, DLVRY_Q_0_BASE_ADDR_HI + (i * 0x14),
+				 DMA_ADDR_HI(hisi_hba->cmd_hdr_dma[i]));
+
+		hisi_sas_write32(hisi_hba, DLVRY_Q_0_BASE_ADDR_LO + (i * 0x14),
+				 DMA_ADDR_LO(hisi_hba->cmd_hdr_dma[i]));
+
+		hisi_sas_write32(hisi_hba, DLVRY_Q_0_DEPTH + (i * 0x14),
+				 HISI_SAS_QUEUE_SLOTS);
+
+		/* Completion queue */
+		hisi_sas_write32(hisi_hba, COMPL_Q_0_BASE_ADDR_HI + (i * 0x14),
+				 DMA_ADDR_HI(hisi_hba->complete_hdr_dma[i]));
+
+		hisi_sas_write32(hisi_hba, COMPL_Q_0_BASE_ADDR_LO + (i * 0x14),
+				 DMA_ADDR_LO(hisi_hba->complete_hdr_dma[i]));
+
+		hisi_sas_write32(hisi_hba, COMPL_Q_0_DEPTH + (i * 0x14),
+				 HISI_SAS_QUEUE_SLOTS);
+	}
+
+	/* itct */
+	hisi_sas_write32(hisi_hba, ITCT_BASE_ADDR_LO,
+			 DMA_ADDR_LO(hisi_hba->itct_dma));
+
+	hisi_sas_write32(hisi_hba, ITCT_BASE_ADDR_HI,
+			 DMA_ADDR_HI(hisi_hba->itct_dma));
+
+	/* iost */
+	hisi_sas_write32(hisi_hba, IOST_BASE_ADDR_LO,
+			 DMA_ADDR_LO(hisi_hba->iost_dma));
+
+	hisi_sas_write32(hisi_hba, IOST_BASE_ADDR_HI,
+			 DMA_ADDR_HI(hisi_hba->iost_dma));
+
+	/* breakpoint */
+	hisi_sas_write32(hisi_hba, IO_BROKEN_MSG_ADDR_LO,
+			 DMA_ADDR_LO(hisi_hba->breakpoint_dma));
+
+	hisi_sas_write32(hisi_hba, IO_BROKEN_MSG_ADDR_HI,
+			 DMA_ADDR_HI(hisi_hba->breakpoint_dma));
+
+	/* SATA broken msg */
+	hisi_sas_write32(hisi_hba, IO_SATA_BROKEN_MSG_ADDR_LO,
+			 DMA_ADDR_LO(hisi_hba->sata_breakpoint_dma));
+
+	hisi_sas_write32(hisi_hba, IO_SATA_BROKEN_MSG_ADDR_HI,
+			 DMA_ADDR_HI(hisi_hba->sata_breakpoint_dma));
+
+	/* SATA initial fis */
+	hisi_sas_write32(hisi_hba, SATA_INITI_D2H_STORE_ADDR_LO,
+			 DMA_ADDR_LO(hisi_hba->initial_fis_dma));
+
+	hisi_sas_write32(hisi_hba, SATA_INITI_D2H_STORE_ADDR_HI,
+			 DMA_ADDR_HI(hisi_hba->initial_fis_dma));
+}
+
 static int hi1610_hw_init(struct hisi_hba *hisi_hba)
 {
 	int rc;
@@ -741,6 +727,23 @@ static int hi1610_hw_init(struct hisi_hba *hisi_hba)
 	hi1610_init_id_frame(hisi_hba);
 
 	return 0;
+}
+
+
+static void hi1610_enable_phy(struct hisi_hba *hisi_hba, int phy)
+{
+	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+
+	cfg |= PHY_CFG_ENA_MSK;
+	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
+}
+
+static void hi1610_disable_phy(struct hisi_hba *hisi_hba, int phy)
+{
+	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+
+	cfg &= ~PHY_CFG_ENA_MSK;
+	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
 }
 
 /* see Higgs_StartPhy */
