@@ -1534,9 +1534,7 @@ static void p660_slot_err(struct hisi_hba *hisi_hba,
 	case SAS_PROTOCOL_STP:
 	case SAS_PROTOCOL_SATA | SAS_PROTOCOL_STP:
 	{
-		task->ata_task.use_ncq = 0;
-		tstat->stat = SAS_PROTO_RESPONSE;
-		/* j00310691 fixme mvs_sata_done(mvi, task, slot_idx, err_dw0); */
+		dev_err(hisi_hba->dev, "%s SATA/STP not supported", __func__);
 	}
 		break;
 	default:
@@ -1665,7 +1663,7 @@ static int p660_slot_complete(struct hisi_hba *hisi_hba, struct hisi_sas_slot *s
 	case SAS_PROTOCOL_SATA:
 	case SAS_PROTOCOL_STP:
 	case SAS_PROTOCOL_SATA | SAS_PROTOCOL_STP:
-		dev_err(hisi_hba->dev, "%s STP not supported", __func__);
+		dev_err(hisi_hba->dev, "%s SATA/STP not supported", __func__);
 		break;
 
 	default:
@@ -1736,7 +1734,7 @@ static irqreturn_t p660_int_phyup(int phy_no, void *p)
 
 	context = hisi_sas_read32(hisi_hba, PHY_CONTEXT);
 	if (context & 1 << phy_no) {
-		dev_info(hisi_hba->dev, "%s SATA attached equipment\n", __func__);
+		dev_err(hisi_hba->dev, "%s SATA attached equipment\n", __func__);
 		goto end;
 	}
 
