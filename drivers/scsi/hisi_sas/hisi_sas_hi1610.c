@@ -1904,7 +1904,7 @@ end:
 
 static const char phy_int_names[HISI_SAS_PHY_INT_NR][32] = {
 	"HotPlug",
-	"Phy up/down",
+	"Phy up_down",
 	"Chnl Int"
 };
 static const char cq_int_name[32] = "cq";
