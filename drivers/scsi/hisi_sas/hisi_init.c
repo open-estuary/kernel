@@ -46,7 +46,6 @@ static struct sas_domain_function_template hisi_sas_transport_ops = {
 	.lldd_I_T_nexus_reset	= hisi_sas_I_T_nexus_reset,
 	.lldd_lu_reset		= hisi_sas_lu_reset,
 	.lldd_query_task	= hisi_sas_query_task,
-	.lldd_abort_task_set	= hisi_sas_abort_task_set,
 	.lldd_port_formed	= hisi_sas_port_formed,
 	.lldd_port_deformed	= hisi_sas_port_deformed,
 };
