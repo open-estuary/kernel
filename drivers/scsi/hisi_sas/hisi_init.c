@@ -100,11 +100,9 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 	}
 
 	for (i = 0; i < HISI_SAS_MAX_DEVICES; i++) {
-		hisi_hba->devices[i].taskfileset = HISI_SAS_ID_NOT_MAPPED;
 		hisi_hba->devices[i].dev_type = SAS_PHY_UNUSED;
 		hisi_hba->devices[i].device_id = i;
 		hisi_hba->devices[i].dev_status = HISI_SAS_DEV_NORMAL;
-		init_timer(&hisi_hba->devices[i].timer);
 	}
 
 	for (i = 0; i < hisi_hba->queue_count; i++) {
@@ -314,8 +312,6 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 
 	hisi_hba->hba_info = match->data;
 
-	INIT_LIST_HEAD(&hisi_hba->wq_list);
-
 	((struct hisi_hba_priv *)sha->lldd_ha)->hisi_hba[hisi_hba->id] = hisi_hba;
 	((struct hisi_hba_priv *)sha->lldd_ha)->n_phy = hisi_hba->n_phy;
 
@@ -421,8 +417,6 @@ static int hisi_sas_probe(struct platform_device *pdev)
 			rc = -ENOMEM;
 			goto err_out_ha;
 		}
-
-		memset(&hisi_hba->hba_param, 0xFF, sizeof(struct hba_info_page));
 
 		hisi_sas_init_add(hisi_hba);
 

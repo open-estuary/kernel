@@ -34,8 +34,6 @@
 #define HISI_SAS_MAX_DEVICES HISI_SAS_MAX_ITCT_ENTRIES
 #define HISI_SAS_COMMAND_ENTRIES 8192
 
-#define HISI_SAS_ID_NOT_MAPPED 0x7f
-
 #define HISI_SAS_ITCT_ENTRY_SZ (sizeof(struct hisi_sas_itct))
 #define HISI_SAS_IOST_ENTRY_SZ (sizeof(struct hisi_sas_iost))
 #define HISI_SAS_DQ_ENTRY_SZ (sizeof(struct hisi_sas_cmd_hdr))
@@ -78,32 +76,18 @@ enum hisi_sas_dev_type {
 	HISI_SAS_DEV_TYPE_SATA
 };
 
-struct hba_info_page {
-	int unused;
-	/* To be completed, j00310691 */
-};
-
 struct hisi_sas_phy {
 	struct hisi_hba	*hisi_hba;
 	struct hisi_sas_port	*port;
 	struct asd_sas_phy	sas_phy;
 	struct sas_identify	identify;
-	struct scsi_device	*sdev;
 	struct timer_list	serdes_timer;
-	struct timer_list	dma_status_timer;
-	/* To be completed, j00310691 */
 	u64		dev_sas_addr;
-	u64		att_dev_sas_addr;
-	u64		att_dev_info;
-	u64		dev_info;
 	u64		phy_type;
-	u64		phy_status;
-	u64		irq_status;
 	u64		frame_rcvd_size;
 	u8		frame_rcvd[32];
 	u8		phy_attached;
-	u8		phy_mode;
-	u8		reserved[2];
+	u8		reserved[3];
 	u64		phy_event;
 	int		eye_diag_done;
 	enum sas_linkrate	minimum_linkrate;
@@ -117,35 +101,28 @@ struct hisi_sas_port {
 };
 
 struct hisi_sas_device {
-	struct list_head	dev_entry;
 	enum sas_device_type	dev_type;
 	struct hisi_hba		*hisi_hba;
 	struct domain_device	*sas_device;
-	struct timer_list	timer;
 	u64 attached_phy;
 	u64 device_id;
 	u64 running_req;
 	struct hisi_sas_itct *itct;
-	u8 taskfileset;
 	u8 dev_status;
 	u64 reserved;
 };
 
 struct hisi_sas_slot {
 	struct list_head entry;
-	union {
-		struct sas_task *task;
-		void	*tdata;
-	};
+	struct sas_task *task;
+	struct hisi_sas_port	*port;
 	u64	n_elem;
-	u64	tx;
 	int	dlvry_queue;
 	int	dlvry_queue_slot;
 	int	cmplt_queue;
 	int	cmplt_queue_slot;
 	int	idx;
-	int	tmf_idx;
-
+	int	tmf_idx; /* to be removed */
 	void	*cmd_hdr;
 	dma_addr_t cmd_hdr_dma;
 	void	*status_buffer;
@@ -154,9 +131,6 @@ struct hisi_sas_slot {
 	dma_addr_t command_table_dma;
 	struct hisi_sas_sge_page *sge_page;
 	dma_addr_t sge_page_dma;
-	struct hisi_sas_port	*port;
-	struct hisi_sas_device	*device;
-	void	*open_frame;
 };
 
 struct hisi_sas_tmf_task {
@@ -253,14 +227,12 @@ struct hisi_hba {
 
 	struct hisi_sas_phy phy[HISI_SAS_MAX_PHYS];
 	struct hisi_sas_port port[HISI_SAS_MAX_PHYS];
-	struct list_head wq_list;
 
 	int	id;
 	int	queue_count;
 	char	*int_names;
 	struct hisi_sas_slot	*slot_prep;
 
-	struct hba_info_page	hba_param;
 	struct hisi_sas_device	devices[HISI_SAS_MAX_DEVICES];
 	struct dma_pool *command_table_pool;
 	struct dma_pool *status_buffer_pool;
@@ -278,11 +250,9 @@ struct hisi_hba {
 
 struct hisi_hba_priv {
 	struct hisi_hba	*hisi_hba[HISI_SAS_MAX_CORE];
-	struct tasklet_struct *hisi_sas_tasklet;
 	int n_core;
 	u8 n_phy;
 	u8 scan_finished;
-	/* To be completed, j00310691 */
 };
 
 #define HISI_SAS_DISP	(hisi_hba->hba_info->dispatch)
@@ -454,7 +424,6 @@ union hisi_sas_command_table {
 	struct hisi_sas_command_table_stp stp;
 };
 
-
 #define HISI_SAS_SGE_PAGE_CNT SCSI_MAX_SG_SEGMENTS
 struct hisi_sas_sge_page {
 	struct hisi_sas_sge sge[HISI_SAS_SGE_PAGE_CNT];
@@ -494,8 +463,6 @@ struct ssp_command_iu {
 		} long_cdb;	  /* sequencer extension */
 	};
 } __packed;
-
-
 
 int hisi_sas_scan_finished(struct Scsi_Host *shost, unsigned long time);
 void hisi_sas_scan_start(struct Scsi_Host *shost);
