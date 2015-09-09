@@ -105,6 +105,7 @@ struct hisi_sas_phy {
 	u8		phy_mode;
 	u8		reserved[2];
 	u64		phy_event;
+	int		eye_diag_done;
 	enum sas_linkrate	minimum_linkrate;
 	enum sas_linkrate	maximum_linkrate;
 };

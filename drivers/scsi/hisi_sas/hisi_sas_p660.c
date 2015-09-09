@@ -1854,8 +1854,7 @@ static irqreturn_t p660_int_statuscg(int phy_no, void *p)
 static irqreturn_t p660_int_abnormal(int phy_no, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
-	u32 irq_value;
-	u32 irq_mask_old;
+	u32 irq_value, irq_mask_old;
 
 	dev_err(hisi_hba->dev, "%s\n", __func__);
 	/* mask_int0 */
@@ -1870,11 +1869,15 @@ static irqreturn_t p660_int_abnormal(int phy_no, void *p)
 
 		if (val & PHY_CFG_ENA_MSK) {
 			u32 phy_state = hisi_sas_read32(hisi_hba, PHY_STATE);
+			#ifdef SAS_12G
+			struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
+			struct timer_list *timer = &phy->serdes_timer;
 
-			/* Enabled */
-			/* Stop serdes fw timer */
-			/* serdes lane reset */
-			/* todo */
+			p660_serdes_lane_reset(hisi_hba, phy_no);
+			phy->eye_diag_done = 0;
+			if (timer_pending(timer))
+				del_timer(timer);
+			#endif
 
 			hisi_sas_phy_down(hisi_hba,
 				phy_no,
@@ -1931,15 +1934,14 @@ static irqreturn_t p660_int_int1(int phy_no, void *p)
 	irq_value2 = hisi_sas_phy_read32(hisi_hba, phy_no, CHL_INT2);
 
 	if (irq_value2 & CHL_INT2_RXEYEDIAG_DONE_MSK) {
-		u32 irq_mask;
-
-		irq_mask = hisi_sas_phy_read32(hisi_hba, phy_no, CHL_INT2_MSK);
-		irq_mask |= CHL_INT2_MSK_RXEYEDIAG_DONE_MSK;
-		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT2_MSK, irq_mask);
 		#ifdef SAS_12G
-		p660_phy_rx_eye_diag_done(hisi_hba, phy_no);
+		struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
+
+		if (!phy->eye_diag_done) {
+			p660_phy_rx_eye_diag_done(hisi_hba, phy_no);
+			phy->eye_diag_done = 1;
+		}
 		#endif
-		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT2, irq_value2);
 	}
 
 	hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT1, irq_value1);
