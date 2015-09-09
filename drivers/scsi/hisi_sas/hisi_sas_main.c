@@ -542,7 +542,6 @@ void hisi_sas_phy_init(struct hisi_hba *hisi_hba, int phy_id)
 	phy->hisi_hba = hisi_hba;
 	phy->port = NULL;
 	init_timer(&phy->serdes_timer);
-	init_timer(&phy->dma_status_timer);
 	sas_phy->enabled = (phy_id < hisi_hba->n_phy) ? 1 : 0;
 	sas_phy->class = SAS;
 	sas_phy->iproto = SAS_PROTOCOL_ALL;
@@ -1120,8 +1119,6 @@ void hisi_sas_port_deformed(struct asd_sas_phy *sas_phy)
 static void hisi_sas_phy_disconnected(struct hisi_sas_phy *phy)
 {
 	phy->phy_attached = 0;
-	phy->att_dev_info = 0;
-	phy->att_dev_sas_addr = 0;
 	phy->phy_type = 0;
 }
 

@@ -518,7 +518,7 @@ static void p660_config_phy_link_param(struct hisi_hba *hisi_hba,
 
 static void p660_config_phy_opt_mode(struct hisi_hba *hisi_hba, int phy)
 {
-	/* j00310691 assume not optical cable for now */
+	/* assume not optical cable for now */
 	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
 
 	cfg &= ~PHY_CFG_DC_OPT_MSK;
@@ -602,7 +602,7 @@ void p660_hisi_sas_setup_itct(struct hisi_hba *hisi_hba, struct hisi_sas_device 
 	itct->valid = 1;
 	itct->break_reply_ena = 0;
 	itct->awt_control = 1;
-	itct->max_conn_rate = dev->max_linkrate; /* j00310691 todo doublecheck, see enum sas_linkrate */
+	itct->max_conn_rate = dev->max_linkrate; /* doublecheck, see enum sas_linkrate */
 	itct->valid_link_number = 1;
 	itct->port_id = dev->port->id;
 	itct->smp_timeout = 0;
@@ -962,7 +962,6 @@ static int p660_hw_init(struct hisi_hba *hisi_hba)
 	msleep(100);
 	p660_init_reg(hisi_hba);
 
-	/* maybe init serdes param j00310691 */
 	p660_init_id_frame(hisi_hba);
 
 	#ifdef SAS_12G
@@ -1745,7 +1744,6 @@ static irqreturn_t p660_int_phyup(int phy_no, void *p)
 		goto end;
 	}
 
-	/* j00310691 todo stop serdes fw timer */
 	for (i = 0; i < 6; i++) {
 		u32 idaf = hisi_sas_phy_read32(hisi_hba, phy_no,
 					RX_IDAF_DWORD0 + (i * 4));
