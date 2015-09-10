@@ -1007,14 +1007,30 @@ static void p660_stop_phy(struct hisi_hba *hisi_hba, int phy)
 	p660_disable_phy(hisi_hba, phy);
 }
 
-static void p660_hard_phy_reset(struct hisi_hba *hisi_hba, int phy)
+static void p660_hard_phy_reset_restart_phy(unsigned long arg)
 {
-	p660_stop_phy(hisi_hba, phy);
-	msleep(100);
-	p660_start_phy(hisi_hba, phy);
-	#ifdef SAS_12G
-	p660_serdes_lane_reset(hisi_hba, phy);
-	#endif
+	struct hisi_sas_phy *phy = (struct hisi_sas_phy *)arg;
+	struct hisi_hba *hisi_hba = phy->hisi_hba;
+	struct asd_sas_phy *sas_phy = &phy->sas_phy;
+	int phy_id = sas_phy->id;
+
+	p660_start_phy(hisi_hba, phy_id);
+}
+
+static void p660_hard_phy_reset(struct hisi_hba *hisi_hba, int phy_no)
+{
+	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
+	struct timer_list *timer = &phy->serdes_timer;
+
+	p660_stop_phy(hisi_hba, phy_no);
+
+	if (timer_pending(timer))
+		del_timer(timer);
+	init_timer(timer);
+	timer->data = (unsigned long)phy;
+	timer->expires = jiffies + msecs_to_jiffies(250);
+	timer->function = p660_hard_phy_reset_restart_phy;
+	add_timer(timer);
 }
 
 static void p660_start_phys(unsigned long data)
@@ -1863,29 +1879,21 @@ static irqreturn_t p660_int_abnormal(int phy_no, void *p)
 	irq_value = hisi_sas_phy_read32(hisi_hba, phy_no, CHL_INT0);
 
 	if (irq_value & CHL_INT0_PHYCTRL_NOTRDY_MSK) {
-		u32 val = hisi_sas_phy_read32(hisi_hba, phy_no, PHY_CFG);
+		u32 phy_state = hisi_sas_read32(hisi_hba, PHY_STATE);
+		#ifdef SAS_12G
+		struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
+		struct timer_list *timer = &phy->serdes_timer;
+		#endif
 
-		if (val & PHY_CFG_ENA_MSK) {
-			u32 phy_state = hisi_sas_read32(hisi_hba, PHY_STATE);
-			#ifdef SAS_12G
-			struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
-			struct timer_list *timer = &phy->serdes_timer;
-
-			p660_serdes_lane_reset(hisi_hba, phy_no);
-			phy->eye_diag_done = 0;
-			if (timer_pending(timer))
-				del_timer(timer);
-			#endif
-
-			hisi_sas_phy_down(hisi_hba,
-				phy_no,
-				(phy_state & 1 << phy_no) ? 1 : 0);
-		} else {
-			/* Disabled */
-			/* Ignore phydown event if disabled */
-			pr_warn("%s phy%d phydown event and already disabled\n", __func__, phy_no);
-		}
-
+		hisi_sas_phy_down(hisi_hba,
+			phy_no,
+			(phy_state & 1 << phy_no) ? 1 : 0);
+		#ifdef SAS_12G
+		p660_serdes_lane_reset(hisi_hba, phy_no);
+		phy->eye_diag_done = 0;
+		if (timer_pending(timer))
+			del_timer(timer);
+		#endif
 	} else if (irq_value & CHL_INT0_ID_TIMEOUT_MSK) {
 		pr_info("%s phy%d identify timeout todo\n", __func__, phy_no);
 	} else {
