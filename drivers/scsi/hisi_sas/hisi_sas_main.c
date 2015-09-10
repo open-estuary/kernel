@@ -1137,10 +1137,10 @@ void hisi_sas_phy_down(struct hisi_hba *hisi_hba, int phy_no, int rdy)
 	} else {
 		/* Phy down and not ready */
 		pr_info("phy%d Removed Device\n", phy_no);
+		sas_ha->notify_phy_event(sas_phy, PHYE_LOSS_OF_SIGNAL);
 		phy->phy_attached = 0;
 		sas_phy_disconnected(sas_phy);
 		hisi_sas_phy_disconnected(phy);
-		sas_ha->notify_phy_event(sas_phy, PHYE_LOSS_OF_SIGNAL);
 	}
 }
 
