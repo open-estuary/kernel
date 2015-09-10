@@ -1417,7 +1417,7 @@ static inline unsigned int SYSTEM_REG_READ(unsigned int node,
 
 	temp = ioread32((void __iomem *)(addr + (pRegBase - addr_reg)));
 
-	pr_info("sas %s %p temp=%d\n", __func__, (void __iomem *)(addr + (pRegBase - addr_reg)), temp);
+//	pr_info("sas %s %p temp=%d\n", __func__, (void __iomem *)(addr + (pRegBase - addr_reg)), temp);
 
 	return temp;
 }
@@ -1484,7 +1484,7 @@ static inline void SYSTEM_REG_WRITE(unsigned int node,
 	} else {
 		pr_err("sas sas pRegBae:0x%llx\n", pRegBase);
 	}
-	pr_info("sas sas %s %p %d\n", __func__, (void __iomem *)(addr + (pRegBase - addr_reg)), ulValue);
+//	pr_info("sas sas %s %p %d\n", __func__, (void __iomem *)(addr + (pRegBase - addr_reg)), ulValue);
 
 	iowrite32(ulValue, (void __iomem *)(addr + (pRegBase - addr_reg)));
 
