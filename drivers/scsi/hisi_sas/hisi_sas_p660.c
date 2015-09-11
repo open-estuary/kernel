@@ -1106,7 +1106,7 @@ static int p660_is_phy_ready(struct hisi_hba *hisi_hba, int phy_no)
 			if (wide_port_phymap == 0xf)
 				port->port_attached = 0;
 		} else if (phy->phy_type & PORT_TYPE_SATA) {
-			port->port_attached = 0; /* j00310691 we cannot have a SATA wideport */
+			port->port_attached = 0; /* we cannot have a SATA wideport */
 		}
 		phy->port = NULL;
 		phy->phy_attached = 0;
@@ -1695,13 +1695,13 @@ static irqreturn_t p660_int_phyup(int phy_no, void *p)
 
 	context = hisi_sas_read32(hisi_hba, PHY_CONTEXT);
 	if (context & 1 << phy_no) {
-		dev_err(hisi_hba->dev, "%s SATA attached equipment\n", __func__);
+		dev_err(hisi_hba->dev, "%s phy%d SATA attached equipment\n", __func__, phy_no);
 		goto end;
 	}
 
 	port_id = (hisi_sas_read32(hisi_hba, PHY_PORT_NUM_MA) >> (4 * phy_no)) & 0xf;
 	if (port_id == 0xf) {
-		dev_err(hisi_hba->dev, "%s phy%d, invalid portid\n", __func__, phy_no);
+		dev_err(hisi_hba->dev, "%s phy%d invalid portid\n", __func__, phy_no);
 		res = IRQ_NONE;
 		goto end;
 	}
@@ -1731,7 +1731,7 @@ static irqreturn_t p660_int_phyup(int phy_no, void *p)
 	sas_phy->oob_mode = SAS_OOB_MODE;
 	memcpy(sas_phy->attached_sas_addr,
 		&id->sas_addr, SAS_ADDR_SIZE);
-	dev_info(hisi_hba->dev, "%s phy_no=%d hisi_hba->id=%d link_rate=%d\n", __func__, phy_no, hisi_hba->id, link_rate);
+	dev_info(hisi_hba->dev, "%s phy%d id=%d link_rate=%d\n", __func__, phy_no, hisi_hba->id, link_rate);
 	phy->phy_type &= ~(PORT_TYPE_SAS | PORT_TYPE_SATA);
 	phy->phy_type |= PORT_TYPE_SAS;
 	phy->phy_attached = 1;
@@ -1795,7 +1795,6 @@ static irqreturn_t p660_int_abnormal(int phy_no, void *p)
 	struct hisi_hba *hisi_hba = p;
 	u32 irq_value, irq_mask_old;
 
-	dev_err(hisi_hba->dev, "%s\n", __func__);
 	/* mask_int0 */
 	irq_mask_old = hisi_sas_phy_read32(hisi_hba, phy_no, CHL_INT0_MSK);
 	hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0_MSK, 0x3fffff);
@@ -1819,29 +1818,26 @@ static irqreturn_t p660_int_abnormal(int phy_no, void *p)
 		if (timer_pending(timer))
 			del_timer(timer);
 		#endif
-	} else if (irq_value & CHL_INT0_ID_TIMEOUT_MSK) {
-		pr_info("%s phy%d identify timeout todo\n", __func__, phy_no);
-	} else {
-		if (irq_value & CHL_INT0_DWS_LOST_MSK)
-			pr_info("%s phy%d dws lost\n",
-				__func__,
-				phy_no);
-
-		if (irq_value & CHL_INT0_SN_FAIL_NGR_MSK)
-			pr_info("%s phy%d sn fail ngr\n",
-				__func__,
-				phy_no);
-
-		if (irq_value & CHL_INT0_SL_IDAF_FAIL_MSK ||
-			irq_value & CHL_INT0_SL_OPAF_FAIL_MSK) {
-			pr_info("%s phy%d check address frame err\n",
-				__func__,
-				phy_no);
-		}
-
-		if (irq_value & CHL_INT0_SL_PS_FAIL_OFF)
-			pr_debug("%s phy%d ps req fail\n", __func__, phy_no);
 	}
+
+	if (irq_value & CHL_INT0_ID_TIMEOUT_MSK)
+		dev_dbg(hisi_hba->dev, "ID_TIMEOUT phy%d identify timeout\n", phy_no);
+
+	if (irq_value & CHL_INT0_DWS_LOST_MSK)
+		dev_dbg(hisi_hba->dev, "DWS_LOST phy%d dws lost\n",
+			phy_no);
+
+	if (irq_value & CHL_INT0_SN_FAIL_NGR_MSK)
+		dev_dbg(hisi_hba->dev, "SN_FAIL_NGR phy%d sn fail ngr\n",
+			phy_no);
+
+	if (irq_value & CHL_INT0_SL_IDAF_FAIL_MSK ||
+		irq_value & CHL_INT0_SL_OPAF_FAIL_MSK)
+		dev_dbg(hisi_hba->dev, "SL_IDAF/OPAF_FAIL phy%d check address frame err\n",
+			phy_no);
+
+	if (irq_value & CHL_INT0_SL_PS_FAIL_OFF)
+		dev_dbg(hisi_hba->dev, "SL_PS_FAIL phy%d ps req fail\n", phy_no);
 
 	/* write to zero */
 	hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0, irq_value);
