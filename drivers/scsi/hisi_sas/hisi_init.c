@@ -288,6 +288,8 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 	hisi_hba->dev = &pdev->dev;
 	hisi_hba->np = np;
 
+	init_timer(&hisi_hba->timer);
+
 	if (of_property_read_u32(np, "phy-count", &hisi_hba->n_phy))
 		goto err_out;
 
