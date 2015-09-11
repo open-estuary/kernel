@@ -227,7 +227,6 @@
 
 enum {
 	HISI_SAS_PHY_BCAST_ACK = 0,
-	HISI_SAS_PHY_STATUS_CHG,
 	HISI_SAS_PHY_SL_PHY_ENABLED,
 	HISI_SAS_PHY_INT_REG0,
 	HISI_SAS_PHY_INT_REG1,
@@ -1813,27 +1812,6 @@ end:
 	return res;
 }
 
-static irqreturn_t p660_int_statuscg(int phy_no, void *p)
-{
-	struct hisi_hba *hisi_hba = p;
-	u32 irq_value;
-
-	dev_err(hisi_hba->dev, "%s\n", __func__);
-	irq_value = hisi_sas_phy_read32(hisi_hba, phy_no, CHL_INT2);
-
-	if (!(irq_value & CHL_INT2_PHY_STATUS_CHG_MSK))
-		dev_err(hisi_hba->dev, "%s irq_value = %x not set enable bit",
-			__func__, irq_value);
-
-	dev_info(hisi_hba->dev, "%s phy%d, irq_value = %x\n",
-		 __func__, phy_no, irq_value);
-
-	hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT2,
-			CHL_INT2_PHY_STATUS_CHG_MSK);
-
-	return IRQ_HANDLED;
-}
-
 static irqreturn_t p660_int_abnormal(int phy_no, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
@@ -2057,14 +2035,12 @@ static irqreturn_t p660_fatal_axi_int(int irq, void *p)
 
 #define DECLARE_PHY_INT_HANDLER_GROUP(phy)\
 	DECLARE_INT_HANDLER(p660_int_bcast, phy)\
-	DECLARE_INT_HANDLER(p660_int_statuscg, phy)\
 	DECLARE_INT_HANDLER(p660_int_phyup, phy)\
 	DECLARE_INT_HANDLER(p660_int_abnormal, phy)\
 	DECLARE_INT_HANDLER(p660_int_int1, phy)\
 
 #define DECLARE_PHY_INT_GROUP_PTR(phy)\
 	INT_HANDLER_NAME(p660_int_bcast, phy),\
-	INT_HANDLER_NAME(p660_int_statuscg, phy),\
 	INT_HANDLER_NAME(p660_int_phyup, phy),\
 	INT_HANDLER_NAME(p660_int_abnormal, phy),\
 	INT_HANDLER_NAME(p660_int_int1, phy),\
@@ -2081,7 +2057,6 @@ DECLARE_PHY_INT_HANDLER_GROUP(8)
 
 static const char phy_int_names[HISI_SAS_PHY_INT_NR][32] = {
 	{"Bcast"},
-	{"StatusCG"},
 	{"Phy Up"},
 	{"Abnormal"},
 	{"Int1"}
