@@ -171,19 +171,6 @@ struct hisi_sas_dispatch {
 	void (*hard_phy_reset)(struct hisi_hba *hisi_hba, int phy_no);
 };
 
-struct hisi_fatal_stat {
-	/* ecc */
-	u32	dq_1b_ecc_err_cnt;
-	u32	dq_multib_ecc_err_cnt;
-	u32	iost_1b_ecc_err_cnt;
-	u32	iost_multib_ecc_err_cnt;
-	u32	itct_1b_ecc_err_cnt;
-	u32	itct_multib_ecc_err_cnt;
-
-	/* axi */
-	u32	overfl_axi_err_cnt;
-};
-
 struct hisi_sas_hba_info {
 	/* We only descibe sizes of structures which */
 	/* are different between IP revisions to simplify */
@@ -216,7 +203,6 @@ struct hisi_hba {
 	struct timer_list timer;
 
 	const struct hisi_sas_hba_info *hba_info;
-	struct hisi_fatal_stat fatal_stat;
 
 	int slot_index_count;
 	unsigned long *slot_index_tags;

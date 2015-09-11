@@ -80,6 +80,10 @@
 #define OQ_INT_SRC_MSK			0x1d4
 #define ENT_INT_SRC1			0x1d8
 #define ENT_INT_SRC2			0x1dc
+#define ENT_INT_SRC2_DQ_CFG_ERR_OFF	25
+#define ENT_INT_SRC2_DQ_CFG_ERR_MSK	0x2000000
+#define ENT_INT_SRC2_CQ_CFG_ERR_OFF	27
+#define ENT_INT_SRC2_CQ_CFG_ERR_MSK	0x8000000
 #define ENT_INT_SRC2_AXI_WRONG_INT_OFF	28
 #define ENT_INT_SRC2_AXI_WRONG_INT_MSK	0x10000000
 #define ENT_INT_SRC2_AXI_OVERLF_INT_OFF	29
@@ -1927,8 +1931,7 @@ static irqreturn_t p660_fatal_ecc_int(int irq, void *p)
 	if (ecc_int & SAS_ECC_INTR_DQ_ECC1B_MSK) {
 		u32 ecc_err = hisi_sas_read32(hisi_hba, HGC_ECC_ERR);
 
-		hisi_hba->fatal_stat.dq_1b_ecc_err_cnt = ecc_err;
-		dev_err(hisi_hba->dev, "fatal DQ 1b ECC interrupt on core %d (0x%x)\n",
+		panic("Fatal DQ 1b ECC interrupt on core %d (0x%x)\n",
 			hisi_hba->id, ecc_err);
 	}
 
@@ -1937,16 +1940,14 @@ static irqreturn_t p660_fatal_ecc_int(int irq, void *p)
 				HGC_DQ_ECC_ADDR_BAD_MSK) >>
 				HGC_DQ_ECC_ADDR_BAD_OFF;
 
-		hisi_hba->fatal_stat.dq_multib_ecc_err_cnt++;
-		dev_err(hisi_hba->dev, "fatal DQ RAM ECC interrupt on core %d @ 0x%08x\n",
+		panic("Fatal DQ RAM ECC interrupt on core %d @ 0x%08x\n",
 			hisi_hba->id, addr);
 	}
 
 	if (ecc_int & SAS_ECC_INTR_IOST_ECC1B_MSK) {
 		u32 ecc_err = hisi_sas_read32(hisi_hba, HGC_ECC_ERR);
 
-		hisi_hba->fatal_stat.iost_1b_ecc_err_cnt = ecc_err;
-		dev_err(hisi_hba->dev, "fatal IOST 1b ECC interrupt on core %d (0x%x)\n",
+		panic("Fatal IOST 1b ECC interrupt on core %d (0x%x)\n",
 			hisi_hba->id, ecc_err);
 	}
 
@@ -1955,8 +1956,7 @@ static irqreturn_t p660_fatal_ecc_int(int irq, void *p)
 				HGC_IOST_ECC_ADDR_BAD_MSK) >>
 				HGC_IOST_ECC_ADDR_BAD_OFF;
 
-		hisi_hba->fatal_stat.iost_multib_ecc_err_cnt++;
-		dev_err(hisi_hba->dev, "fatal IOST RAM ECC interrupt on core %d @ 0x%08x\n",
+		panic("Fatal IOST RAM ECC interrupt on core %d @ 0x%08x\n",
 			hisi_hba->id, addr);
 	}
 
@@ -1965,16 +1965,14 @@ static irqreturn_t p660_fatal_ecc_int(int irq, void *p)
 				HGC_ITCT_ECC_ADDR_BAD_MSK) >>
 				HGC_ITCT_ECC_ADDR_BAD_OFF;
 
-		hisi_hba->fatal_stat.itct_multib_ecc_err_cnt++;
-		dev_err(hisi_hba->dev, "fatal TCT RAM ECC interrupt on core %d @ 0x%08x\n",
+		panic("Fatal TCT RAM ECC interrupt on core %d @ 0x%08x\n",
 			hisi_hba->id, addr);
 	}
 
 	if (ecc_int & SAS_ECC_INTR_ITCT_ECC1B_MSK) {
 		u32 ecc_err = hisi_sas_read32(hisi_hba, HGC_ECC_ERR);
 
-		hisi_hba->fatal_stat.itct_1b_ecc_err_cnt++;
-		dev_err(hisi_hba->dev, "fatal ITCT 1b ECC interrupt on core %d (0x%x)\n",
+		panic("Fatal ITCT 1b ECC interrupt on core %d (0x%x)\n",
 			hisi_hba->id, ecc_err);
 	}
 
@@ -1989,16 +1987,21 @@ static irqreturn_t p660_fatal_axi_int(int irq, void *p)
 	u32 axi_int = hisi_sas_read32(hisi_hba, ENT_INT_SRC2);
 	u32 axi_info = hisi_sas_read32(hisi_hba, HGC_AXI_FIFO_ERR_INFO);
 
+	if (axi_int & ENT_INT_SRC2_DQ_CFG_ERR_MSK)
+		panic("Fatal DQ_CFG_ERR interrupt on core %d (0x%x)\n",
+			hisi_hba->id, axi_info);
+
+	if (axi_int & ENT_INT_SRC2_CQ_CFG_ERR_MSK)
+		panic("Fatal CQ_CFG_ERR interrupt on core %d (0x%x)\n",
+			hisi_hba->id, axi_info);
+
 	if (axi_int & ENT_INT_SRC2_AXI_WRONG_INT_MSK)
-		dev_err(hisi_hba->dev, "fatal AXI incorrect interrupt on core %d (0x%x)\n",
+		panic("Fatal AXI_WRONG_INT interrupt on core %d (0x%x)\n",
 			hisi_hba->id, axi_info);
 
-	if (axi_int & ENT_INT_SRC2_AXI_OVERLF_INT_MSK) {
-		hisi_hba->fatal_stat.overfl_axi_err_cnt++;
-		dev_err(hisi_hba->dev, "fatal AXI incorrect interrupt on core %d (0x%x)\n",
+	if (axi_int & ENT_INT_SRC2_AXI_OVERLF_INT_MSK)
+		panic("Fatal AXI_OVERLF_INT incorrect interrupt on core %d (0x%x)\n",
 			hisi_hba->id, axi_info);
-
-	}
 
 	hisi_sas_write32(hisi_hba, ENT_INT_SRC2, axi_int | 0x30000000);
 
