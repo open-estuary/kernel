@@ -1042,7 +1042,6 @@ static void p660_start_phys(unsigned long data)
 		hisi_sas_phy_write32(hisi_hba, i, CHL_INT2_MSK, 0x0000012a);
 		p660_start_phy(hisi_hba, i);
 	}
-
 }
 
 static void p660_phys_up(struct hisi_hba *hisi_hba)
@@ -1057,13 +1056,8 @@ static void p660_phys_up(struct hisi_hba *hisi_hba)
 
 static int p660_start_phy_layer(struct hisi_hba *hisi_hba)
 {
-	struct timer_list *timer = NULL;
+	struct timer_list *timer = &hisi_hba->timer;
 
-	timer = vmalloc(sizeof(*timer)); /* j00310691 memory leak? Is this timer even needed? */
-	if (!timer)
-		return -ENOMEM;
-
-	init_timer(timer);
 	timer->data = (unsigned long)hisi_hba;
 	timer->expires = jiffies + msecs_to_jiffies(1000);
 	timer->function = p660_start_phys;

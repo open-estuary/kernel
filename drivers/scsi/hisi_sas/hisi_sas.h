@@ -213,6 +213,8 @@ struct hisi_hba {
 
 	int	n_phy;
 
+	struct timer_list timer;
+
 	const struct hisi_sas_hba_info *hba_info;
 	struct hisi_fatal_stat fatal_stat;
 
