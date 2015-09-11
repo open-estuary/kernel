@@ -23,6 +23,7 @@
 #define DEV_IS_GONE(dev) \
 	((!dev) || (dev->dev_type == SAS_PHY_UNUSED))
 
+#ifdef CONFIG_DEBUG_FS
 static inline u32 hisi_sas_read32(struct hisi_hba *hisi_hba, u32 off)
 {
 	void __iomem *regs = hisi_hba->regs + off;
@@ -37,19 +38,20 @@ static inline void hisi_sas_write32(struct hisi_hba *hisi_hba, u32 off, u32 val)
 	writel(val, regs);
 }
 
-static inline void hisi_sas_phy_write32(struct hisi_hba *hisi_hba, int phy, u32 off, u32 val)
+static inline void hisi_sas_phy_write32(struct hisi_hba *hisi_hba, int phy_no, u32 off, u32 val)
 {
-	void __iomem *regs = hisi_hba->regs + (0x400 * phy) + off;
+	void __iomem *regs = hisi_hba->regs + (0x400 * phy_no) + off;
 
 	writel(val, regs);
 }
 
-static inline u32 hisi_sas_phy_read32(struct hisi_hba *hisi_hba, int phy, u32 off)
+static inline u32 hisi_sas_phy_read32(struct hisi_hba *hisi_hba, int phy_no, u32 off)
 {
-	void __iomem *regs = hisi_hba->regs + (0x400 * phy) + off;
+	void __iomem *regs = hisi_hba->regs + (0x400 * phy_no) + off;
 
 	return readl(regs);
 }
+#endif
 
 static int hisi_sas_find_tag(struct hisi_hba *hisi_hba, struct sas_task *task, u32 *tag)
 {
@@ -476,20 +478,20 @@ int hisi_sas_dev_found_notify(struct domain_device *dev, int lock)
 	HISI_SAS_DISP->setup_itct(hisi_hba, hisi_sas_device);
 
 	if (parent_dev && DEV_IS_EXPANDER(parent_dev->dev_type)) {
-		int phy_id;
+		int phy_no;
 		u8 phy_num = parent_dev->ex_dev.num_phys;
 		struct ex_phy *phy;
 
-		for (phy_id = 0; phy_id < phy_num; phy_id++) {
-			phy = &parent_dev->ex_dev.ex_phy[phy_id];
+		for (phy_no = 0; phy_no < phy_num; phy_no++) {
+			phy = &parent_dev->ex_dev.ex_phy[phy_no];
 			if (SAS_ADDR(phy->attached_sas_addr) ==
 				SAS_ADDR(dev->sas_addr)) {
-				hisi_sas_device->attached_phy = phy_id;
+				hisi_sas_device->attached_phy = phy_no;
 				break;
 			}
 		}
 
-		if (phy_id == phy_num) {
+		if (phy_no == phy_num) {
 			dev_info(hisi_hba->dev, "%s Error: no attached dev:%016llx at ex:%016llx.\n",
 				__func__, SAS_ADDR(dev->sas_addr),
 				SAS_ADDR(parent_dev->sas_addr));
@@ -534,15 +536,15 @@ void hisi_sas_scan_start(struct Scsi_Host *shost)
 	hisi_hba_priv->scan_finished = 1;
 }
 
-void hisi_sas_phy_init(struct hisi_hba *hisi_hba, int phy_id)
+void hisi_sas_phy_init(struct hisi_hba *hisi_hba, int phy_no)
 {
-	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_id];
+	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
 	struct asd_sas_phy *sas_phy = &phy->sas_phy;
 
 	phy->hisi_hba = hisi_hba;
 	phy->port = NULL;
 	init_timer(&phy->serdes_timer);
-	sas_phy->enabled = (phy_id < hisi_hba->n_phy) ? 1 : 0;
+	sas_phy->enabled = (phy_no < hisi_hba->n_phy) ? 1 : 0;
 	sas_phy->class = SAS;
 	sas_phy->iproto = SAS_PROTOCOL_ALL;
 	sas_phy->tproto = 0;
@@ -550,7 +552,7 @@ void hisi_sas_phy_init(struct hisi_hba *hisi_hba, int phy_id)
 	sas_phy->role = PHY_ROLE_INITIATOR;
 	sas_phy->oob_mode = OOB_NOT_CONNECTED;
 	sas_phy->linkrate = SAS_LINK_RATE_UNKNOWN;
-	sas_phy->id = phy_id;
+	sas_phy->id = phy_no;
 	sas_phy->sas_addr = &hisi_hba->sas_addr[0];
 	sas_phy->frame_rcvd = &phy->frame_rcvd[0];
 	sas_phy->ha = (struct sas_ha_struct *)hisi_hba->shost->hostdata;
@@ -749,7 +751,7 @@ int hisi_sas_control_phy(struct asd_sas_phy *sas_phy,
 {
 	struct sas_ha_struct *sas_ha = sas_phy->ha;
 	struct hisi_hba *hisi_hba = NULL;
-	int rc = 0, phy_id = 0, hi = 0, i = 0;
+	int rc = 0, phy_no = 0, hi = 0, i = 0;
 
 	while (sas_ha->sas_phy[i]) {
 		if (sas_ha->sas_phy[i] == sas_phy) {
@@ -757,25 +759,25 @@ int hisi_sas_control_phy(struct asd_sas_phy *sas_phy,
 					->hisi_hba[hi];
 			break;
 		}
-		i++; phy_id++;
-		if (phy_id == ((struct hisi_hba_priv *)sas_ha->lldd_ha)
+		i++; phy_no++;
+		if (phy_no == ((struct hisi_hba_priv *)sas_ha->lldd_ha)
 				->hisi_hba[hi]->n_phy) {
-			phy_id = 0;
+			phy_no = 0;
 			hi++;
 		}
 	}
 	switch (func) {
 	case PHY_FUNC_HARD_RESET:
-		HISI_SAS_DISP->hard_phy_reset(hisi_hba, phy_id);
+		HISI_SAS_DISP->hard_phy_reset(hisi_hba, phy_no);
 		break;
 
 	case PHY_FUNC_LINK_RESET:
-		HISI_SAS_DISP->phy_enable(hisi_hba, phy_id);
-		HISI_SAS_DISP->hard_phy_reset(hisi_hba, phy_id);
+		HISI_SAS_DISP->phy_enable(hisi_hba, phy_no);
+		HISI_SAS_DISP->hard_phy_reset(hisi_hba, phy_no);
 		break;
 
 	case PHY_FUNC_DISABLE:
-		HISI_SAS_DISP->phy_disable(hisi_hba, phy_id);
+		HISI_SAS_DISP->phy_disable(hisi_hba, phy_no);
 		break;
 	case PHY_FUNC_SET_LINK_RATE:
 	case PHY_FUNC_RELEASE_SPINUP_HOLD:
@@ -1399,7 +1401,7 @@ static ssize_t hisi_sas_dq_write(struct file *file,
 	pr_info("      t10_flds_pres = 0x%x.\n", dq->t10_flds_pres);
 	pr_info("      resp_report = 0x%x.\n", dq->resp_report);
 	pr_info("      tlr_ctrl = 0x%x.\n", dq->tlr_ctrl);
-	pr_info("      phy_id = 0x%x.\n", dq->phy_id);
+	pr_info("      phy_no = 0x%x.\n", dq->phy_no);
 	pr_info("      force_phy = 0x%x.\n", dq->force_phy);
 	pr_info("      port = 0x%x.\n", dq->port);
 	pr_info("      sata_reg_set = 0x%x.\n", dq->sata_reg_set);
@@ -2045,7 +2047,7 @@ static ssize_t hisi_sas_iost_write(struct file *file,
 		pr_info("      io_dir = 0x%x.\n", iost->io_dir);
 		pr_info("      cmd_tlr = 0x%x.\n", iost->cmd_tlr);
 		pr_info("      send_rpt = 0x%x.\n", iost->send_rpt);
-		pr_info("      phy_id = 0x%x.\n", iost->phy_id);
+		pr_info("      phy_no = 0x%x.\n", iost->phy_no);
 		pr_info("      target_ict = 0x%x.\n", iost->target_ict);
 		pr_info("      force_phy = 0x%x.\n", iost->force_phy);
 		pr_info("      tlr_cnt = 0x%x.\n", iost->tlr_cnt);
