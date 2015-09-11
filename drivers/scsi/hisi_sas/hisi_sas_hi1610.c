@@ -155,6 +155,8 @@
 #define DMA_RX_STATUS_BUSY_MSK		0x1
 
 #define AXI_CFG				(0x5100)
+#define AM_CFG_MAX_TRANS			(0x5010)
+#define AM_CFG_SINGLE_PORT_MAX_TRANS		(0x5014)
 
 enum {
 	HISI_SAS_PHY_HOTPLUG_TOUT,
@@ -461,6 +463,8 @@ static int hi1610_reset_hw(struct hisi_hba *hisi_hba)
 	u32 sub_ctrl_range = 0;
 	u64 reset_reg_addr = 0;
 	u64 dereset_reg_addr = 0;
+	u64 clock_ena_addr = 0;
+	u64 clock_dis_addr = 0;
 	u32 reset_value = 0;
 	u32 dereset_value = 0;
 	u64 reset_status_reg_addr = 0;
@@ -510,61 +514,70 @@ static int hi1610_reset_hw(struct hisi_hba *hisi_hba)
 	}
 
 /* do you mean i put them here ?*/
-#define DSAF_SUBCTL_BASE			(0xc0000000ull)
-#define DSAF_SUBCTL_RANGE			(0xffff)
-#define DSAF_SUB_CTRL_RESET_OFFSET		(0xa60)
-#define DSAF_SUB_CTRL_DERESET_OFFSET		(0xa64)
-#define DSAF_SUB_CTRL_RESET_STATUS_OFFSET	(0x5a30)
-#define DSAF_SUB_CTRL_RESET_VALUE		(0x7ffff)
-#define DSAF_SUB_CTRL_DERESET_VALUE		(0x7ffff)
+#define SAS0_DSAF_SUBCTL_BASE			(0xc0000000ull)
+#define SAS0_DSAF_SUBCTL_RANGE			(0xffff)
+#define SAS0_DSAF_SUB_CTRL_RESET_OFFSET			(0xa60)
+#define SAS0_DSAF_SUB_CTRL_DERESET_OFFSET		(0xa64)
+#define SAS0_DSAF_SUB_CTRL_CLOCK_ENA			(0x338)
+#define SAS0_DSAF_SUB_CTRL_CLOCK_DIS			(0x33c)
+#define SAS0_DSAF_SUB_CTRL_RESET_STATUS_OFFSET	(0x5a30)
+#define SAS0_DSAF_SUB_CTRL_RESET_VALUE			(0x7ffff)
+#define SAS0_DSAF_SUB_CTRL_DERESET_VALUE		(0x7ffff)
 /*sas1*/
 #define SAS1_PCIE_SUBCTL_BASE			(0xa0000000ull)
 #define SAS1_PCIE_SUBCTL_RANGE			(0xffff)
-#define SAS1_PCIE_SUB_CTRL_RESET_OFFSET		(0xa18)
-#define SAS1_PCIE_SUB_CTRL_DERESET_OFFSET	(0xa1c)
+#define SAS1_PCIE_SUB_CTRL_RESET_OFFSET			(0xa18)
+#define SAS1_PCIE_SUB_CTRL_DERESET_OFFSET		(0xa1c)
+#define SAS1_PCIE_SUB_CTRL_CLOCK_ENA			(0x318)
+#define SAS1_PCIE_SUB_CTRL_CLOCK_DIS			(0x31c)
 #define SAS1_PCIE_SUB_CTRL_RESET_STATUS_OFFSET	(0x5a0c)
-#define SAS1_PCIE_SUB_CTRL_RESET_VALUE		(0x7ffff)
-#define SAS1_PCIE_SUB_CTRL_DERESET_VALUE	(0x7ffff)
+#define SAS1_PCIE_SUB_CTRL_RESET_VALUE			(0x7ffff)
+#define SAS1_PCIE_SUB_CTRL_DERESET_VALUE		(0x7ffff)
 /*sas2*/
-#define PCIE_SUBCTL_BASE			(0xa0000000ull)
-#define PCIE_SUBCTL_RANGE			(0xffff)
-#define PCIE_SUB_CTRL_RESET_OFFSET		(0xae0)
-#define PCIE_SUB_CTRL_DERESET_OFFSET		(0xae4)
-#define PCIE_SUB_CTRL_RESET_STATUS_OFFSET	(0x5a70)
-/*sas2 may need 0x1fffff*/
-#define PCIE_SUB_CTRL_RESET_VALUE		(0x7ffff)
-/*sas2 may need 0x1fffff*/
-#define PCIE_SUB_CTRL_DERESET_VALUE		(0x7ffff)
+#define SAS2_PCIE_SUBCTL_BASE			(0xa0000000ull)
+#define SAS2_PCIE_SUBCTL_RANGE			(0xffff)
+#define SAS2_PCIE_SUB_CTRL_RESET_OFFSET			(0xae0)
+#define SAS2_PCIE_SUB_CTRL_DERESET_OFFSET		(0xae4)
+#define SAS2_PCIE_SUB_CTRL_CLOCK_ENA			(0x3a8)
+#define SAS2_PCIE_SUB_CTRL_CLOCK_DIS			(0x3ac)
+#define SAS2_PCIE_SUB_CTRL_RESET_STATUS_OFFSET	(0x5a70)
+#define SAS2_PCIE_SUB_CTRL_RESET_VALUE			(0x1fffff)
+#define SAS2_PCIE_SUB_CTRL_DERESET_VALUE		(0x1fffff)
 
 /* reg & mask used for bus */
 #define RESET_STATUS_MSK		0x7ffff
 #define RESET_STATUS_RESET		0x7ffff
 #define RESET_STATUS_DERESET		0x0
-	/* l00293075 fixme I just debug sas2, so...make sas2'core-id = 0 */
-	if (1 == hisi_hba->id) {
-		sub_ctrl_base = (void __iomem *)DSAF_SUBCTL_BASE;
-		sub_ctrl_range = DSAF_SUBCTL_RANGE;
-		reset_reg_addr = DSAF_SUB_CTRL_RESET_OFFSET;
-		dereset_reg_addr = DSAF_SUB_CTRL_DERESET_OFFSET;
-		reset_status_reg_addr = DSAF_SUB_CTRL_RESET_STATUS_OFFSET;
-		reset_value = DSAF_SUB_CTRL_RESET_VALUE;
-		dereset_value = DSAF_SUB_CTRL_DERESET_VALUE;
-	} else if (2 == hisi_hba->id) {
+	if (0 == hisi_hba->id) {
+		sub_ctrl_base = (void __iomem *)SAS0_DSAF_SUBCTL_BASE;
+		sub_ctrl_range = SAS0_DSAF_SUBCTL_RANGE;
+		reset_reg_addr = SAS0_DSAF_SUB_CTRL_RESET_OFFSET;
+		dereset_reg_addr = SAS0_DSAF_SUB_CTRL_DERESET_OFFSET;
+		clock_ena_addr = SAS0_DSAF_SUB_CTRL_CLOCK_ENA;
+		clock_dis_addr = SAS0_DSAF_SUB_CTRL_CLOCK_DIS;
+		reset_status_reg_addr = SAS0_DSAF_SUB_CTRL_RESET_STATUS_OFFSET;
+		reset_value = SAS0_DSAF_SUB_CTRL_RESET_VALUE;
+		dereset_value = SAS0_DSAF_SUB_CTRL_DERESET_VALUE;
+	} else if (1 == hisi_hba->id) {
 		sub_ctrl_base = (void __iomem *)SAS1_PCIE_SUBCTL_BASE;
 		sub_ctrl_range = SAS1_PCIE_SUBCTL_RANGE;
 		reset_reg_addr = SAS1_PCIE_SUB_CTRL_RESET_OFFSET;
 		dereset_reg_addr = SAS1_PCIE_SUB_CTRL_DERESET_OFFSET;
+		clock_ena_addr = SAS1_PCIE_SUB_CTRL_CLOCK_ENA;
+		clock_dis_addr = SAS1_PCIE_SUB_CTRL_CLOCK_DIS;
 		reset_status_reg_addr = SAS1_PCIE_SUB_CTRL_RESET_STATUS_OFFSET;
 		reset_value = SAS1_PCIE_SUB_CTRL_RESET_VALUE;
 		dereset_value = SAS1_PCIE_SUB_CTRL_DERESET_VALUE;
-	} else if (0 == hisi_hba->id) {
-		sub_ctrl_base = (void __iomem *)PCIE_SUBCTL_BASE;
-		sub_ctrl_range = PCIE_SUBCTL_RANGE;
-		reset_reg_addr = PCIE_SUB_CTRL_RESET_OFFSET;
-		dereset_reg_addr = PCIE_SUB_CTRL_DERESET_OFFSET;
-		reset_status_reg_addr = PCIE_SUB_CTRL_RESET_STATUS_OFFSET;
-		reset_value = PCIE_SUB_CTRL_RESET_VALUE;
-		dereset_value = PCIE_SUB_CTRL_DERESET_VALUE;
+	} else if (2 == hisi_hba->id) {
+		sub_ctrl_base = (void __iomem *)SAS2_PCIE_SUBCTL_BASE;
+		sub_ctrl_range = SAS2_PCIE_SUBCTL_RANGE;
+		reset_reg_addr = SAS2_PCIE_SUB_CTRL_RESET_OFFSET;
+		dereset_reg_addr = SAS2_PCIE_SUB_CTRL_DERESET_OFFSET;
+		clock_ena_addr = SAS2_PCIE_SUB_CTRL_CLOCK_ENA;
+		clock_dis_addr = SAS2_PCIE_SUB_CTRL_CLOCK_DIS;
+		reset_status_reg_addr = SAS2_PCIE_SUB_CTRL_RESET_STATUS_OFFSET;
+		reset_value = SAS2_PCIE_SUB_CTRL_RESET_VALUE;
+		dereset_value = SAS2_PCIE_SUB_CTRL_DERESET_VALUE;
 	}
 
 	/* reset */
@@ -572,6 +585,7 @@ static int hi1610_reset_hw(struct hisi_hba *hisi_hba)
 			(unsigned long)sub_ctrl_base,
 			sub_ctrl_range);
 	writel(reset_value, sub_ctrl_base + reset_reg_addr);
+	writel(reset_value, sub_ctrl_base + clock_dis_addr);
 	mdelay(1);
 	reg_value = readl(sub_ctrl_base + reset_status_reg_addr);
 	if (RESET_STATUS_RESET != (reg_value & RESET_STATUS_MSK)) {
@@ -581,6 +595,7 @@ static int hi1610_reset_hw(struct hisi_hba *hisi_hba)
 
 	/* dereset */
 	writel(dereset_value, sub_ctrl_base + dereset_reg_addr);
+	writel(dereset_value, sub_ctrl_base + clock_ena_addr);
 	mdelay(1);
 	reg_value = readl(sub_ctrl_base + reset_status_reg_addr);
 	if (RESET_STATUS_DERESET != (reg_value & RESET_STATUS_MSK)) {
@@ -601,6 +616,12 @@ static void hi1610_init_reg(struct hisi_hba *hisi_hba)
 	int i;
 
 	/* Global registers init*/
+	if (1 == hisi_hba->id) {
+		hisi_sas_write32(hisi_hba,
+				AM_CFG_MAX_TRANS, 0x2020);
+		hisi_sas_write32(hisi_hba,
+				AM_CFG_SINGLE_PORT_MAX_TRANS, 0x2020);
+	}
 	hisi_sas_write32(hisi_hba,
 		DLVRY_QUEUE_ENABLE,
 		(u32)((1ULL << hisi_hba->queue_count) - 1));
@@ -1602,7 +1623,7 @@ static int hi1610_phy_down(int phy_no, struct hisi_hba *hisi_hba)
 
 end:
 	hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0, CHL_INT0_NOT_RDY_MSK);
-	hisi_sas_phy_write32(hisi_hba, phy_no, PHYCTRL_PHY_ENA_MSK, 0);
+	hisi_sas_phy_write32(hisi_hba, phy_no, PHYCTRL_NOT_RDY_MSK, 0);
 
 	return res;
 }
