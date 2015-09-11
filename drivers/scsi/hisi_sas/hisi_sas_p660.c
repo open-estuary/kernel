@@ -203,8 +203,6 @@
 #define CHL_INT2			(PORT_BASE + 0x1b8)
 #define CHL_INT2_RXEYEDIAG_DONE_OFF	9
 #define CHL_INT2_RXEYEDIAG_DONE_MSK	0x200
-#define CHL_INT2_CTRL_PHY_RDY_OFF	0
-#define CHL_INT2_CTRL_PHY_RDY_MSK	0x1
 #define CHL_INT2_PHY_HP_TOUT_OFF	1
 #define CHL_INT2_PHY_HP_TOUT_MSK	0x2
 #define CHL_INT2_SL_RX_BC_ACK_OFF	2
@@ -228,8 +226,7 @@
 #define AXI_CFG				(0x5100)
 
 enum {
-	HISI_SAS_PHY_CTRL_RDY = 0,
-	HISI_SAS_PHY_BCAST_ACK,
+	HISI_SAS_PHY_BCAST_ACK = 0,
 	HISI_SAS_PHY_STATUS_CHG,
 	HISI_SAS_PHY_SL_PHY_ENABLED,
 	HISI_SAS_PHY_INT_REG0,
@@ -1699,28 +1696,6 @@ out:
 	return sts;
 }
 
-static irqreturn_t p660_int_ctrlrdy(int phy, void *p)
-{
-	struct hisi_hba *hisi_hba = p;
-	u32 irq_value;
-	u32 context = hisi_sas_read32(hisi_hba, PHY_CONTEXT);
-
-	dev_err(hisi_hba->dev, "%s phy%d context=0x%x\n", __func__, phy, context);
-	irq_value = hisi_sas_phy_read32(hisi_hba, phy, CHL_INT2);
-
-	if (!(irq_value & CHL_INT2_CTRL_PHY_RDY_MSK)) {
-		dev_dbg(hisi_hba->dev, "%s irq_value = %x not set enable bit",
-			__func__, irq_value);
-		hisi_sas_phy_write32(hisi_hba, phy, CHL_INT2, CHL_INT2_CTRL_PHY_RDY_MSK);
-		return IRQ_NONE;
-	}
-
-	hisi_sas_phy_write32(hisi_hba, phy, CHL_INT2,
-			CHL_INT2_CTRL_PHY_RDY_MSK);
-
-	return IRQ_HANDLED;
-}
-
 static irqreturn_t p660_int_phyup(int phy_no, void *p)
 {
 	struct hisi_hba *hisi_hba = p;
@@ -2081,7 +2056,6 @@ static irqreturn_t p660_fatal_axi_int(int irq, void *p)
 }
 
 #define DECLARE_PHY_INT_HANDLER_GROUP(phy)\
-	DECLARE_INT_HANDLER(p660_int_ctrlrdy, phy)\
 	DECLARE_INT_HANDLER(p660_int_bcast, phy)\
 	DECLARE_INT_HANDLER(p660_int_statuscg, phy)\
 	DECLARE_INT_HANDLER(p660_int_phyup, phy)\
@@ -2089,7 +2063,6 @@ static irqreturn_t p660_fatal_axi_int(int irq, void *p)
 	DECLARE_INT_HANDLER(p660_int_int1, phy)\
 
 #define DECLARE_PHY_INT_GROUP_PTR(phy)\
-	INT_HANDLER_NAME(p660_int_ctrlrdy, phy),\
 	INT_HANDLER_NAME(p660_int_bcast, phy),\
 	INT_HANDLER_NAME(p660_int_statuscg, phy),\
 	INT_HANDLER_NAME(p660_int_phyup, phy),\
@@ -2107,7 +2080,6 @@ DECLARE_PHY_INT_HANDLER_GROUP(7)
 DECLARE_PHY_INT_HANDLER_GROUP(8)
 
 static const char phy_int_names[HISI_SAS_PHY_INT_NR][32] = {
-	{"CTRL Rdy"},
 	{"Bcast"},
 	{"StatusCG"},
 	{"Phy Up"},
