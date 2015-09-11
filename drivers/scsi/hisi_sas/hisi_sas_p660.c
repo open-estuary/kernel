@@ -186,9 +186,11 @@
 #define CHL_INT2_RXEYEDIAG_DONE_MSK	0x200
 #define CHL_INT2_SL_RX_BC_ACK_OFF	2
 #define CHL_INT2_SL_RX_BC_ACK_MSK	0x4
-#define CHL_INT2_SL_PHY_ENA_OFF	6
-#define CHL_INT2_SL_PHY_ENA_MSK	0x40
+#define CHL_INT2_SL_PHY_ENA_OFF		6
+#define CHL_INT2_SL_PHY_ENA_MSK		0x40
 #define CHL_INT0_MSK			(PORT_BASE + 0x1bc)
+#define CHL_INT0_MSK_PHYCTRL_NOTRDY_OFF	0
+#define CHL_INT0_MSK_PHYCTRL_NOTRDY_MSK	0x1
 #define CHL_INT1_MSK			(PORT_BASE + 0x1c0)
 #define CHL_INT2_MSK			(PORT_BASE + 0x1c4)
 #define CHL_INT_COAL_EN			(PORT_BASE + 0x1d0)
@@ -442,25 +444,25 @@ static inline void hisi_sas_write32(struct hisi_hba *hisi_hba, u32 off, u32 val)
 	writel(val, regs);
 }
 
-static inline void hisi_sas_phy_write32(struct hisi_hba *hisi_hba, int phy, u32 off, u32 val)
+static inline void hisi_sas_phy_write32(struct hisi_hba *hisi_hba, int phy_no, u32 off, u32 val)
 {
-	void __iomem *regs = hisi_hba->regs + (0x400 * phy) + off;
+	void __iomem *regs = hisi_hba->regs + (0x400 * phy_no) + off;
 
 	writel(val, regs);
 }
 
-static inline u32 hisi_sas_phy_read32(struct hisi_hba *hisi_hba, int phy, u32 off)
+static inline u32 hisi_sas_phy_read32(struct hisi_hba *hisi_hba, int phy_no, u32 off)
 {
-	void __iomem *regs = hisi_hba->regs + (0x400 * phy) + off;
+	void __iomem *regs = hisi_hba->regs + (0x400 * phy_no) + off;
 
 	return readl(regs);
 }
 
 static void p660_config_phy_link_param(struct hisi_hba *hisi_hba,
-					int phy,
+					int phy_no,
 					enum sas_linkrate linkrate)
 {
-	u32 rate = hisi_sas_phy_read32(hisi_hba, phy, PROG_PHY_LINK_RATE);
+	u32 rate = hisi_sas_phy_read32(hisi_hba, phy_no, PROG_PHY_LINK_RATE);
 	u32 pcn;
 
 	rate &= ~PROG_PHY_LINK_RATE_MAX_MSK;
@@ -484,29 +486,29 @@ static void p660_config_phy_link_param(struct hisi_hba *hisi_hba,
 	rate |= SAS_LINK_RATE_1_5_GBPS << PROG_PHY_LINK_RATE_OOB_OFF;
 	rate &= ~PROG_PHY_LINK_RATE_MIN_MSK;
 	rate |= SAS_LINK_RATE_1_5_GBPS << PROG_PHY_LINK_RATE_MIN_OFF;
-	hisi_sas_phy_write32(hisi_hba, phy, PROG_PHY_LINK_RATE, rate);
-	hisi_sas_phy_write32(hisi_hba, phy, PHY_PCN, pcn);
+	hisi_sas_phy_write32(hisi_hba, phy_no, PROG_PHY_LINK_RATE, rate);
+	hisi_sas_phy_write32(hisi_hba, phy_no, PHY_PCN, pcn);
 }
 
-static void p660_config_phy_opt_mode(struct hisi_hba *hisi_hba, int phy)
+static void p660_config_phy_opt_mode(struct hisi_hba *hisi_hba, int phy_no)
 {
 	/* assume not optical cable for now */
-	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy_no, PHY_CFG);
 
 	cfg &= ~PHY_CFG_DC_OPT_MSK;
 	cfg |= 1 << PHY_CFG_DC_OPT_OFF;
-	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
+	hisi_sas_phy_write32(hisi_hba, phy_no, PHY_CFG, cfg);
 }
 
-static void p660_config_tx_tfe_autoneg(struct hisi_hba *hisi_hba, int phy)
+static void p660_config_tx_tfe_autoneg(struct hisi_hba *hisi_hba, int phy_no)
 {
-	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CONFIG2);
+	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy_no, PHY_CONFIG2);
 
 	cfg &= ~PHY_CONFIG2_FORCE_TXDEEMPH_MSK;
-	hisi_sas_phy_write32(hisi_hba, phy, PHY_CONFIG2, cfg);
+	hisi_sas_phy_write32(hisi_hba, phy_no, PHY_CONFIG2, cfg);
 }
 
-static void p660_config_id_frame(struct hisi_hba *hisi_hba, int phy)
+static void p660_config_id_frame(struct hisi_hba *hisi_hba, int phy_no)
 {
 	struct sas_identify_frame identify_frame;
 	u32 *identify_buffer;
@@ -523,20 +525,20 @@ static void p660_config_id_frame(struct hisi_hba *hisi_hba, int phy)
 	identify_frame.target_bits = SAS_PROTOCOL_NONE;
 	memcpy(&identify_frame._un4_11[0], hisi_hba->sas_addr, SAS_ADDR_SIZE);
 	memcpy(&identify_frame.sas_addr[0], hisi_hba->sas_addr,	SAS_ADDR_SIZE);
-	identify_frame.phy_id = phy;
+	identify_frame.phy_id = phy_no;
 	identify_buffer = (u32 *)(&identify_frame);
 
-	hisi_sas_phy_write32(hisi_hba, phy, TX_ID_DWORD0,
+	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD0,
 			__swab32(identify_buffer[0]));
-	hisi_sas_phy_write32(hisi_hba, phy, TX_ID_DWORD1,
+	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD1,
 			identify_buffer[2]);
-	hisi_sas_phy_write32(hisi_hba, phy, TX_ID_DWORD2,
+	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD2,
 			identify_buffer[1]);
-	hisi_sas_phy_write32(hisi_hba, phy, TX_ID_DWORD3,
+	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD3,
 			identify_buffer[4]);
-	hisi_sas_phy_write32(hisi_hba, phy, TX_ID_DWORD4,
+	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD4,
 			identify_buffer[3]);
-	hisi_sas_phy_write32(hisi_hba, phy, TX_ID_DWORD5,
+	hisi_sas_phy_write32(hisi_hba, phy_no, TX_ID_DWORD5,
 			__swab32(identify_buffer[5]));
 }
 
@@ -597,7 +599,7 @@ extern void SRE_CommonSerdesEnableCTLEDFE(unsigned int node,
 		unsigned int lane,
 		unsigned int ulDsCfg);
 
-static void p660_serdes_enable_ctledfe(struct hisi_hba *hisi_hba, int phy_id)
+static void p660_serdes_enable_ctledfe(struct hisi_hba *hisi_hba, int phy_no)
 {
 	int ds_api = 0;
 	int hilink_id;
@@ -605,14 +607,14 @@ static void p660_serdes_enable_ctledfe(struct hisi_hba *hisi_hba, int phy_id)
 
 	if (hisi_hba->id == 0) {
 		hilink_id = 2;
-		ds_api = phy_id;
+		ds_api = phy_no;
 		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 9);
 	} else if (hisi_hba->id == 1) {
-		if (phy_id < 4)
+		if (phy_no < 4)
 			hilink_id = 5;
 		else
 			hilink_id = 6;
-		ds_api = phy_id % 4;
+		ds_api = phy_no % 4;
 		SRE_CommonSerdesEnableCTLEDFE(cpu_node, hilink_id, ds_api, 9);
 	} else
 		BUG();
@@ -623,32 +625,32 @@ void p660_config_serdes_12G_timer_handler(unsigned long arg)
 	struct hisi_sas_phy *phy = (struct hisi_sas_phy *)arg;
 	struct hisi_hba *hisi_hba = phy->hisi_hba;
 	struct asd_sas_phy *sas_phy = &phy->sas_phy;
-	int phy_id = sas_phy->id;
+	int phy_no = sas_phy->id;
 	u32 val;
 
 	/* End training */
-	val = hisi_sas_phy_read32(hisi_hba, phy_id, PHY_CONFIG2);
+	val = hisi_sas_phy_read32(hisi_hba, phy_no, PHY_CONFIG2);
 	if (!(val & PHY_CONFIG2_TX_TRAIN_COMP_MSK)) {
 		val |= PHY_CONFIG2_TX_TRAIN_COMP_MSK;
-		hisi_sas_phy_write32(hisi_hba, phy_id, PHY_CONFIG2, val);
+		hisi_sas_phy_write32(hisi_hba, phy_no, PHY_CONFIG2, val);
 	}
 
 	udelay(1);
 
 	/* Clear training */
-	val = hisi_sas_phy_read32(hisi_hba, phy_id, PHY_CONFIG2);
+	val = hisi_sas_phy_read32(hisi_hba, phy_no, PHY_CONFIG2);
 	if (val & PHY_CONFIG2_TX_TRAIN_COMP_MSK) {
 		val &= ~PHY_CONFIG2_TX_TRAIN_COMP_MSK;
-		hisi_sas_phy_write32(hisi_hba, phy_id, PHY_CONFIG2, val);
+		hisi_sas_phy_write32(hisi_hba, phy_no, PHY_CONFIG2, val);
 	}
 }
 
-void p660_phy_rx_eye_diag_done(struct hisi_hba *hisi_hba, int phy_id)
+void p660_phy_rx_eye_diag_done(struct hisi_hba *hisi_hba, int phy_no)
 {
-	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_id];
+	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
 	struct timer_list *timer = &phy->serdes_timer;
 
-	p660_serdes_enable_ctledfe(hisi_hba, phy_id);
+	p660_serdes_enable_ctledfe(hisi_hba, phy_no);
 
 	if (!timer_pending(timer)) {
 		init_timer(timer);
@@ -666,7 +668,7 @@ extern unsigned int SRE_CommonSerdesLaneReset(unsigned int node,
 			unsigned int ulDsNum,
 			unsigned int ulDsCfg);
 
-static void p660_serdes_lane_reset(struct hisi_hba *hisi_hba, int phy_id)
+static void p660_serdes_lane_reset(struct hisi_hba *hisi_hba, int phy_no)
 {
 	int ds_api = 0;
 	int hilink_id;
@@ -674,14 +676,14 @@ static void p660_serdes_lane_reset(struct hisi_hba *hisi_hba, int phy_id)
 
 	if (hisi_hba->id == 0) {
 		hilink_id = 2;
-		ds_api = phy_id;
+		ds_api = phy_no;
 		SRE_CommonSerdesLaneReset(cpu_node, hilink_id, ds_api, 6);
 	} else if (hisi_hba->id == 1) {
-		if (phy_id < 4)
+		if (phy_no < 4)
 			hilink_id = 5;
 		else
 			hilink_id = 6;
-		ds_api = phy_id % 4;
+		ds_api = phy_no % 4;
 		SRE_CommonSerdesLaneReset(cpu_node, hilink_id, ds_api, 6);
 	} else
 		BUG();
@@ -945,38 +947,38 @@ static int p660_hw_init(struct hisi_hba *hisi_hba)
 	return 0;
 }
 
-static void p660_enable_phy(struct hisi_hba *hisi_hba, int phy)
+static void p660_enable_phy(struct hisi_hba *hisi_hba, int phy_no)
 {
-	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy_no, PHY_CFG);
 
 	cfg |= PHY_CFG_ENA_MSK;
-	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
+	hisi_sas_phy_write32(hisi_hba, phy_no, PHY_CFG, cfg);
 }
 
-static void p660_disable_phy(struct hisi_hba *hisi_hba, int phy)
+static void p660_disable_phy(struct hisi_hba *hisi_hba, int phy_no)
 {
-	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy, PHY_CFG);
+	u32 cfg = hisi_sas_phy_read32(hisi_hba, phy_no, PHY_CFG);
 
 	cfg &= ~PHY_CFG_ENA_MSK;
-	hisi_sas_phy_write32(hisi_hba, phy, PHY_CFG, cfg);
+	hisi_sas_phy_write32(hisi_hba, phy_no, PHY_CFG, cfg);
 }
 
-static void p660_start_phy(struct hisi_hba *hisi_hba, int phy)
+static void p660_start_phy(struct hisi_hba *hisi_hba, int phy_no)
 {
-	p660_config_id_frame(hisi_hba, phy);
+	p660_config_id_frame(hisi_hba, phy_no);
 	#ifdef SAS_12G
-	p660_config_phy_link_param(hisi_hba, phy, SAS_LINK_RATE_12_0_GBPS);
+	p660_config_phy_link_param(hisi_hba, phy_no, SAS_LINK_RATE_12_0_GBPS);
 	#else
-	p660_config_phy_link_param(hisi_hba, phy, SAS_LINK_RATE_6_0_GBPS);
+	p660_config_phy_link_param(hisi_hba, phy_no, SAS_LINK_RATE_6_0_GBPS);
 	#endif
-	p660_config_phy_opt_mode(hisi_hba, phy);
-	p660_config_tx_tfe_autoneg(hisi_hba, phy);
-	p660_enable_phy(hisi_hba, phy);
+	p660_config_phy_opt_mode(hisi_hba, phy_no);
+	p660_config_tx_tfe_autoneg(hisi_hba, phy_no);
+	p660_enable_phy(hisi_hba, phy_no);
 }
 
-static void p660_stop_phy(struct hisi_hba *hisi_hba, int phy)
+static void p660_stop_phy(struct hisi_hba *hisi_hba, int phy_no)
 {
-	p660_disable_phy(hisi_hba, phy);
+	p660_disable_phy(hisi_hba, phy_no);
 }
 
 static void p660_hard_phy_reset_restart_phy(unsigned long arg)
@@ -984,9 +986,9 @@ static void p660_hard_phy_reset_restart_phy(unsigned long arg)
 	struct hisi_sas_phy *phy = (struct hisi_sas_phy *)arg;
 	struct hisi_hba *hisi_hba = phy->hisi_hba;
 	struct asd_sas_phy *sas_phy = &phy->sas_phy;
-	int phy_id = sas_phy->id;
+	int phy_no = sas_phy->id;
 
-	p660_start_phy(hisi_hba, phy_id);
+	p660_start_phy(hisi_hba, phy_no);
 }
 
 static void p660_hard_phy_reset(struct hisi_hba *hisi_hba, int phy_no)
@@ -1754,7 +1756,7 @@ end:
 
 		chl_int0 &= ~CHL_INT0_PHYCTRL_NOTRDY_MSK;
 		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0, chl_int0);
-		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0_MSK, 0x003ce3ee);
+		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0_MSK, 0x3ce3ee);
 	}
 
 	return res;
@@ -1796,7 +1798,7 @@ static irqreturn_t p660_int_abnormal(int phy_no, void *p)
 	dev_err(hisi_hba->dev, "%s\n", __func__);
 	/* mask_int0 */
 	irq_mask_old = hisi_sas_phy_read32(hisi_hba, phy_no, CHL_INT0_MSK);
-	hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0_MSK, 0x003FFFFF);
+	hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0_MSK, 0x3fffff);
 
 	/* read int0 */
 	irq_value = hisi_sas_phy_read32(hisi_hba, phy_no, CHL_INT0);
@@ -1846,7 +1848,7 @@ static irqreturn_t p660_int_abnormal(int phy_no, void *p)
 
 	if (irq_value & CHL_INT0_PHYCTRL_NOTRDY_MSK)
 		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0_MSK,
-				0x003FFFFF & ~1);
+				0x003fffff & ~CHL_INT0_MSK_PHYCTRL_NOTRDY_MSK);
 	else
 		hisi_sas_phy_write32(hisi_hba, phy_no, CHL_INT0_MSK,
 				irq_mask_old);
@@ -2233,7 +2235,7 @@ static int p660_interrupt_openall(struct hisi_hba *hisi_hba)
 		hisi_sas_phy_write32(hisi_hba, i, CHL_INT2_MSK, 0x8000012a);
 
 		/* bypass chip bug mask abnormal intr */
-		hisi_sas_phy_write32(hisi_hba, i, CHL_INT0_MSK, 0x003fffff & ~1);
+		hisi_sas_phy_write32(hisi_hba, i, CHL_INT0_MSK, 0x003fffff & ~CHL_INT0_MSK_PHYCTRL_NOTRDY_MSK);
 	}
 
 	return 0;
