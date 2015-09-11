@@ -934,7 +934,7 @@ void pcie_equalization(struct hisi_pcie *pcie)
 		hisi_pcie_apb_writel(pcie, 0x0, 0x89c);
 		hisi_pcie_apb_writel(pcie, 0xfc00, 0x898);
 		hisi_pcie_apb_writel(pcie, 0x1, 0x89c);
-		hisi_pcie_apb_writel(pcie, 0xdb00, 0x898);
+		hisi_pcie_apb_writel(pcie, 0xbd00, 0x898);
 		hisi_pcie_apb_writel(pcie, 0x2, 0x89c);
 		hisi_pcie_apb_writel(pcie, 0xccc0, 0x898);
 		hisi_pcie_apb_writel(pcie, 0x3, 0x89c);
@@ -944,6 +944,7 @@ void pcie_equalization(struct hisi_pcie *pcie)
 		hisi_pcie_apb_writel(pcie, 0x5, 0x89c);
 		hisi_pcie_apb_writel(pcie, 0xe46, 0x898);
 		hisi_pcie_apb_writel(pcie, 0x6, 0x89c);
+		hisi_pcie_apb_writel(pcie, 0xdc8, 0x898);
 		hisi_pcie_apb_writel(pcie, 0x7, 0x89c);
 		hisi_pcie_apb_writel(pcie, 0xcb46, 0x898);
 		hisi_pcie_apb_writel(pcie, 0x8, 0x89c);
