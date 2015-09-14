@@ -867,44 +867,6 @@ static void hi1610_start_delivery(struct hisi_hba *hisi_hba)
 			(dlvry_queue * 0x14), ++w % HISI_SAS_QUEUE_SLOTS);
 }
 
-static int hi1610_is_phy_ready(struct hisi_hba *hisi_hba, int phy_no)
-{
-	u32 phy_state, port_state, phy_port_dis_state;
-	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
-	struct hisi_sas_port *port = phy->port;
-
-	/* j00310691 fimxe (check on phy rdy register) */
-	port_state = hisi_sas_read32(hisi_hba, PORT_STATE);
-	phy_port_dis_state = hisi_sas_read32(hisi_hba, PHY_PORT_NUM_MA);
-
-	phy_state = hisi_sas_read32(hisi_hba, PHY_STATE);
-	if (phy_state & (1 << phy_no)) {
-		if (!port)
-			phy->phy_attached = 1;
-		return 1;
-	}
-
-	/* phy is not ready, so update port */
-	if (port) {
-		u32 wide_port_phymap =
-			(hisi_sas_read32(hisi_hba, PHY_PORT_NUM_MA)
-			 >> (phy_no * 4)) & 0xf;
-
-		if (phy->phy_type & PORT_TYPE_SAS) {
-			if (wide_port_phymap == 0xf)
-				port->port_attached = 0;
-		} else if (phy->phy_type & PORT_TYPE_SATA) {
-			port->port_attached = 0;
-			/* j00310691 we cannot have a SATA wideport */
-		}
-		phy->port = NULL;
-		phy->phy_attached = 0;
-		phy->phy_type &= ~(PORT_TYPE_SAS | PORT_TYPE_SATA);
-	}
-
-	return 0;
-}
-
 static int hi1610_prep_prd_sge(struct hisi_hba *hisi_hba,
 				 struct hisi_sas_slot *slot,
 				 struct hisi_sas_cmd_hdr *hdr,
@@ -2143,7 +2105,6 @@ const struct hisi_sas_dispatch hisi_sas_hi1610_dispatch = {
 	.prep_ssp = hi1610_prep_ssp,
 	.prep_smp = hi1610_prep_smp,
 	.prep_stp = hi1610_prep_ata,
-	.is_phy_ready = hi1610_is_phy_ready,
 	.slot_complete = hi1610_slot_complete,
 	.phy_enable = hi1610_enable_phy,
 	.phy_disable = hi1610_disable_phy,

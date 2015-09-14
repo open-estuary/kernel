@@ -165,7 +165,6 @@ struct hisi_sas_dispatch {
 	int (*prep_stp)(struct hisi_hba *hisi_hba,
 			struct hisi_sas_tei *tei);
 	int (*slot_complete)(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, u32 abort);
-	int (*is_phy_ready)(struct hisi_hba *hisi_hba, int phy_no);
 	void (*phy_enable)(struct hisi_hba *hisi_hba, int phy_no);
 	void (*phy_disable)(struct hisi_hba *hisi_hba, int phy_no);
 	void (*hard_phy_reset)(struct hisi_hba *hisi_hba, int phy_no);
