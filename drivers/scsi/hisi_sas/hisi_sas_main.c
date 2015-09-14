@@ -595,6 +595,7 @@ void hisi_sas_port_notify_formed(struct asd_sas_phy *sas_phy, int lock)
 	if (lock)
 		spin_lock_irqsave(&hisi_hba->lock, flags);
 	port->port_attached = 1;
+	port->id = phy->port_id;
 	phy->port = port;
 	sas_port->lldd_port = port;
 
@@ -633,8 +634,11 @@ static void hisi_sas_port_notify_deformed(struct asd_sas_phy *sas_phy, int lock)
 	struct domain_device *dev;
 	struct hisi_sas_phy *phy = sas_phy->lldd_phy;
 	struct hisi_hba *hisi_hba = phy->hisi_hba;
-	struct asd_sas_port *port = sas_phy->port;
+	struct asd_sas_port *sas_port = sas_phy->port;
+	struct hisi_sas_port *port = sas_port->lldd_port;
 	int phy_no = 0;
+	port->port_attached = 0;
+	port->id = -1;
 
 	while (phy != &hisi_hba->phy[phy_no]) {
 		phy_no++;
@@ -642,7 +646,7 @@ static void hisi_sas_port_notify_deformed(struct asd_sas_phy *sas_phy, int lock)
 		if (phy_no >= hisi_hba->n_phy)
 			return;
 	}
-	list_for_each_entry(dev, &port->dev_list, dev_list_node)
+	list_for_each_entry(dev, &sas_port->dev_list, dev_list_node)
 		hisi_sas_do_release_task(phy->hisi_hba, phy_no, dev);
 }
 
