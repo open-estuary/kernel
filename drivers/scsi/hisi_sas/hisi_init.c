@@ -96,6 +96,7 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 	for (i = 0; i < hisi_hba->n_phy; i++) {
 		hisi_sas_phy_init(hisi_hba, i);
 		hisi_hba->port[i].port_attached = 0;
+		hisi_hba->port[i].id = -1;
 		INIT_LIST_HEAD(&hisi_hba->port[i].list);
 	}
 

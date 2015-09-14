@@ -1132,7 +1132,7 @@ static int p660_prep_smp(struct hisi_hba *hisi_hba,
 	struct sas_task *task = tei->task;
 	struct hisi_sas_cmd_hdr *hdr = tei->hdr;
 	struct domain_device *dev = task->dev;
-	struct asd_sas_port *sas_port = dev->port;
+	struct hisi_sas_port *port = tei->port;
 	struct scatterlist *sg_req, *sg_resp;
 	struct hisi_sas_device *hisi_sas_dev = dev->lldd_dev;
 	dma_addr_t req_dma_addr;
@@ -1177,7 +1177,7 @@ static int p660_prep_smp(struct hisi_hba *hisi_hba,
 	/* hdr->resp_report, ->tlr_ctrl for SSP */
 	/* dw0->phy_id not set as we do not force phy */
 	dw0->force_phy = 0; /* do not force ordering in phy */
-	dw0->port = sas_port->id; /* double-check */
+	dw0->port = port->id; /* double-check */
 	/* hdr->sata_reg_set not applicable to smp */
 	dw0->priority = 1; /* high priority */
 	dw0->mode = 1; /* ini mode */
@@ -1241,8 +1241,8 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 	struct sas_task *task = tei->task;
 	struct hisi_sas_cmd_hdr *hdr = tei->hdr;
 	struct domain_device *dev = task->dev;
-	struct asd_sas_port *sas_port = dev->port;
 	struct hisi_sas_device *hisi_sas_dev = dev->lldd_dev;
+	struct hisi_sas_port *port = tei->port;
 	struct sas_ssp_task *ssp_task = &task->ssp_task;
 	struct scsi_cmnd *scsi_cmnd = ssp_task->cmd;
 	int has_data = 0, rc;
@@ -1263,7 +1263,7 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 	dw0->tlr_ctrl = 0x2; /* Do not enable */
 	/* dw0->phy_id not set as we do not force phy */
 	dw0->force_phy = 0; /* do not force ordering in phy */
-	dw0->port = sas_port->id; /* double-check */
+	dw0->port = port->id; /* double-check */
 	/* hdr->sata_reg_set not applicable to smp */
 	if (is_tmf)
 		dw0->priority = 1;
@@ -1697,6 +1697,7 @@ static irqreturn_t p660_int_phyup(int phy_no, void *p)
 	memcpy(sas_phy->attached_sas_addr,
 		&id->sas_addr, SAS_ADDR_SIZE);
 	dev_info(hisi_hba->dev, "%s phy%d id=%d link_rate=%d\n", __func__, phy_no, hisi_hba->id, link_rate);
+	phy->port_id = port_id;
 	phy->phy_type &= ~(PORT_TYPE_SAS | PORT_TYPE_SATA);
 	phy->phy_type |= PORT_TYPE_SAS;
 	phy->phy_attached = 1;

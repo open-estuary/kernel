@@ -82,6 +82,7 @@ struct hisi_sas_phy {
 	struct asd_sas_phy	sas_phy;
 	struct sas_identify	identify;
 	struct timer_list	serdes_timer;
+	u64		port_id; /* from hw */
 	u64		dev_sas_addr;
 	u64		phy_type;
 	u64		frame_rcvd_size;
@@ -97,6 +98,7 @@ struct hisi_sas_phy {
 struct hisi_sas_port {
 	struct asd_sas_port	sas_port;
 	u8	port_attached;
+	u8	id; /* from hw */
 	struct list_head	list;
 };
 
