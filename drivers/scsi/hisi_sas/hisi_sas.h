@@ -83,7 +83,7 @@ struct hisi_sas_phy {
 	struct hisi_sas_port	*port;
 	struct asd_sas_phy	sas_phy;
 	struct sas_identify	identify;
-	struct timer_list	serdes_timer;
+	struct timer_list	timer;
 	u64		port_id; /* from hw */
 	u64		dev_sas_addr;
 	u64		phy_type;
@@ -251,7 +251,7 @@ struct hisi_hba_priv {
 extern const struct hisi_sas_hba_info hisi_sas_p660_hba_info;
 extern const struct hisi_sas_hba_info hisi_sas_hi1610_hba_info;
 
-/* HW structures */
+/* Generic HW structures */
 /* Delivery queue header */
 struct hisi_sas_cmd_hdr {
 	/* dw0 */
@@ -305,11 +305,11 @@ struct hisi_sas_cmd_hdr {
 
 	/* dw15 */
 	u32 dif_prd_table_addr_hi;
-};
+} __packed;
 
 struct hisi_sas_itct {
 	u64 data[16];
-};
+} __packed;
 
 struct hisi_sas_iost {
 	/* qw0 */
@@ -351,7 +351,7 @@ struct hisi_sas_iost {
 
 	/* qw3 */
 	uint64_t status_buffer_address;
-};
+} __packed;
 
 struct hisi_sas_err_record {
 	/* dw0 */
@@ -366,17 +366,17 @@ struct hisi_sas_err_record {
 
 	/* dw3 */
 	u32 rsvd;
-};
+} __packed;
 
 struct hisi_sas_initial_fis {
 	struct hisi_sas_err_record err_record;
 	struct dev_to_host_fis fis;
 	u32 rsvd[3];
-};
+} __packed;
 
 struct hisi_sas_breakpoint {
 	u8	data[128];	/*io128 byte*/
-};
+} __packed;
 
 struct hisi_sas_sge {
 	u32 addr_lo;
@@ -385,23 +385,23 @@ struct hisi_sas_sge {
 	u32 page_ctrl_1;
 	u32 data_len;
 	u32 data_off;
-};
+} __packed;
 
 /* j00310691 Max SMP Request frame size is 44; see table 186 */
 struct hisi_sas_command_table_smp {
 	u8 bytes[44];
-};
+} __packed;
 
 struct hisi_sas_command_table_stp {
 	struct	host_to_dev_fis command_fis; /* 20 */
 	u8	dummy[12]; /* 12 */
 	u8	atapi_cdb[ATAPI_CDB_LEN]; /* 16 */
-};
+} __packed;
 
 #define HISI_SAS_SGE_PAGE_CNT SCSI_MAX_SG_SEGMENTS
 struct hisi_sas_sge_page {
 	struct hisi_sas_sge sge[HISI_SAS_SGE_PAGE_CNT];
-};
+} __packed;
 
 #define LUN_SIZE 8
 
@@ -456,7 +456,7 @@ struct hisi_sas_command_table_ssp {
 		struct ssp_response_iu ssp_res;
 	} u;
 	/* See Table 118 of 1.1 spec */
-};
+} __packed;
 
 union hisi_sas_command_table {
 	struct hisi_sas_command_table_ssp ssp;

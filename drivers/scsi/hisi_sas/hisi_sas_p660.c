@@ -332,7 +332,7 @@ struct hisi_sas_cmd_hdr_dw0_p660 {
 	u32 priority:1;
 	u32 mode:1;
 	u32 cmd:3;
-};
+} __packed;
 
 struct hisi_sas_cmd_hdr_dw1_p660 {
 	u32 port_multiplier:4;
@@ -347,7 +347,7 @@ struct hisi_sas_cmd_hdr_dw1_p660 {
 	u32 ssp_pass_through:1;
 	u32 ssp_frame_type:3;
 	u32 device_id:16;
-};
+} __packed;
 
 struct hisi_sas_cmd_hdr_dw2_p660 {
 	u32 cmd_frame_len:9;
@@ -357,7 +357,7 @@ struct hisi_sas_cmd_hdr_dw2_p660 {
 	u32 sg_mode:1;
 	u32 first_burst:1;
 	u32 rsvd3:6;
-};
+} __packed;
 
 /* Completion queue header */
 struct hisi_sas_complete_hdr_p660 {
@@ -373,7 +373,7 @@ struct hisi_sas_complete_hdr_p660 {
 	u32 abort_status:3;
 	u32 io_cfg_err:1;
 	u32 rsvd1:4;
-};
+} __packed;
 
 struct hisi_sas_itct_p660 {
 	/* qw0 */
@@ -432,7 +432,7 @@ struct hisi_sas_itct_p660 {
 	/* qw14-15 */
 	u64 rsvd4;
 	u64 rsvd5;
-};
+} __packed;
 
 #ifdef SAS_DIF
 struct hip660_protect_iu {
@@ -548,12 +548,8 @@ static void p660_config_id_frame(struct hisi_hba *hisi_hba, int phy_no)
 	u32 *identify_buffer;
 
 	memset(&identify_frame, 0, sizeof(identify_frame));
-	/*dev_type is [6-4]bit, frame_type is [3-0]bit
-	 *according to IT code, the byte is set to 0x10 */
-	/* l00293075 I found this one */
 	identify_frame.dev_type = SAS_END_DEVICE;
 	identify_frame.frame_type = 0;
-	/*_un1 is the second byte,the byte is set to 0x1 in IT code*/
 	identify_frame._un1 = 1;
 	identify_frame.initiator_bits = SAS_PROTOCOL_ALL;
 	identify_frame.target_bits = SAS_PROTOCOL_NONE;
@@ -580,8 +576,6 @@ static void p660_init_id_frame(struct hisi_hba *hisi_hba)
 {
 	int i;
 
-	/*ifdef _LITTLE_ENDIAN_BITFIELD,
-	*sas_identify_frame the same as the structure in IT code*/
 	for (i = 0; i < hisi_hba->n_phy; i++)
 		p660_config_id_frame(hisi_hba, i);
 }
@@ -682,7 +676,7 @@ void p660_config_serdes_12G_timer_handler(unsigned long arg)
 void p660_phy_rx_eye_diag_done(struct hisi_hba *hisi_hba, int phy_no)
 {
 	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
-	struct timer_list *timer = &phy->serdes_timer;
+	struct timer_list *timer = &phy->timer;
 
 	p660_serdes_enable_ctledfe(hisi_hba, phy_no);
 
@@ -1036,7 +1030,7 @@ static void p660_hard_phy_reset_restart_phy(unsigned long arg)
 static void p660_hard_phy_reset(struct hisi_hba *hisi_hba, int phy_no)
 {
 	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
-	struct timer_list *timer = &phy->serdes_timer;
+	struct timer_list *timer = &phy->timer;
 
 	p660_stop_phy(hisi_hba, phy_no);
 
@@ -2208,7 +2202,7 @@ static int p660_interrupt_init(struct hisi_hba *hisi_hba)
 					&int_names[idx * HISI_SAS_INT_NAME_LENGTH],
 					hisi_hba);
 			if (rc) {
-				dev_err(dev, "%s [%d] could not request interrupt %d, rc=%d\n",
+				dev_err(dev, "%s [%d] could not request phy interrupt %d, rc=%d\n",
 					__func__, hisi_hba->id, irq, rc);
 				return -ENOENT;
 			}
@@ -2231,7 +2225,7 @@ static int p660_interrupt_init(struct hisi_hba *hisi_hba)
 				&int_names[idx * HISI_SAS_INT_NAME_LENGTH],
 				hisi_hba);
 		if (rc) {
-			dev_err(dev, "%s [%d] could not request interrupt %d, rc=%d\n",
+			dev_err(dev, "%s [%d] could not request cq interrupt %d, rc=%d\n",
 				__func__, hisi_hba->id, irq, rc);
 			return -ENOENT;
 		}
@@ -2255,7 +2249,7 @@ static int p660_interrupt_init(struct hisi_hba *hisi_hba)
 				&int_names[idx * HISI_SAS_INT_NAME_LENGTH],
 				hisi_hba);
 		if (rc) {
-			dev_err(dev, "%s [%d] could not request interrupt %d, rc=%d\n",
+			dev_err(dev, "%s [%d] could not request fatal interrupt %d, rc=%d\n",
 				__func__, hisi_hba->id, irq, rc);
 			return -ENOENT;
 		}
@@ -2306,7 +2300,7 @@ static const struct hisi_sas_dispatch hisi_sas_p660_dispatch = {
 	.phy_enable = p660_enable_phy,
 	.phy_disable = p660_disable_phy,
 	.hard_phy_reset = p660_hard_phy_reset,
-	/* p660 does not support STP */
+	/* p660 does not support SATA/STP */
 };
 
 const struct hisi_sas_hba_info hisi_sas_p660_hba_info = {
