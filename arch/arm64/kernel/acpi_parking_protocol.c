@@ -18,7 +18,9 @@
  */
 #include <linux/acpi.h>
 #include <linux/types.h>
+#include <linux/dmi.h>
 
+#include <asm/cacheflush.h>
 #include <asm/cpu_ops.h>
 
 struct cpu_mailbox_entry {
@@ -65,11 +67,72 @@ struct parking_protocol_mailbox {
 	__le64 entry_point;
 };
 
+static int acpi_mustang_protocol_cpu_boot(unsigned int cpu)
+{
+	struct cpu_mailbox_entry *cpu_entry = &cpu_mailbox_entries[cpu];
+	struct parking_protocol_mailbox __iomem *mailbox;
+
+	/*
+	 * Early Mustang firmware may put mailbox in linear map.
+	 */
+	mailbox = ioremap_cache(cpu_entry->mailbox_addr, sizeof(*mailbox));
+	if (!mailbox)
+		return -EIO;
+
+	/*
+	 * We write the entry point and cpu id as LE regardless of the
+	 * native endianness of the kernel. Therefore, any boot-loaders
+	 * that read this address need to convert this address to the
+	 * Boot-Loader's endianness before jumping.
+	 */
+	writeq(__pa(secondary_entry), &mailbox->entry_point);
+	writel(cpu_entry->gic_cpu_id, &mailbox->cpu_id);
+	__flush_dcache_area(mailbox, sizeof(*mailbox));
+	sev();
+
+	iounmap(mailbox);
+
+	return 0;
+}
+
+static void acpi_mustang_protocol_cpu_postboot(void)
+{
+	int cpu = smp_processor_id();
+	struct cpu_mailbox_entry *cpu_entry = &cpu_mailbox_entries[cpu];
+	struct parking_protocol_mailbox __iomem *mailbox;
+	__le64 entry_point;
+
+	/*
+	 * Early Mustang firmware may put mailbox in linear map.
+	 */
+	mailbox = ioremap_cache(cpu_entry->mailbox_addr, sizeof(*mailbox));
+	if (!mailbox)
+		return;
+
+	entry_point = readl(&mailbox->entry_point);
+
+	/*
+	 * Check if firmware has cleared the entry_point as expected
+	 * by the protocol specification.
+	 */
+	WARN_ON(entry_point);
+
+	iounmap(mailbox);
+}
+
+static bool is_broken_mustang(struct cpu_mailbox_entry *cpu_entry)
+{
+	return pfn_valid(__phys_to_pfn(cpu_entry->mailbox_addr));
+}
+
 static int acpi_parking_protocol_cpu_boot(unsigned int cpu)
 {
 	struct cpu_mailbox_entry *cpu_entry = &cpu_mailbox_entries[cpu];
 	struct parking_protocol_mailbox __iomem *mailbox;
 	__le32 cpu_id;
+
+	if (is_broken_mustang(cpu_entry))
+		return acpi_mustang_protocol_cpu_boot(cpu);
 
 	/*
 	 * Map mailbox memory with attribute device nGnRE (ie ioremap -
@@ -118,6 +181,11 @@ static void acpi_parking_protocol_cpu_postboot(void)
 	struct cpu_mailbox_entry *cpu_entry = &cpu_mailbox_entries[cpu];
 	struct parking_protocol_mailbox __iomem *mailbox;
 	__le64 entry_point;
+
+	if (is_broken_mustang(cpu_entry)) {
+		acpi_mustang_protocol_cpu_postboot();
+		return;
+	}
 
 	/*
 	 * Map mailbox memory with attribute device nGnRE (ie ioremap -
