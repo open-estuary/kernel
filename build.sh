@@ -46,8 +46,8 @@ else
     sudo cp arch/arm64/boot/Image /boot/
     sudo cp arch/arm64/boot/dts/hisilicon/hip05-d02.dtb /boot/
 
-    scp arch/arm64/boot/Image justin@192.168.1.107:~/ftp/
-    scp arch/arm64/boot/dts/hisilicon/hip05-d02.dtb justin@192.168.1.107:~/ftp/
+#    scp arch/arm64/boot/Image justin@192.168.1.107:~/ftp/
+#    scp arch/arm64/boot/dts/hisilicon/hip05-d02.dtb justin@192.168.1.107:~/ftp/
 
     find . -name Image
     find . -name hip05-d02.dtb
