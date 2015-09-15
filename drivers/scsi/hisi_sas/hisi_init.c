@@ -523,5 +523,6 @@ module_exit(hisi_sas_exit);
 
 MODULE_VERSION(DRV_VERSION);
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("HISILICON P660 SAS/SATA controller driver");
+MODULE_AUTHOR("John Garry <john.garry@huawei.com>");
+MODULE_DESCRIPTION("HISILICON SAS controller driver");
 MODULE_ALIAS("platform:hisi_sas_controller");

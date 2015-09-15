@@ -65,26 +65,26 @@ static int hisi_sas_find_tag(struct hisi_hba *hisi_hba, struct sas_task *task, u
 	return 0;
 }
 
-void hisi_sas_slot_index_clear(struct hisi_hba *hisi_hba, int slot_idx)
+static void hisi_sas_slot_index_clear(struct hisi_hba *hisi_hba, int slot_idx)
 {
 	void *bitmap = hisi_hba->slot_index_tags;
 
 	clear_bit(slot_idx, bitmap);
 }
 
-void hisi_sas_slot_index_free(struct hisi_hba *hisi_hba, int slot_idx)
+static void hisi_sas_slot_index_free(struct hisi_hba *hisi_hba, int slot_idx)
 {
 	hisi_sas_slot_index_clear(hisi_hba, slot_idx);
 }
 
-void hisi_sas_slot_index_set(struct hisi_hba *hisi_hba, int slot_idx)
+static void hisi_sas_slot_index_set(struct hisi_hba *hisi_hba, int slot_idx)
 {
 	void *bitmap = hisi_hba->slot_index_tags;
 
 	set_bit(slot_idx, bitmap);
 }
 
-int hisi_sas_slot_index_alloc(struct hisi_hba *hisi_hba, int *slot_idx)
+static int hisi_sas_slot_index_alloc(struct hisi_hba *hisi_hba, int *slot_idx)
 {
 	unsigned int index;
 	void *bitmap = hisi_hba->slot_index_tags;
@@ -105,12 +105,8 @@ void hisi_sas_slot_index_init(struct hisi_hba *hisi_hba)
 		hisi_sas_slot_index_clear(hisi_hba, i);
 }
 
-int hisi_sas_get_ncq_tag(struct sas_task *task, u32 *hdr_tag)
-{
-	return 0;
-}
-
-void hisi_sas_slot_task_free(struct hisi_hba *hisi_hba, struct sas_task *task,
+void hisi_sas_slot_task_free(struct hisi_hba *hisi_hba,
+			struct sas_task *task,
 			struct hisi_sas_slot *slot)
 {
 	if (!slot->task)
@@ -171,7 +167,8 @@ static int hisi_sas_task_prep_ata(struct hisi_hba *hisi_hba,
 	return HISI_SAS_DISP->prep_stp(hisi_hba, tei);
 }
 
-static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
+static int hisi_sas_task_prep(struct sas_task *task,
+				struct hisi_hba *hisi_hba,
 				int is_tmf, struct hisi_sas_tmf_task *tmf,
 				int *pass)
 {
@@ -544,7 +541,7 @@ void hisi_sas_phy_init(struct hisi_hba *hisi_hba, int phy_no)
 
 	phy->hisi_hba = hisi_hba;
 	phy->port = NULL;
-	init_timer(&phy->serdes_timer);
+	init_timer(&phy->timer);
 	sas_phy->enabled = (phy_no < hisi_hba->n_phy) ? 1 : 0;
 	sas_phy->class = SAS;
 	sas_phy->iproto = SAS_PROTOCOL_ALL;
@@ -784,6 +781,7 @@ int hisi_sas_control_phy(struct asd_sas_phy *sas_phy,
 	case PHY_FUNC_DISABLE:
 		HISI_SAS_DISP->phy_disable(hisi_hba, phy_no);
 		break;
+
 	case PHY_FUNC_SET_LINK_RATE:
 	case PHY_FUNC_RELEASE_SPINUP_HOLD:
 	default:
