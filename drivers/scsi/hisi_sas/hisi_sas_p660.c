@@ -10,11 +10,15 @@
  */
 
 #include "hisi_sas.h"
-#include <linux/swab.h>
+#include <linux/crc-t10dif.h>
+#include <linux/debugfs.h>
 #include <linux/fs.h>
 #include <linux/module.h>
-#include <linux/debugfs.h>
+#include <linux/swab.h>
 #include <linux/types.h>
+#include <linux/t10-pi.h>
+#include <scsi/scsi_cmnd.h>
+#include <scsi/scsi_dbg.h>
 
 #undef SAS_12G
 
@@ -429,6 +433,36 @@ struct hisi_sas_itct_p660 {
 	u64 rsvd4;
 	u64 rsvd5;
 };
+
+#ifdef SAS_DIF
+struct hip660_protect_iu {
+	u32 t10_insert_en:1;
+	u32 t10_rmv_en:1;
+	u32 t10_rplc_en:1;
+	u32 t10_chk_en:1;
+	u32 chk_dsbl_md:1;
+	u32 incr_lbrt:1;
+	u32 incr_lbat:1;
+	u32 prd_dat_incl_t10:1;
+	u32 _r_a:8;
+	u32 app_proc_mode:1;
+	u32 dif_fmt:1;
+	u32 usr_dif_blk_sz:2;
+	u32 usr_dt_sz:12;
+
+	u32 lbrt_chk_val;
+	u32 lbrt_gen_val;
+	u32 lbat_chk_val:16;
+	u32 lbat_chk_mask:16;
+
+	u32 lbat_gen_val:16;
+	u32 t10_chk_msk:8;
+	u32 t10_rplc_msk:8;
+
+	u32 crc_gen_seed_val:16;
+	u32 crc_chk_seed_val:16;
+} __packed;
+#endif
 
 static inline u32 hisi_sas_read32(struct hisi_hba *hisi_hba, u32 off)
 {
@@ -927,6 +961,14 @@ static int p660_hw_init(struct hisi_hba *hisi_hba)
 {
 	int rc;
 
+#ifdef SAS_DIF
+	/* turn on DIF support */
+	scsi_host_set_prot(hisi_hba->shost,
+			   SHOST_DIF_TYPE1_PROTECTION |
+			   SHOST_DIF_TYPE2_PROTECTION |
+			   SHOST_DIF_TYPE3_PROTECTION);
+	scsi_host_set_guard(hisi_hba->shost, SHOST_DIX_GUARD_CRC);
+#endif
 	rc = p660_reset_hw(hisi_hba);
 	if (rc) {
 		dev_err(hisi_hba->dev, "hisi_sas_reset_hw failed, rc=%d", rc);
@@ -1089,10 +1131,6 @@ static int p660_prep_prd_sge(struct hisi_hba *hisi_hba,
 {
 	struct scatterlist *sg;
 	int i;
-	struct hisi_sas_cmd_hdr_dw0_p660 *dw0 =
-		(struct hisi_sas_cmd_hdr_dw0_p660 *)&hdr->dw0;
-	struct hisi_sas_cmd_hdr_dw1_p660 *dw1 =
-		(struct hisi_sas_cmd_hdr_dw1_p660 *)&hdr->dw1;
 
 	if (n_elem > HISI_SAS_SGE_PAGE_CNT) {
 		dev_err(hisi_hba->dev, "%s n_elem(%d) > HISI_SAS_SGE_PAGE_CNT",
@@ -1104,9 +1142,6 @@ static int p660_prep_prd_sge(struct hisi_hba *hisi_hba,
 					&slot->sge_page_dma);
 	if (!slot->sge_page)
 		return -ENOMEM;
-
-	dw0->t10_flds_pres = 0;
-	dw1->pir_pres = 0;
 
 	for_each_sg(scatter, sg, n_elem, i) {
 		struct hisi_sas_sge *entry = &slot->sge_page->sge[i];
@@ -1255,6 +1290,60 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 	struct hisi_sas_cmd_hdr_dw2_p660 *dw2 =
 		(struct hisi_sas_cmd_hdr_dw2_p660 *)&hdr->dw2;
 
+#ifdef SAS_DIF
+	u8 prot_type = scsi_get_prot_type(scsi_cmnd);
+	u8 prot_op = scsi_get_prot_op(scsi_cmnd);
+	union hisi_sas_command_table *cmd =
+		(union hisi_sas_command_table *) slot->command_table;
+	struct hip660_protect_iu *prot =
+		(struct hip660_protect_iu *)&cmd->ssp.u.prot;
+
+	if (prot_type != SCSI_PROT_DIF_TYPE0) {
+		/* enable dif */
+		dw0->t10_flds_pres = 1;
+		dw1->pir_pres = 1;
+
+		prot->usr_dt_sz = scsi_prot_interval(scsi_cmnd) / 4;
+		/* user dif block is 8B, if 0x1 is 64B */
+		prot->usr_dif_blk_sz = 0;	/* 8B */
+		/*0x0: CRC+APP+REF, 0x1:REF+APP+CRC*/
+		prot->dif_fmt = 0;
+		/*0x0: APP pass through, 0x1:*/
+		prot->app_proc_mode = 0;
+		/*0x1: PRD Table contains the T10*/
+		prot->prd_dat_incl_t10 = 1;
+		/*0x0: APP is constant*/
+		prot->incr_lbat = 0;
+		/*0x1: Ref Tag is increment*/
+		prot->incr_lbrt = 1;
+		/*0x1: if App and Ref Tag is 0xFF, then don't check*/
+		prot->chk_dsbl_md = 0;
+
+		prot->lbat_chk_mask = 0;
+		prot->t10_rplc_msk = 0xff;
+		prot->t10_chk_msk = 0xff;
+		prot->crc_gen_seed_val = 0;
+		prot->crc_chk_seed_val = 0;
+
+		hdr->data_transfer_len = 8 * scsi_bufflen(scsi_cmnd) /
+					 scsi_prot_interval(scsi_cmnd);
+		hdr->double_mode = 0;
+
+		if (prot_op == SCSI_PROT_READ_STRIP) {
+			prot->t10_chk_en = 0;
+			prot->t10_rmv_en = 1;
+			prot->t10_insert_en = 0;
+			prot->t10_rplc_en = 0;
+		} else if (prot_op == SCSI_PROT_WRITE_INSERT) {
+			prot->t10_chk_en = 0;
+			prot->t10_rmv_en = 0;
+			prot->t10_insert_en = 1;
+			prot->t10_rplc_en = 0;
+			prot->lbrt_gen_val = cpu_to_le32((uint32_t)
+					(0xffffffff & scsi_get_lba(scsi_cmnd)));
+		}
+	}
+#endif
 	/* create header */
 	/* dw0 */
 	/* hdr->abort_flag set in Higgs_PrepareBaseSSP */
@@ -1325,7 +1414,7 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 
 	/* dw4 */
 	if (!is_tmf)
-		hdr->data_transfer_len = scsi_bufflen(scsi_cmnd);
+		hdr->data_transfer_len += scsi_bufflen(scsi_cmnd);
 	else
 		hdr->data_transfer_len = 0;
 
@@ -1383,7 +1472,6 @@ static int p660_prep_ssp(struct hisi_hba *hisi_hba,
 	}
 
 	return 0;
-
 }
 
 /* by default, task resp is complete */

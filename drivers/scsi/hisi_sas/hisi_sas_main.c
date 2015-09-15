@@ -275,6 +275,7 @@ static int hisi_sas_task_prep(struct sas_task *task, struct hisi_hba *hisi_hba,
 	if (!slot->command_table)
 		goto err_out_status_buf;
 	memset(slot->command_table, 0, HISI_SAS_COMMAND_TABLE_SZ);
+	memset(slot->cmd_hdr, 0, sizeof(struct hisi_sas_cmd_hdr));
 
 	tei.hdr = slot->cmd_hdr;
 	tei.task = task;
