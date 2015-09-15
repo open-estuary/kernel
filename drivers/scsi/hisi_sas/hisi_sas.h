@@ -25,6 +25,8 @@
 #define DRV_NAME "hisi_sas"
 #define DRV_VERSION "v0.1"
 
+#undef SAS_DIF
+
 #define HISI_SAS_MAX_CORE 3
 
 #define HISI_SAS_MAX_PHYS	9
@@ -385,17 +387,6 @@ struct hisi_sas_sge {
 	u32 data_off;
 };
 
-struct hisi_sas_command_table_ssp {
-	struct ssp_frame_hdr hdr;
-	u8 iu[1024];/* j00310691 todo struct struct for iu: */
-/*	Data frame
-	XFR_RDY frame
-	Command frame
-	Response frame
-	Task frame
-	See Table 118 of 1.1 spec */
-};
-
 /* j00310691 Max SMP Request frame size is 44; see table 186 */
 struct hisi_sas_command_table_smp {
 	u8 bytes[44];
@@ -405,12 +396,6 @@ struct hisi_sas_command_table_stp {
 	struct	host_to_dev_fis command_fis; /* 20 */
 	u8	dummy[12]; /* 12 */
 	u8	atapi_cdb[ATAPI_CDB_LEN]; /* 16 */
-};
-
-union hisi_sas_command_table {
-	struct hisi_sas_command_table_ssp ssp;
-	struct hisi_sas_command_table_smp smp;
-	struct hisi_sas_command_table_stp stp;
 };
 
 #define HISI_SAS_SGE_PAGE_CNT SCSI_MAX_SG_SEGMENTS
@@ -452,6 +437,32 @@ struct ssp_command_iu {
 		} long_cdb;	  /* sequencer extension */
 	};
 } __packed;
+
+struct ssp_rdy_iu {
+	__be32 requested_offset;  /* BE */
+	__be32 write_data_len;	  /* BE */
+	__be32 _r_a;
+} __packed;
+
+struct hisi_sas_command_table_ssp {
+	struct ssp_frame_hdr hdr;
+	union {
+		struct {
+			struct ssp_command_iu task;
+			u32 prot[6];
+		};
+		struct ssp_task_iu ssp_task;
+		struct ssp_rdy_iu xfer_rdy;
+		struct ssp_response_iu ssp_res;
+	} u;
+	/* See Table 118 of 1.1 spec */
+};
+
+union hisi_sas_command_table {
+	struct hisi_sas_command_table_ssp ssp;
+	struct hisi_sas_command_table_smp smp;
+	struct hisi_sas_command_table_stp stp;
+};
 
 int hisi_sas_scan_finished(struct Scsi_Host *shost, unsigned long time);
 void hisi_sas_scan_start(struct Scsi_Host *shost);

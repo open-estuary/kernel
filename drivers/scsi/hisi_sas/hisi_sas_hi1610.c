@@ -207,6 +207,31 @@ struct hisi_sas_cmd_hdr_dw2_hi1610 {
 	u32 rsvd:5;
 };
 
+#ifdef SAS_DIF
+struct hi1610_protect_iu {
+	/* dw0 */
+	u32 _r_a:15;
+	u32 t10_chk_msk:8;
+	u32 incr_lbrt:1;
+	u32 incr_lbat:1;
+	u32 chk_dsbl_md:1;
+	u32 t10_chk_en:1;
+	u32 dif_fmt:1;
+	u32 usr_dif_blk_sz:2;
+	u32 usr_dt_sz:2;
+
+	/* dw1 */
+	u32 lbrt_chk_val;
+
+	/* dw2 */
+	u32 lbat_chk_val:16;
+	u32 lbat_chk_mask:16;
+
+	/* dw3 */
+	u32 _r_b;
+} __packed;
+#endif
+
 #define DIR_NO_DATA 0
 #define DIR_TO_INI 1
 #define DIR_TO_DEVICE 2
