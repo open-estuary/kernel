@@ -111,6 +111,7 @@ void hisi_sas_slot_task_free(struct hisi_hba *hisi_hba,
 {
 	if (!slot->task)
 		return;
+
 	if (!sas_protocol_ata(task->task_proto))
 		if (slot->n_elem)
 			dma_unmap_sg(hisi_hba->dev, task->scatter,
@@ -272,7 +273,7 @@ static int hisi_sas_task_prep(struct sas_task *task,
 	if (!slot->command_table)
 		goto err_out_status_buf;
 	memset(slot->command_table, 0, HISI_SAS_COMMAND_TABLE_SZ);
-	memset(slot->cmd_hdr, 0, sizeof(struct hisi_sas_cmd_hdr));
+	memset(slot->cmd_hdr, 0, HISI_SAS_DQ_ENTRY_SZ);
 
 	tei.hdr = slot->cmd_hdr;
 	tei.task = task;
@@ -709,6 +710,7 @@ void hisi_sas_free_dev(struct hisi_sas_device *dev)
 	memset(dev, 0, sizeof(*dev));
 	dev->device_id = id;
 	dev->dev_type = SAS_PHY_UNUSED;
+	dev->dev_status = HISI_SAS_DEV_NORMAL;
 }
 
 static void hisi_sas_dev_gone_notify(struct domain_device *dev)
@@ -933,8 +935,9 @@ int hisi_sas_abort_task(struct sas_task *task)
 		rc = TMF_RESP_FUNC_COMPLETE;
 		goto out;
 	}
-	spin_unlock_irqrestore(&task->task_state_lock, flags);
 
+	spin_unlock_irqrestore(&task->task_state_lock, flags);
+	hisi_sas_dev->dev_status = HISI_SAS_DEV_EH;
 	if (task->lldd_task && task->task_proto & SAS_PROTOCOL_SSP) {
 		struct scsi_cmnd *cmnd = (struct scsi_cmnd *)task->uldd_task;
 
@@ -1036,10 +1039,6 @@ int hisi_sas_I_T_nexus_reset(struct domain_device *dev)
 	struct hisi_sas_device *hisi_sas_dev = (struct hisi_sas_device *)dev->lldd_dev;
 	struct hisi_hba *hisi_hba = hisi_sas_dev->hisi_hba;
 
-/*	if (hisi_sas_dev->dev_status != MVS_DEV_EH)
-		return TMF_RESP_FUNC_COMPLETE;
-	else
-		hisi_sas_dev->dev_status = MVS_DEV_NORMAL; */
 	if (hisi_sas_dev->dev_status != HISI_SAS_DEV_EH)
 		return TMF_RESP_FUNC_FAILED;
 	hisi_sas_dev->dev_status = HISI_SAS_DEV_NORMAL;
@@ -1062,6 +1061,7 @@ int hisi_sas_lu_reset(struct domain_device *dev, u8 *lun)
 	struct hisi_hba *hisi_hba = hisi_sas_dev->hisi_hba;
 
 	tmf_task.tmf = TMF_LU_RESET;
+	hisi_sas_dev->dev_status = HISI_SAS_DEV_EH;
 	rc = hisi_sas_debug_issue_ssp_tmf(dev, lun, &tmf_task);
 	if (rc == TMF_RESP_FUNC_COMPLETE) {
 		spin_lock_irqsave(&hisi_hba->lock, flags);
