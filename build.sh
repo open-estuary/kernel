@@ -3,23 +3,27 @@
 #author: Justin Zhao
 #date: 2015-5-29
 
-export ARCH=arm64
+if [ x"arm32" = x"$1" ]; then
+    export ARCH=arm
+else
+    export ARCH=arm64
+fi
+
 march=`uname -m`
+export CROSS_COMPILE=
 if [ "$march" != "aarch64" ]; then
 	export CROSS_COMPILE=aarch64-linux-gnu-
 fi
-if [ "$march" = "arm" ]; then
-    export ARCH=arm
-	export CROSS_COMPILE=
+if [ "$march" != "arm" ]; then
+	export CROSS_COMPILE=arm-linux-gnueabihf-
 fi
 
 rm *.out 2>/dev/null
 sudo make mrproper
 
-if [ "$march" = "arm" ]; then
-    export ARCH=arm
+if [ "$ARCH" = "arm" ]; then
     make hisi_defconfig
-    make zImage -j14 > build0.out 2>&1
+    make zImage -j36 > build0.out 2>&1
     make hip04-d01.dtb
     cat arch/arm/boot/zImage arch/arm/boot/dts/hip04-d01.dtb >.kernel
 else
@@ -34,9 +38,11 @@ if [ "$march" = "aarch64" -o "$march" = "arm" ]; then
 	sudo make firmware_install -j14 > build3.out 2>&1
 fi
 
-if [ "$march" = "arm" ]; then
+if [ "$ARCH" = "arm" ]; then
     sudo cp arch/arm/boot/zImage /boot/
     sudo cp arch/arm/boot/dts/hip04-d01.dtb /boot/
+
+#    scp .kernel justinzh@192.168.1.107:~/
 
     find . -name zImage
     find . -name hip04-d01.dtb
