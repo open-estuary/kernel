@@ -177,7 +177,14 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 				sizeof(struct hisi_sas_sge_page), 16, 0);
 	if (!hisi_hba->sge_page_pool)
 		goto err_out;
-
+#ifdef SAS_DIF
+	sprintf(pool_name, "%s%d",
+			"hisi_sas_status_dif_sge_pool", hisi_hba->id);
+	hisi_hba->sge_dif_page_pool = dma_pool_create(pool_name, hisi_hba->dev,
+				sizeof(struct hisi_sas_sge_page), 16, 0);
+	if (!hisi_hba->sge_dif_page_pool)
+		goto err_out;
+#endif
 	s = sizeof(struct hisi_sas_initial_fis) * HISI_SAS_MAX_PHYS;
 	hisi_hba->initial_fis = dma_alloc_coherent(dev, s,
 				&hisi_hba->initial_fis_dma, GFP_KERNEL);
@@ -249,6 +256,10 @@ static void hisi_sas_free(struct hisi_hba *hisi_hba)
 	if (hisi_hba->sge_page_pool)
 		dma_pool_destroy(hisi_hba->sge_page_pool);
 
+#ifdef SAS_DIF
+	if (hisi_hba->sge_dif_page_pool)
+		dma_pool_destroy(hisi_hba->sge_dif_page_pool);
+#endif
 	s = sizeof(struct hisi_sas_initial_fis) * HISI_SAS_MAX_PHYS;
 	if (hisi_hba->initial_fis)
 		dma_free_coherent(hisi_hba->dev, s,

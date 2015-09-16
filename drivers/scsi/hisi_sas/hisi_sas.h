@@ -135,6 +135,10 @@ struct hisi_sas_slot {
 	dma_addr_t command_table_dma;
 	struct hisi_sas_sge_page *sge_page;
 	dma_addr_t sge_page_dma;
+#ifdef SAS_DIF
+	struct hisi_sas_sge_page *sge_dif_page;
+	dma_addr_t sge_dif_page_dma;
+#endif
 };
 
 struct hisi_sas_tmf_task {
@@ -223,6 +227,9 @@ struct hisi_hba {
 	unsigned long *slot_index_tags;
 
 	struct dma_pool *sge_page_pool;
+#ifdef SAS_DIF
+	struct dma_pool *sge_dif_page_pool;
+#endif
 
 	/* SCSI/SAS glue */
 	struct sas_ha_struct *sas;

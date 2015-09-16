@@ -112,10 +112,18 @@ void hisi_sas_slot_task_free(struct hisi_hba *hisi_hba,
 	if (!slot->task)
 		return;
 
-	if (!sas_protocol_ata(task->task_proto))
+	if (!sas_protocol_ata(task->task_proto)) {
 		if (slot->n_elem)
 			dma_unmap_sg(hisi_hba->dev, task->scatter,
 				slot->n_elem, task->data_dir);
+#ifdef SAS_DIF
+		if (scsi_prot_sg_count(task->ssp_task.cmd))
+			dma_unmap_sg(hisi_hba->dev,
+				scsi_prot_sglist(task->ssp_task.cmd),
+				scsi_prot_sg_count(task->ssp_task.cmd),
+				task->data_dir);
+#endif
+	}
 
 	switch (task->task_proto) {
 	case SAS_PROTOCOL_SMP:
@@ -141,6 +149,11 @@ void hisi_sas_slot_task_free(struct hisi_hba *hisi_hba,
 		dma_pool_free(hisi_hba->sge_page_pool, slot->sge_page,
 			slot->sge_page_dma);
 
+#ifdef SAS_DIF
+	if (slot->sge_dif_page)
+		dma_pool_free(hisi_hba->sge_dif_page_pool, slot->sge_dif_page,
+			slot->sge_dif_page_dma);
+#endif
 	list_del_init(&slot->entry);
 	task->lldd_task = NULL;
 	slot->task = NULL;
@@ -301,6 +314,10 @@ static int hisi_sas_task_prep(struct sas_task *task,
 
 	if (rc) {
 		dev_err(hisi_hba->dev, "%s rc = 0x%x\n", __func__, rc);
+#ifdef SAS_DIF
+		if (slot->sge_dif_page)
+			goto err_out_sge_dif;
+#endif
 		if (slot->sge_page)
 			goto err_out_sge;
 		goto err_out_command_table;
@@ -321,6 +338,11 @@ static int hisi_sas_task_prep(struct sas_task *task,
 
 	return rc;
 
+#ifdef SAS_DIF
+err_out_sge_dif:
+	dma_pool_free(hisi_hba->sge_dif_page_pool, slot->sge_dif_page,
+		slot->sge_dif_page_dma);
+#endif
 err_out_sge:
 	dma_pool_free(hisi_hba->sge_page_pool, slot->sge_page,
 		slot->sge_page_dma);
