@@ -11,11 +11,12 @@ fi
 
 march=`uname -m`
 export CROSS_COMPILE=
-if [ "$march" != "aarch64" ]; then
-	export CROSS_COMPILE=aarch64-linux-gnu-
-fi
-if [ "$march" != "arm" ]; then
-	export CROSS_COMPILE=arm-linux-gnueabihf-
+if [ "$march" != "aarch64" -a "$march" != "arm" ]; then
+    if [ "$ARCH" = "arm" ]; then
+	    export CROSS_COMPILE=arm-linux-gnueabihf-
+    else
+	    export CROSS_COMPILE=aarch64-linux-gnu-
+    fi
 fi
 
 rm *.out 2>/dev/null
@@ -23,12 +24,12 @@ sudo make mrproper
 
 if [ "$ARCH" = "arm" ]; then
     make hisi_defconfig
-    make zImage -j36 > build0.out 2>&1
+    make zImage -j14 > build0.out 2>&1
     make hip04-d01.dtb
     cat arch/arm/boot/zImage arch/arm/boot/dts/hip04-d01.dtb >.kernel
 else
     make defconfig
-    make Image -j36 > build0.out 2>&1
+    make Image -j14 > build0.out 2>&1
     make hisilicon/hip05-d02.dtb
 fi
 
