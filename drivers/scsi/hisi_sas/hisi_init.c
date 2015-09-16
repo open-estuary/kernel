@@ -217,6 +217,12 @@ static void hisi_sas_free(struct hisi_hba *hisi_hba)
 					  hisi_hba->complete_hdr_dma[i]);
 	}
 
+	if (hisi_hba->status_buffer_pool)
+		dma_pool_destroy(hisi_hba->status_buffer_pool);
+
+	if (hisi_hba->command_table_pool)
+		dma_pool_destroy(hisi_hba->command_table_pool);
+
 	s = HISI_SAS_MAX_ITCT_ENTRIES * HISI_SAS_ITCT_ENTRY_SZ;
 	if (hisi_hba->itct)
 		dma_free_coherent(hisi_hba->dev, s,
@@ -233,14 +239,20 @@ static void hisi_sas_free(struct hisi_hba *hisi_hba)
 				  hisi_hba->breakpoint,
 				  hisi_hba->breakpoint_dma);
 
-	if (hisi_hba->status_buffer_pool)
-		dma_pool_destroy(hisi_hba->status_buffer_pool);
-
-	if (hisi_hba->command_table_pool)
-		dma_pool_destroy(hisi_hba->command_table_pool);
-
 	if (hisi_hba->sge_page_pool)
 		dma_pool_destroy(hisi_hba->sge_page_pool);
+
+	s = sizeof(struct hisi_sas_initial_fis) * HISI_SAS_MAX_PHYS;
+	if (hisi_hba->initial_fis)
+		dma_free_coherent(hisi_hba->dev, s,
+				  hisi_hba->initial_fis,
+				  hisi_hba->initial_fis_dma);
+
+	s = HISI_SAS_COMMAND_ENTRIES * HISI_SAS_BREAKPOINT_ENTRY_SZ * 2;
+	if (hisi_hba->sata_breakpoint)
+		dma_free_coherent(hisi_hba->dev, s,
+				  hisi_hba->sata_breakpoint,
+				  hisi_hba->sata_breakpoint_dma);
 }
 
 int hisi_sas_ioremap(struct hisi_hba *hisi_hba)
