@@ -225,7 +225,7 @@ struct hi1610_protect_iu {
 
 	/* dw2 */
 	u32 lbat_chk_val:16;
-	u32 lbat_chk_mask:16;
+	u32 crc_chk_seed_val:16;
 
 	/* dw3 */
 	u32 _r_b;
@@ -900,8 +900,6 @@ static int hi1610_prep_prd_sge(struct hisi_hba *hisi_hba,
 {
 	struct scatterlist *sg;
 	int i;
-	struct hisi_sas_cmd_hdr_dw1_hi1610 *dw1 =
-		(struct hisi_sas_cmd_hdr_dw1_hi1610 *)&hdr->dw1;
 
 	if (n_elem > HISI_SAS_SGE_PAGE_CNT) {
 		dev_err(hisi_hba->dev, "%s n_elem(%d) > HISI_SAS_SGE_PAGE_CNT",
@@ -913,8 +911,6 @@ static int hi1610_prep_prd_sge(struct hisi_hba *hisi_hba,
 					&slot->sge_page_dma);
 	if (!slot->sge_page)
 		return -ENOMEM;
-
-	dw1->pir_pres = 0;
 
 	for_each_sg(scatter, sg, n_elem, i) {
 		struct hisi_sas_sge *entry = &slot->sge_page->sge[i];
@@ -933,6 +929,48 @@ static int hi1610_prep_prd_sge(struct hisi_hba *hisi_hba,
 
 	return 0;
 }
+
+#ifdef SAS_DIF
+static int hi1610_prep_prd_sge_dif(struct hisi_hba *hisi_hba,
+				 struct hisi_sas_slot *slot,
+				 struct hisi_sas_cmd_hdr *hdr,
+				 struct scatterlist *scatter,
+				 int n_elem)
+{
+	struct scatterlist *sg;
+	int i;
+
+	if (n_elem > HISI_SAS_SGE_PAGE_CNT) {
+		dev_err(hisi_hba->dev, "%s n_elem(%d) > HISI_SAS_SGE_PAGE_CNT",
+			__func__, n_elem);
+		return -EINVAL;
+	}
+
+	slot->sge_dif_page = dma_pool_alloc(hisi_hba->sge_dif_page_pool,
+			GFP_ATOMIC,
+			&slot->sge_dif_page_dma);
+	if (!slot->sge_dif_page)
+		return -ENOMEM;
+
+	hdr->double_mode = 1;
+
+	for_each_sg(scatter, sg, n_elem, i) {
+		struct hisi_sas_sge *entry = &slot->sge_dif_page->sge[i];
+
+		entry->addr_lo = DMA_ADDR_LO(sg_dma_address(sg));
+		entry->addr_hi = DMA_ADDR_HI(sg_dma_address(sg));
+		entry->page_ctrl_0 = entry->page_ctrl_1 = 0;
+		entry->data_len = sg_dma_len(sg);
+		entry->data_off = 0;
+	}
+
+	hdr->dif_prd_table_addr_lo = DMA_ADDR_LO(slot->sge_dif_page_dma);
+	hdr->dif_prd_table_addr_hi = DMA_ADDR_HI(slot->sge_dif_page_dma);
+
+	hdr->dif_sg_len = n_elem;
+	return 0;
+}
+#endif
 
 static int hi1610_prep_smp(struct hisi_hba *hisi_hba,
 			struct hisi_sas_tei *tei)
@@ -1059,6 +1097,64 @@ static int hi1610_prep_ssp(struct hisi_hba *hisi_hba,
 	struct hisi_sas_cmd_hdr_dw2_hi1610 *dw2 =
 		(struct hisi_sas_cmd_hdr_dw2_hi1610 *)&hdr->dw2;
 
+
+	dw1->pir_pres = 0;
+#ifdef SAS_DIF
+	u8 prot_type = scsi_get_prot_type(scsi_cmnd);
+	u8 prot_op = scsi_get_prot_op(scsi_cmnd);
+	union hisi_sas_command_table *cmd =
+		(union hisi_sas_command_table *) slot->command_table;
+	struct hi1610_protect_iu *prot =
+		(struct hi1610_protect_iu *)&cmd->ssp.u.prot;
+
+	if (prot_type != SCSI_PROT_DIF_TYPE0) {
+		/* enable dif */
+		/*dw0->t10_flds_pres = 1;*/
+		dw1->pir_pres = 1;
+
+		prot->usr_dt_sz = scsi_prot_interval(scsi_cmnd) / 4;
+		/* user dif block is 8B, if 0x1 is 64B */
+		prot->usr_dif_blk_sz = 0;	/* 8B */
+		/*0x0: CRC+APP+REF, 0x1:REF+APP+CRC*/
+		prot->dif_fmt = 0;
+		/*0x0: APP is constant*/
+		prot->incr_lbat = 0;
+		/*0x1: Ref Tag is increment*/
+		prot->incr_lbrt = 1;
+		/*0x1: if App and Ref Tag is 0xFF, then don't check*/
+		prot->chk_dsbl_md = 0;
+		/*0x0: all bits 0, check CRC+App+Ref*/
+		prot->t10_chk_msk = 0x0;
+
+		if (prot_op == SCSI_PROT_WRITE_PASS) {
+			prot->t10_chk_en = 1;
+			prot->lbrt_chk_val = cpu_to_le32((uint32_t)
+					(0xffffffff & scsi_get_lba(scsi_cmnd)));
+		} else if (prot_op == SCSI_PROT_READ_PASS) {
+			/* fixme not check app & ref tag */
+			prot->t10_chk_en = 1;
+			prot->t10_chk_msk = 0xfc;
+		}
+
+		if (scsi_prot_sg_count(scsi_cmnd)) {
+			int n_elem = dma_map_sg(hisi_hba->dev,
+					scsi_prot_sglist(scsi_cmnd),
+					scsi_prot_sg_count(scsi_cmnd),
+					task->data_dir);
+			if (!n_elem) {
+				rc = -ENOMEM;
+				return rc;
+			}
+
+			rc = hi1610_prep_prd_sge_dif(hisi_hba, slot, hdr,
+					scsi_prot_sglist(scsi_cmnd),
+					n_elem);
+			if (rc)
+				return rc;
+		}
+	}
+#endif
+
 	/* create header */
 	/* dw0 */
 	/* hdr->abort_flag set in Higgs_PrepareBaseSSP */
@@ -1120,7 +1216,7 @@ static int hi1610_prep_ssp(struct hisi_hba *hisi_hba,
 	}
 
 	/* dw4 */
-	hdr->data_transfer_len = scsi_bufflen(scsi_cmnd);
+	hdr->data_transfer_len = scsi_transfer_length(scsi_cmnd);
 
 	/* dw5 */
 	/* hdr->first_burst_num not set in Higgs code */
@@ -1176,7 +1272,6 @@ static int hi1610_prep_ssp(struct hisi_hba *hisi_hba,
 	}
 
 	return 0;
-
 }
 
 static int hi1610_sata_done(struct hisi_hba *hisi_hba, struct sas_task *task,
@@ -1221,7 +1316,9 @@ static int hi1610_slot_complete(struct hisi_hba *hisi_hba,
 			hisi_hba->complete_hdr[slot->cmplt_queue];
 	struct hisi_sas_complete_hdr_hi1610 *complete_hdr;
 
+
 	complete_hdr = &complete_queue[slot->cmplt_queue_slot];
+
 
 	if (unlikely(!task || !task->lldd_task || !task->dev))
 		return -1;
@@ -2139,5 +2236,10 @@ const struct hisi_sas_dispatch hisi_sas_hi1610_dispatch = {
 const struct hisi_sas_hba_info hisi_sas_hi1610_hba_info = {
 	.cq_hdr_sz = sizeof(struct hisi_sas_complete_hdr_hi1610),
 	.dispatch = &hisi_sas_hi1610_dispatch,
+#ifdef SAS_DIF
+	.prot_cap = SHOST_DIX_TYPE1_PROTECTION |
+			SHOST_DIX_TYPE2_PROTECTION |
+			SHOST_DIX_TYPE3_PROTECTION,
+#endif
 };
 
