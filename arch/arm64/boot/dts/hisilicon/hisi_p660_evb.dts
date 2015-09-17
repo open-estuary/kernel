@@ -355,7 +355,7 @@
 		core1: sas@0xb1000000 {
 			compatible = "hisilicon,p660-sas-core";
 			core-id = <1>;
-			reg = <0x0 0xb1000000 0x0 0x100000>;
+			reg = <0x0 0xb1000000 0x0 0x10000>;
 			queue-count = <32>;
 			phy-count = <8>;
 			interrupt-parent = <&mbigen_pcie>;
