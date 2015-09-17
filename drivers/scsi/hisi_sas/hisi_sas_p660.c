@@ -1227,7 +1227,9 @@ static int p660_prep_smp(struct hisi_hba *hisi_hba,
 	/* hdr->sg_mode, ->first_burst not applicable to smp */
 
 	/* dw3 */
-	/* hdr->iptt, ->tptt not applicable to smp */
+	/* dw3 */
+	hdr->iptt = tei->iptt;
+	hdr->tptt = 0;
 
 	/* hdr->data_transfer_len not applicable to smp */
 
