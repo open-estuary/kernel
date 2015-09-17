@@ -327,6 +327,12 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 
 	hisi_hba->hba_info = match->data;
 
+#ifdef SAS_DIF
+	/* turn on DIF support */
+	scsi_host_set_prot(shost, hisi_hba->hba_info->prot_cap);
+	scsi_host_set_guard(shost, SHOST_DIX_GUARD_CRC);
+#endif
+
 	((struct hisi_hba_priv *)sha->lldd_ha)->hisi_hba[hisi_hba->id] = hisi_hba;
 	((struct hisi_hba_priv *)sha->lldd_ha)->n_phy = hisi_hba->n_phy;
 
