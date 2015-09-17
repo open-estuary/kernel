@@ -955,14 +955,6 @@ static int p660_hw_init(struct hisi_hba *hisi_hba)
 {
 	int rc;
 
-#ifdef SAS_DIF
-	/* turn on DIF support */
-	scsi_host_set_prot(hisi_hba->shost,
-			   SHOST_DIF_TYPE1_PROTECTION |
-			   SHOST_DIF_TYPE2_PROTECTION |
-			   SHOST_DIF_TYPE3_PROTECTION);
-	scsi_host_set_guard(hisi_hba->shost, SHOST_DIX_GUARD_CRC);
-#endif
 	rc = p660_reset_hw(hisi_hba);
 	if (rc) {
 		dev_err(hisi_hba->dev, "hisi_sas_reset_hw failed, rc=%d", rc);
@@ -2308,5 +2300,10 @@ static const struct hisi_sas_dispatch hisi_sas_p660_dispatch = {
 const struct hisi_sas_hba_info hisi_sas_p660_hba_info = {
 	.cq_hdr_sz = sizeof(struct hisi_sas_complete_hdr_p660),
 	.dispatch = &hisi_sas_p660_dispatch,
+#ifdef SAS_DIF
+	.prot_cap = SHOST_DIF_TYPE1_PROTECTION |
+		    SHOST_DIF_TYPE2_PROTECTION |
+		    SHOST_DIF_TYPE3_PROTECTION,
+#endif
 };
 

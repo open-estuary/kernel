@@ -180,6 +180,9 @@ struct hisi_sas_hba_info {
 	/* the code. */
 	int cq_hdr_sz;
 	const struct hisi_sas_dispatch *dispatch;
+#ifdef SAS_DIF
+	u32 prot_cap;
+#endif
 };
 
 struct hisi_hba {
