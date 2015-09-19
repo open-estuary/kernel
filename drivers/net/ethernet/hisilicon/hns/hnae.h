@@ -34,7 +34,7 @@
 #include <linux/module.h>
 #include <linux/notifier.h>
 
-#define HNAE_DRIVER_VERSION "1.2.0"
+#define HNAE_DRIVER_VERSION "1.3.1"
 #define HNAE_DRIVER_NAME "hns"
 #define HNAE_COPYRIGHT "Copyright(c) 2015 - 2019 Huawei Corporation."
 #define HNAE_DRIVER_STRING "Hilisicon Network Subsystem Driver"
@@ -547,11 +547,9 @@ static inline void hnae_replace_buffer(struct hnae_ring *ring, int i,
 				       struct hnae_desc_cb *res_cb)
 {
 	struct hnae_buf_ops *bops = ring->q->handle->bops;
-	struct hnae_desc_cb tmp_cb = ring->desc_cb[i];
 
 	bops->unmap_buffer(ring, &ring->desc_cb[i]);
 	ring->desc_cb[i] = *res_cb;
-	*res_cb = tmp_cb;
 	ring->desc[i].addr = (__le64)ring->desc_cb[i].dma;
 	ring->desc[i].rx.ipoff_bnum_pid_flag = 0;
 }

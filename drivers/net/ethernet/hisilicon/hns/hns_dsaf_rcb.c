@@ -355,6 +355,9 @@ int hns_rcb_common_init_hw(struct rcb_common_cb *rcb_common)
 	dsaf_write_dev(rcb_common, RCB_COM_CFG_ENDIAN_REG,
 		       HNS_RCB_COMMON_ENDIAN);
 
+	dsaf_write_dev(rcb_common, RCB_COM_CFG_FNA_REG, 0x0);
+	dsaf_write_dev(rcb_common, RCB_COM_CFG_FA_REG, 0x1);
+
 	return 0;
 }
 

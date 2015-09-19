@@ -51,7 +51,7 @@ static const struct mac_stats_string g_gmac_stats_string[] = {
 	{"gmac_tx_pkts_64octets", MAC_STATS_FIELD_OFF(tx_64bytes)},
 	{"gmac_tx_pkts_65to127", MAC_STATS_FIELD_OFF(tx_65to127)},
 	{"gmac_tx_pkts_128to255", MAC_STATS_FIELD_OFF(tx_128to255)},
-	{"gmac_tx_pkts_255to511", MAC_STATS_FIELD_OFF(tx_256to511)},
+	{"gmac_tx_pkts_256to511", MAC_STATS_FIELD_OFF(tx_256to511)},
 	{"gmac_tx_pkts_512to1023", MAC_STATS_FIELD_OFF(tx_512to1023)},
 	{"gmac_tx_pkts_1024to1518", MAC_STATS_FIELD_OFF(tx_1024to1518)},
 	{"gmac_tx_pkts_1519tomax", MAC_STATS_FIELD_OFF(tx_1519tomax)},
