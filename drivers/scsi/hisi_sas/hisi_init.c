@@ -89,7 +89,7 @@ static int hisi_sas_prep_ha_init(struct device *dev, struct Scsi_Host *shost,
 static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 {
 	int i, s;
-	char pool_name[32];
+	char name[32];
 	struct device *dev = hisi_hba->dev;
 
 	spin_lock_init(&hisi_hba->lock);
@@ -124,15 +124,15 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 		memset(hisi_hba->complete_hdr[i], 0, s);
 	}
 
-	sprintf(pool_name, "%s%d", "hisi_sas_status_buffer_pool", hisi_hba->id);
+	sprintf(name, "%s%d", "hisi_sas_status_buffer_pool", hisi_hba->id);
 	s = HISI_SAS_STATUS_BUF_SZ;
-	hisi_hba->status_buffer_pool = dma_pool_create(pool_name, dev, s, 16, 0);
+	hisi_hba->status_buffer_pool = dma_pool_create(name, dev, s, 16, 0);
 	if (!hisi_hba->status_buffer_pool)
 		goto err_out;
 
-	sprintf(pool_name, "%s%d", "hisi_sas_command_table_pool", hisi_hba->id);
+	sprintf(name, "%s%d", "hisi_sas_command_table_pool", hisi_hba->id);
 	s = HISI_SAS_COMMAND_TABLE_SZ;
-	hisi_hba->command_table_pool = dma_pool_create(pool_name, dev, s, 16, 0);
+	hisi_hba->command_table_pool = dma_pool_create(name, dev, s, 16, 0);
 	if (!hisi_hba->command_table_pool)
 		goto err_out;
 
@@ -172,8 +172,8 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 	if (!hisi_hba->slot_index_tags)
 		goto err_out;
 
-	sprintf(pool_name, "%s%d", "hisi_sas_status_sge_pool", hisi_hba->id);
-	hisi_hba->sge_page_pool = dma_pool_create(pool_name, hisi_hba->dev,
+	sprintf(name, "%s%d", "hisi_sas_status_sge_pool", hisi_hba->id);
+	hisi_hba->sge_page_pool = dma_pool_create(name, hisi_hba->dev,
 				sizeof(struct hisi_sas_sge_page), 16, 0);
 	if (!hisi_hba->sge_page_pool)
 		goto err_out;
@@ -193,6 +193,13 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 	memset(hisi_hba->sata_breakpoint, 0, s);
 
 	hisi_sas_slot_index_init(hisi_hba);
+
+	sprintf(name, "%s%d", "hisi_sas", hisi_hba->id);
+	hisi_hba->wq = create_singlethread_workqueue(name);
+	if (!hisi_hba->wq) {
+		dev_err(dev, "Failed to create workqueue\n");
+		goto err_out;
+	}
 
 	return 0;
 err_out:

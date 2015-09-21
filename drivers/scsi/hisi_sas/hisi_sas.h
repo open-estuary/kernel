@@ -185,6 +185,13 @@ struct hisi_sas_hba_info {
 #endif
 };
 
+struct hisi_sas_wq {
+	struct work_struct	work_struct;
+	struct hisi_hba *hisi_hba;
+	int phy_no;
+	int data;
+};
+
 struct hisi_hba {
 	spinlock_t	lock;
 
@@ -209,7 +216,7 @@ struct hisi_hba {
 	int	n_phy;
 
 	struct timer_list timer;
-
+	struct workqueue_struct *wq;
 	const struct hisi_sas_hba_info *hba_info;
 
 	int slot_index_count;
