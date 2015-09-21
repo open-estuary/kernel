@@ -269,6 +269,14 @@ int hisi_sas_ioremap(struct hisi_hba *hisi_hba)
 	if (IS_ERR(hisi_hba->regs))
 		return PTR_ERR(hisi_hba->regs);
 
+	err = of_address_to_resource(hisi_hba->np, 1, &res);
+	if (err)
+		return err;
+
+	hisi_hba->ctrl_regs = devm_ioremap_resource(&pdev->dev, &res);
+	if (IS_ERR(hisi_hba->ctrl_regs))
+		return PTR_ERR(hisi_hba->ctrl_regs);
+
 	return 0;
 }
 
@@ -302,6 +310,9 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 	hisi_hba->np = np;
 
 	init_timer(&hisi_hba->timer);
+
+	if (of_property_read_u32(np, "reset-reg", &hisi_hba->reset_reg))
+		goto err_out;
 
 	if (of_property_read_u32(np, "phy-count", &hisi_hba->n_phy))
 		goto err_out;

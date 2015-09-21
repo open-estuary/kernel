@@ -193,6 +193,8 @@ struct hisi_hba {
 	struct device_node *np;
 
 	void __iomem *regs;
+	void __iomem *ctrl_regs;
+	unsigned int reset_reg;
 
 	u8 sas_addr[SAS_ADDR_SIZE];
 

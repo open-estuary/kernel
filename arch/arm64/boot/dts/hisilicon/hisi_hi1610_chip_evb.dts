@@ -376,7 +376,9 @@
 		core0: sas@c3000000 {
 			compatible = "hisilicon,hi1610-sas-core";
 			core-id = <0>;
-			reg = <0 0xc3000000 0 0x10000>;
+			reg = <0 0xc3000000 0 0x10000>,
+				<0x0 0xc0000000 0x0 0x10000>;
+			reset-reg = <0xa60>;
 			queue-count = <16>;
 			phy-count = <8>;
 			interrupt-parent = <&mbigen_dsa>;
@@ -514,7 +516,9 @@
 		core1: sas@a2000000 {
 			compatible = "hisilicon,hi1610-sas-core";
 			core-id = <1>;
-			reg = <0 0xa2000000 0 0x10000>;
+			reg = <0 0xa2000000 0 0x10000>,
+				<0x0 0xb0000000 0x0 0x10000>;
+			reset-reg = <0xa18>;
 			queue-count = <16>;
 			phy-count = <8>;
 			interrupt-parent = <&mbigen_pcie>;

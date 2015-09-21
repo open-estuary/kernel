@@ -472,7 +472,9 @@
 		core0: sas@0xc1000000 {
 			compatible = "hisilicon,p660-sas-core";
 			core-id = <0>;
-			reg = <0x0 0xc1000000 0x0 0x10000>;
+			reg = <0x0 0xc1000000 0x0 0x10000>,
+				<0x0 0xc0000000 0x0 0x10000>;
+			reset-reg = <0xa60>;
 			queue-count = <32>;
 			phy-count = <8>;
 			interrupt-parent = <&mbigen_dsa>;
@@ -496,7 +498,9 @@
 		core1: sas@0xb1000000 {
 			compatible = "hisilicon,p660-sas-core";
 			core-id = <1>;
-			reg = <0x0 0xb1000000 0x0 0x10000>;
+			reg = <0x0 0xb1000000 0x0 0x10000>,
+				<0x0 0xb0000000 0x0 0x10000>;
+			reset-reg = <0xa18>;
 			queue-count = <32>;
 			phy-count = <8>;
 			interrupt-parent = <&mbigen_pcie>;

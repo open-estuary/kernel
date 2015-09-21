@@ -206,6 +206,7 @@
 #define DMA_RX_STATUS_BUSY_MSK		0x1
 
 #define AXI_CFG				(0x5100)
+#define CORE_RESET_VALUE		0x7ffff
 
 enum {
 	HISI_SAS_PHY_BCAST_ACK = 0,
@@ -722,14 +723,6 @@ static int p660_reset_hw(struct hisi_hba *hisi_hba)
 {
 	int i;
 	unsigned long end_time;
-	int reg_value;
-	void __iomem *sub_ctrl_base;
-	u32 sub_ctrl_range;
-	u64 reset_reg_addr;
-	u64 dereset_reg_addr;
-	u32 reset_value;
-	u32 dereset_value;
-	u64 reset_status_reg_addr;
 
 	for (i = 0; i < hisi_hba->n_phy; i++) {
 		u32 phy_ctrl = hisi_sas_phy_read32(hisi_hba, i, PHY_CTRL);
@@ -775,71 +768,12 @@ static int p660_reset_hw(struct hisi_hba *hisi_hba)
 			return -EIO;
 	}
 
-/* do you mean i put them here ?*/
-#define DSAF_SUBCTL_BASE			(0xc0000000ull)
-#define DSAF_SUBCTL_RANGE			(0xffff)
-#define DSAF_SUB_CTRL_RESET_OFFSET		(0xa60)
-#define DSAF_SUB_CTRL_DERESET_OFFSET		(0xa64)
-#define DSAF_SUB_CTRL_RESET_STATUS_OFFSET	(0x5a30)
-#define DSAF_SUB_CTRL_RESET_VALUE		(0x7ffff)
-#define DSAF_SUB_CTRL_DERESET_VALUE		(0x7ffff)
-
-#define PCIE_SUBCTL_BASE			(0xb0000000ull)
-#define PCIE_SUBCTL_RANGE			(0xffff)
-#define PCIE_SUB_CTRL_RESET_OFFSET		(0xa18)
-#define PCIE_SUB_CTRL_DERESET_OFFSET		(0xa1c)
-#define PCIE_SUB_CTRL_RESET_STATUS_OFFSET	(0x5a0c)
-#define PCIE_SUB_CTRL_RESET_VALUE		(0x7ffff)
-#define PCIE_SUB_CTRL_DERESET_VALUE		(0x7ffff)
-
-/* reg & mask used for bus */
-#define RESET_STATUS_MSK		0x7ffff
-#define RESET_STATUS_RESET		0x7ffff
-#define RESET_STATUS_DERESET		0x0
-
-	if (0 == hisi_hba->id) {
-		sub_ctrl_base = (void __iomem *)DSAF_SUBCTL_BASE;
-		sub_ctrl_range = DSAF_SUBCTL_RANGE;
-		reset_reg_addr = DSAF_SUB_CTRL_RESET_OFFSET;
-		dereset_reg_addr = DSAF_SUB_CTRL_DERESET_OFFSET;
-		reset_status_reg_addr = DSAF_SUB_CTRL_RESET_STATUS_OFFSET;
-		reset_value = DSAF_SUB_CTRL_RESET_VALUE;
-		dereset_value = DSAF_SUB_CTRL_DERESET_VALUE;
-	} else {
-		sub_ctrl_base = (void __iomem *)PCIE_SUBCTL_BASE;
-		sub_ctrl_range = PCIE_SUBCTL_RANGE;
-		reset_reg_addr = PCIE_SUB_CTRL_RESET_OFFSET;
-		dereset_reg_addr = PCIE_SUB_CTRL_DERESET_OFFSET;
-		reset_status_reg_addr = PCIE_SUB_CTRL_RESET_STATUS_OFFSET;
-		reset_value = PCIE_SUB_CTRL_RESET_VALUE;
-		dereset_value = PCIE_SUB_CTRL_DERESET_VALUE;
-	}
-
-	/* reset */
-	sub_ctrl_base = (void __iomem *)ioremap(
-			(unsigned long)sub_ctrl_base,
-			sub_ctrl_range);
-	writel(reset_value, sub_ctrl_base + reset_reg_addr);
+	/* Apply reset */
+	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg);
 	mdelay(1);
-	reg_value = readl(sub_ctrl_base + reset_status_reg_addr);
-	if (RESET_STATUS_RESET != (reg_value & RESET_STATUS_MSK)) {
-		pr_err("%s card:%d sas reset failed", __func__, hisi_hba->id);
-		return -1;
-	}
+	/* De-reset (offset is 4) */
+	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg + 4);
 
-	/* dereset */
-	writel(dereset_value, sub_ctrl_base + dereset_reg_addr);
-	mdelay(1);
-	reg_value = readl(sub_ctrl_base + reset_status_reg_addr);
-	if (RESET_STATUS_DERESET != (reg_value & RESET_STATUS_MSK)) {
-		pr_err("%s card:%d sas dereset failed",
-			__func__,
-			hisi_hba->id);
-		return -1; /* sorry i don't konw about the right errcode.. */
-	}
-
-	/* io unmap */
-	iounmap(sub_ctrl_base);
 	return 0;
 }
 
