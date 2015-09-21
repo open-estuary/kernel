@@ -535,6 +535,37 @@ void hisi_sas_scan_start(struct Scsi_Host *shost)
 	hisi_hba_priv->scan_finished = 1;
 }
 
+static void hisi_sas_control_phy_work(struct work_struct *work)
+{
+	struct hisi_sas_wq *wq =
+		container_of(work, struct hisi_sas_wq, work_struct);
+	struct hisi_hba *hisi_hba = wq->hisi_hba;
+	int phy_no = wq->phy_no;
+	int func = wq->data;
+
+	switch (func) {
+	case PHY_FUNC_HARD_RESET:
+		HISI_SAS_DISP->hard_phy_reset(hisi_hba, phy_no);
+		break;
+
+	case PHY_FUNC_LINK_RESET:
+		HISI_SAS_DISP->phy_enable(hisi_hba, phy_no);
+		HISI_SAS_DISP->hard_phy_reset(hisi_hba, phy_no);
+		break;
+
+	case PHY_FUNC_DISABLE:
+		HISI_SAS_DISP->phy_disable(hisi_hba, phy_no);
+		break;
+
+	case PHY_FUNC_SET_LINK_RATE:
+	case PHY_FUNC_RELEASE_SPINUP_HOLD:
+	default:
+		dev_err(hisi_hba->dev, "Control phy func %d unsupported\n", func);
+	}
+
+	kfree(wq);
+}
+
 void hisi_sas_phy_init(struct hisi_hba *hisi_hba, int phy_no)
 {
 	struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
@@ -755,7 +786,12 @@ int hisi_sas_control_phy(struct asd_sas_phy *sas_phy,
 {
 	struct sas_ha_struct *sas_ha = sas_phy->ha;
 	struct hisi_hba *hisi_hba = NULL;
-	int rc = 0, phy_no = 0, hi = 0, i = 0;
+	struct hisi_sas_phy *phy = NULL;
+	int phy_no = 0, hi = 0, i = 0;
+	struct hisi_sas_wq *wq = kmalloc(sizeof(*wq), GFP_ATOMIC);
+
+	if (!wq)
+		return -ENOMEM;
 
 	while (sas_ha->sas_phy[i]) {
 		if (sas_ha->sas_phy[i] == sas_phy) {
@@ -770,27 +806,18 @@ int hisi_sas_control_phy(struct asd_sas_phy *sas_phy,
 			hi++;
 		}
 	}
-	switch (func) {
-	case PHY_FUNC_HARD_RESET:
-		HISI_SAS_DISP->hard_phy_reset(hisi_hba, phy_no);
-		break;
 
-	case PHY_FUNC_LINK_RESET:
-		HISI_SAS_DISP->phy_enable(hisi_hba, phy_no);
-		HISI_SAS_DISP->hard_phy_reset(hisi_hba, phy_no);
-		break;
+	phy = &hisi_hba->phy[phy_no];
 
-	case PHY_FUNC_DISABLE:
-		HISI_SAS_DISP->phy_disable(hisi_hba, phy_no);
-		break;
+	wq->data = func;
+	wq->hisi_hba = hisi_hba;
+	wq->phy_no = phy_no;
 
-	case PHY_FUNC_SET_LINK_RATE:
-	case PHY_FUNC_RELEASE_SPINUP_HOLD:
-	default:
-		rc = -ENOSYS;
-	}
-	msleep(200);
-	return rc;
+	INIT_WORK(&wq->work_struct, hisi_sas_control_phy_work);
+
+	queue_work(hisi_hba->wq, &wq->work_struct);
+
+	return 0;
 }
 
 static void hisi_sas_task_done(struct sas_task *task)
