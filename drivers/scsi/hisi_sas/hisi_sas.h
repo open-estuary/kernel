@@ -267,8 +267,8 @@ struct hisi_hba_priv {
 
 #define HISI_SAS_DISP	(hisi_hba->hba_info->dispatch)
 
-extern const struct hisi_sas_hba_info hisi_sas_p660_hba_info;
-extern const struct hisi_sas_hba_info hisi_sas_hi1610_hba_info;
+extern const struct hisi_sas_hba_info hisi_sas_hba_info_v1_hw;
+extern const struct hisi_sas_hba_info hisi_sas_hba_info_v2_hw;
 
 /* Generic HW structures */
 /* Delivery queue header */

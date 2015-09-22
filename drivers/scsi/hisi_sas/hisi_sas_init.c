@@ -178,9 +178,9 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 	if (!hisi_hba->sge_page_pool)
 		goto err_out;
 #ifdef SAS_DIF
-	sprintf(pool_name, "%s%d",
+	sprintf(name, "%s%d",
 			"hisi_sas_status_dif_sge_pool", hisi_hba->id);
-	hisi_hba->sge_dif_page_pool = dma_pool_create(pool_name, hisi_hba->dev,
+	hisi_hba->sge_dif_page_pool = dma_pool_create(name, hisi_hba->dev,
 				sizeof(struct hisi_sas_sge_page), 16, 0);
 	if (!hisi_hba->sge_dif_page_pool)
 		goto err_out;
@@ -299,10 +299,10 @@ int hisi_sas_ioremap(struct hisi_hba *hisi_hba)
 }
 
 static const struct of_device_id sas_core_of_match[] = {
-	{ .compatible = "hisilicon,p660-sas-core",
-	.data = &hisi_sas_p660_hba_info},
-	{ .compatible = "hisilicon,hi1610-sas-core",
-	.data = &hisi_sas_hi1610_hba_info},
+	{ .compatible = "hisilicon,sas-core-v1",
+	.data = &hisi_sas_hba_info_v1_hw},
+	{ .compatible = "hisilicon,sas-core-v2",
+	.data = &hisi_sas_hba_info_v2_hw},
 	{},
 };
 
@@ -534,8 +534,7 @@ static int hisi_sas_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id sas_of_match[] = {
-	{ .compatible = "hisilicon,p660-sas",},
-	{ .compatible = "hisilicon,hi1610-sas",},
+	{ .compatible = "hisilicon,sas-controller",},
 	{},
 };
 
