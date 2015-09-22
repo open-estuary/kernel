@@ -189,10 +189,15 @@ struct hisi_sas_hba_info {
 #endif
 };
 
+enum hisi_sas_wq_event {
+	CONTROL_PHY,
+};
+
 struct hisi_sas_wq {
 	struct work_struct	work_struct;
 	struct hisi_hba *hisi_hba;
 	int phy_no;
+	int event;
 	int data;
 };
 

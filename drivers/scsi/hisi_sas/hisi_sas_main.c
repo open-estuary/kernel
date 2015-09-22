@@ -557,14 +557,11 @@ void hisi_sas_scan_start(struct Scsi_Host *shost)
 	hisi_hba_priv->scan_finished = 1;
 }
 
-static void hisi_sas_control_phy_work(struct work_struct *work)
-{
-	struct hisi_sas_wq *wq =
-		container_of(work, struct hisi_sas_wq, work_struct);
-	struct hisi_hba *hisi_hba = wq->hisi_hba;
-	int phy_no = wq->phy_no;
-	int func = wq->data;
 
+static void hisi_sas_control_phy_work(struct hisi_hba *hisi_hba,
+				int func,
+				int phy_no)
+{
 	switch (func) {
 	case PHY_FUNC_HARD_RESET:
 		HISI_SAS_DISP->hard_phy_reset(hisi_hba, phy_no);
@@ -582,7 +579,24 @@ static void hisi_sas_control_phy_work(struct work_struct *work)
 	case PHY_FUNC_SET_LINK_RATE:
 	case PHY_FUNC_RELEASE_SPINUP_HOLD:
 	default:
-		dev_err(hisi_hba->dev, "Control phy func %d unsupported\n", func);
+		dev_err(hisi_hba->dev,
+			"Control phy func %d unsupported\n", func);
+	}
+}
+
+static void hisi_sas_wq_process(struct work_struct *work)
+{
+	struct hisi_sas_wq *wq =
+		container_of(work, struct hisi_sas_wq, work_struct);
+	struct hisi_hba *hisi_hba = wq->hisi_hba;
+	int event = wq->event;
+	int phy_no = wq->phy_no;
+	int func = wq->data;
+
+	switch (event) {
+	case CONTROL_PHY:
+		hisi_sas_control_phy_work(hisi_hba, func, phy_no);
+		break;
 	}
 
 	kfree(wq);
@@ -831,11 +845,12 @@ int hisi_sas_control_phy(struct asd_sas_phy *sas_phy,
 
 	phy = &hisi_hba->phy[phy_no];
 
+	wq->event = CONTROL_PHY;
 	wq->data = func;
 	wq->hisi_hba = hisi_hba;
 	wq->phy_no = phy_no;
 
-	INIT_WORK(&wq->work_struct, hisi_sas_control_phy_work);
+	INIT_WORK(&wq->work_struct, hisi_sas_wq_process);
 
 	queue_work(hisi_hba->wq, &wq->work_struct);
 

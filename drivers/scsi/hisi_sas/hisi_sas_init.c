@@ -271,6 +271,9 @@ static void hisi_sas_free(struct hisi_hba *hisi_hba)
 		dma_free_coherent(hisi_hba->dev, s,
 				  hisi_hba->sata_breakpoint,
 				  hisi_hba->sata_breakpoint_dma);
+
+	if (hisi_hba->wq)
+		destroy_workqueue(hisi_hba->wq);
 }
 
 int hisi_sas_ioremap(struct hisi_hba *hisi_hba)
