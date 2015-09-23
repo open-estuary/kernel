@@ -1322,7 +1322,6 @@ static int slot_complete_v2_hw(struct hisi_hba *hisi_hba,
 	struct hisi_sas_device *hisi_sas_dev;
 	struct task_status_struct *tstat;
 	struct domain_device *dev;
-	void *to;
 	enum exec_status sts;
 	struct hisi_sas_complete_hdr_v2_hw *complete_queue =
 			(struct hisi_sas_complete_hdr_v2_hw *)
@@ -1376,15 +1375,11 @@ static int slot_complete_v2_hw(struct hisi_hba *hisi_hba,
 	}
 	case SAS_PROTOCOL_SMP:
 	{
+		void *to;
 		struct scatterlist *sg_resp = &task->smp_task.smp_resp;
-			tstat->stat = SAM_STAT_GOOD;
+
+		tstat->stat = SAM_STAT_GOOD;
 		to = kmap_atomic(sg_page(sg_resp));
-		/*for expander*/
-		dma_unmap_sg(hisi_hba->dev, &task->smp_task.smp_resp, 1,
-			DMA_FROM_DEVICE);/*fixme*/
-		dma_unmap_sg(hisi_hba->dev, &task->smp_task.smp_req, 1,
-			DMA_TO_DEVICE);/*fixme*/
-			/* j00310691 for SMP, buffer contains the full SMP frame */
 		memcpy(to + sg_resp->offset,
 			slot->status_buffer + sizeof(struct hisi_sas_err_record),
 			sg_dma_len(sg_resp));

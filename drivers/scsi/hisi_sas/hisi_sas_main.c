@@ -127,6 +127,10 @@ void hisi_sas_slot_task_free(struct hisi_hba *hisi_hba,
 
 	switch (task->task_proto) {
 	case SAS_PROTOCOL_SMP:
+		dma_unmap_sg(hisi_hba->dev, &task->smp_task.smp_resp, 1,
+			DMA_FROM_DEVICE);
+		dma_unmap_sg(hisi_hba->dev, &task->smp_task.smp_req, 1,
+			DMA_TO_DEVICE);
 		break;
 
 	case SAS_PROTOCOL_SATA:
