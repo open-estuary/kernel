@@ -1065,6 +1065,48 @@ static int prep_prd_sge_v1_hw(struct hisi_hba *hisi_hba,
 	return 0;
 }
 
+#ifdef SAS_DIF
+static int prep_prd_sge_dif_v1_hw(struct hisi_hba *hisi_hba,
+				 struct hisi_sas_slot *slot,
+				 struct hisi_sas_cmd_hdr *hdr,
+				 struct scatterlist *scatter,
+				 int n_elem)
+{
+	struct scatterlist *sg;
+	int i;
+
+	if (n_elem > HISI_SAS_SGE_PAGE_CNT) {
+		dev_err(hisi_hba->dev, "%s n_elem(%d) > HISI_SAS_SGE_PAGE_CNT",
+			__func__, n_elem);
+		return -EINVAL;
+	}
+
+	slot->sge_dif_page = dma_pool_alloc(hisi_hba->sge_dif_page_pool,
+			GFP_ATOMIC,
+			&slot->sge_dif_page_dma);
+	if (!slot->sge_dif_page)
+		return -ENOMEM;
+
+	hdr->double_mode = 1;
+
+	for_each_sg(scatter, sg, n_elem, i) {
+		struct hisi_sas_sge *entry = &slot->sge_dif_page->sge[i];
+
+		entry->addr_lo = DMA_ADDR_LO(sg_dma_address(sg));
+		entry->addr_hi = DMA_ADDR_HI(sg_dma_address(sg));
+		entry->page_ctrl_0 = entry->page_ctrl_1 = 0;
+		entry->data_len = sg_dma_len(sg);
+		entry->data_off = 0;
+	}
+
+	hdr->dif_prd_table_addr_lo = DMA_ADDR_LO(slot->sge_dif_page_dma);
+	hdr->dif_prd_table_addr_hi = DMA_ADDR_HI(slot->sge_dif_page_dma);
+
+	hdr->dif_sg_len = n_elem;
+	return 0;
+}
+#endif
+
 static int prep_smp_v1_hw(struct hisi_hba *hisi_hba,
 			struct hisi_sas_tei *tei)
 {
@@ -1196,6 +1238,7 @@ static int prep_ssp_v1_hw(struct hisi_hba *hisi_hba,
 	struct hisi_sas_cmd_hdr_dw2_v1_hw *dw2 =
 		(struct hisi_sas_cmd_hdr_dw2_v1_hw *)&hdr->dw2;
 
+	dw1->pir_pres = 0;
 #ifdef SAS_DIF
 	u8 prot_type = scsi_get_prot_type(scsi_cmnd);
 	u8 prot_op = scsi_get_prot_op(scsi_cmnd);
@@ -1231,22 +1274,54 @@ static int prep_ssp_v1_hw(struct hisi_hba *hisi_hba,
 		prot->crc_gen_seed_val = 0;
 		prot->crc_chk_seed_val = 0;
 
-		hdr->data_transfer_len = 8 * scsi_bufflen(scsi_cmnd) /
-					 scsi_prot_interval(scsi_cmnd);
 		hdr->double_mode = 0;
 
-		if (prot_op == SCSI_PROT_READ_STRIP) {
+		switch (prot_op) {
+		case SCSI_PROT_READ_STRIP:
 			prot->t10_chk_en = 0;
 			prot->t10_rmv_en = 1;
 			prot->t10_insert_en = 0;
 			prot->t10_rplc_en = 0;
-		} else if (prot_op == SCSI_PROT_WRITE_INSERT) {
+			break;
+		case SCSI_PROT_WRITE_INSERT:
 			prot->t10_chk_en = 0;
 			prot->t10_rmv_en = 0;
 			prot->t10_insert_en = 1;
 			prot->t10_rplc_en = 0;
 			prot->lbrt_gen_val = cpu_to_le32((uint32_t)
 					(0xffffffff & scsi_get_lba(scsi_cmnd)));
+			break;
+		case SCSI_PROT_WRITE_PASS:
+			prot->t10_chk_en = 1;
+			prot->t10_chk_msk = 0xff;
+			prot->lbrt_chk_val = cpu_to_le32((uint32_t)
+					(0xffffffff & scsi_get_lba(scsi_cmnd)));
+			break;
+		case SCSI_PROT_READ_PASS:
+			/* fixme not check crc & app & ref tag */
+			prot->t10_chk_en = 1;
+			prot->t10_chk_msk = 0x0;
+			break;
+		default:
+			prot->t10_chk_en = 0;
+			prot->t10_chk_msk = 0x0;
+		}
+
+		if (scsi_prot_sg_count(scsi_cmnd)) {
+			int n_elem = dma_map_sg(hisi_hba->dev,
+					scsi_prot_sglist(scsi_cmnd),
+					scsi_prot_sg_count(scsi_cmnd),
+					task->data_dir);
+			if (!n_elem) {
+				rc = -ENOMEM;
+				return rc;
+			}
+
+			rc = prep_prd_sge_dif_v1_hw(hisi_hba, slot, hdr,
+					scsi_prot_sglist(scsi_cmnd),
+					n_elem);
+			if (rc)
+				return rc;
 		}
 	}
 #endif
@@ -1319,11 +1394,7 @@ static int prep_ssp_v1_hw(struct hisi_hba *hisi_hba,
 	}
 
 	/* dw4 */
-	if (!is_tmf)
-		hdr->data_transfer_len += scsi_bufflen(scsi_cmnd);
-	else
-		hdr->data_transfer_len = 0;
-
+	hdr->data_transfer_len = scsi_transfer_length(scsi_cmnd);
 	/* dw5 */
 	/* hdr->first_burst_num not set in Higgs code */
 
@@ -2221,7 +2292,10 @@ const struct hisi_sas_hba_info hisi_sas_hba_info_v1_hw = {
 #ifdef SAS_DIF
 	.prot_cap = SHOST_DIF_TYPE1_PROTECTION |
 		    SHOST_DIF_TYPE2_PROTECTION |
-		    SHOST_DIF_TYPE3_PROTECTION,
+		    SHOST_DIF_TYPE3_PROTECTION |
+			SHOST_DIX_TYPE1_PROTECTION |
+			SHOST_DIX_TYPE2_PROTECTION |
+			SHOST_DIX_TYPE3_PROTECTION,
 #endif
 };
 
