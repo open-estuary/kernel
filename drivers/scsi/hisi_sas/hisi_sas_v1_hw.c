@@ -44,6 +44,8 @@
 #define BUS_INACTIVE_LIMIT_TIME	0xa8
 #define REJECT_TO_OPEN_LIMIT_TIME	0xac
 #define CFG_AGING_TIME			0xbc
+#define CFG_AGING_TIME_ITCT_REL_OFF	0
+#define CFG_AGING_TIME_ITCT_REL_MSK	0x1
 #define HGC_DFX_CFG2			0xc0
 #define FIS_LIST_BADDR_L		0xc4
 #define CFG_1US_TIMER_TRSH		0xcc
@@ -585,7 +587,7 @@ static void init_id_frame_v1_hw(struct hisi_hba *hisi_hba)
 void hisi_sas_setup_itct_v1_hw(struct hisi_hba *hisi_hba, struct hisi_sas_device *device)
 {
 	struct domain_device *dev = device->sas_device;
-	u32 device_id = device->device_id;
+	u64 device_id = device->device_id;
 	struct hisi_sas_itct_v1_hw *itct =
 		(struct hisi_sas_itct_v1_hw *)&hisi_hba->itct[device_id];
 
@@ -620,6 +622,33 @@ void hisi_sas_setup_itct_v1_hw(struct hisi_hba *hisi_hba, struct hisi_sas_device
 	itct->bus_inactive_time_limit = 0xff00;
 	itct->max_conn_time_limit = 0xff00;
 	itct->reject_open_time_limit = 0xff00;
+}
+
+static int free_device_v1_hw(struct hisi_hba *hisi_hba,
+			     struct hisi_sas_device *dev)
+{
+	u64 dev_id = dev->device_id;
+	struct hisi_sas_itct_v1_hw *itct =
+		(struct hisi_sas_itct_v1_hw *)&hisi_hba->itct[dev_id];
+	u32 reg_val = hisi_sas_read32(hisi_hba, CFG_AGING_TIME);
+
+	reg_val |= CFG_AGING_TIME_ITCT_REL_MSK;
+	hisi_sas_write32(hisi_hba, CFG_AGING_TIME, reg_val);
+
+	/* free itct */
+	udelay(1);
+	reg_val = hisi_sas_read32(hisi_hba, CFG_AGING_TIME);
+	reg_val &= ~CFG_AGING_TIME_ITCT_REL_MSK;
+	hisi_sas_write32(hisi_hba, CFG_AGING_TIME, reg_val);
+
+	itct->valid = 0;
+
+	memset(dev, 0, sizeof(*dev));
+	dev->device_id = dev_id;
+	dev->dev_type = SAS_PHY_UNUSED;
+	dev->dev_status = HISI_SAS_DEV_NORMAL;
+
+	return 0;
 }
 
 #ifdef SAS_12G
@@ -2283,6 +2312,7 @@ static const struct hisi_sas_dispatch hisi_sas_dispatch_v1_hw = {
 	.phy_enable = enable_phy_v1_hw,
 	.phy_disable = disable_phy_v1_hw,
 	.hard_phy_reset = hard_phy_reset_v1_hw,
+	.free_device = free_device_v1_hw,
 	/* v1 hw does not support SATA/STP */
 };
 

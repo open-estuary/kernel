@@ -478,7 +478,20 @@ void hisi_sas_setup_itct_v2_hw(struct hisi_hba *hisi_hba,
 	itct->reject_open_time_limit = 0xff00;
 }
 
+static int free_device_v2_hw(struct hisi_hba *hisi_hba,
+			     struct hisi_sas_device *dev)
+{
+	u64 dev_id = dev->device_id;
 
+	/* Todo: fix hw interaction */
+
+	memset(dev, 0, sizeof(*dev));
+	dev->device_id = dev_id;
+	dev->dev_type = SAS_PHY_UNUSED;
+	dev->dev_status = HISI_SAS_DEV_NORMAL;
+
+	return 0;
+}
 static int reset_hw_v2_hw(struct hisi_hba *hisi_hba)
 {
 	int i;
@@ -2224,6 +2237,7 @@ const struct hisi_sas_dispatch hisi_sas_dispatch_v2_hw = {
 	.phy_enable = enable_phy_v2_hw,
 	.phy_disable = disable_phy_v2_hw,
 	.hard_phy_reset = hard_phy_reset_v2_hw,
+	.free_device = free_device_v2_hw,
 };
 
 const struct hisi_sas_hba_info hisi_sas_hba_info_v2_hw = {

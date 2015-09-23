@@ -770,16 +770,6 @@ static void hisi_sas_release_task(struct hisi_hba *hisi_hba,
 		hisi_sas_do_release_task(hisi_hba, phyno[i], dev);
 }
 
-void hisi_sas_free_dev(struct hisi_sas_device *dev)
-{
-	u32 id = dev->device_id;
-
-	memset(dev, 0, sizeof(*dev));
-	dev->device_id = id;
-	dev->dev_type = SAS_PHY_UNUSED;
-	dev->dev_status = HISI_SAS_DEV_NORMAL;
-}
-
 static void hisi_sas_dev_gone_notify(struct domain_device *dev)
 {
 	struct hisi_sas_device *hisi_sas_dev = dev->lldd_dev;
@@ -800,7 +790,7 @@ static void hisi_sas_dev_gone_notify(struct domain_device *dev)
 	in race with sas_deform_port->hisi_sas_port_deformed->hisi_sas_port_notify_deformed->
 	hisi_sas_do_release_task */
 
-	hisi_sas_free_dev(hisi_sas_dev);
+	HISI_SAS_DISP->free_device(hisi_hba, hisi_sas_dev);
 
 	dev->lldd_dev = NULL;
 	hisi_sas_dev->sas_device = NULL;
