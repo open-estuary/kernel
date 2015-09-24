@@ -208,7 +208,7 @@
 #define DMA_RX_STATUS_BUSY_MSK		0x1
 
 #define AXI_CFG				(0x5100)
-#define CORE_RESET_VALUE		(0x7ffff)
+#define CONTROLLER_RESET_VALUE		(0x7ffff)
 
 enum {
 	HISI_SAS_PHY_BCAST_ACK = 0,
@@ -798,12 +798,12 @@ static int reset_hw_v1_hw(struct hisi_hba *hisi_hba)
 	}
 
 	/* Apply reset */
-	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg);
-	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->clock_reg + 4);
+	writel(CONTROLLER_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg);
+	writel(CONTROLLER_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->clock_reg + 4);
 	mdelay(1);
 	/* De-reset (offset is 4) */
-	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg + 4);
-	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->clock_reg);
+	writel(CONTROLLER_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg + 4);
+	writel(CONTROLLER_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->clock_reg);
 
 	return 0;
 }
@@ -1985,7 +1985,7 @@ static irqreturn_t fatal_ecc_int_v1_hw(int irq, void *p)
 	if (ecc_int & SAS_ECC_INTR_DQ_ECC1B_MSK) {
 		u32 ecc_err = hisi_sas_read32(hisi_hba, HGC_ECC_ERR);
 
-		panic("Fatal DQ 1b ECC interrupt on core %d (0x%x)\n",
+		panic("Fatal DQ 1b ECC interrupt on controller %d (0x%x)\n",
 			hisi_hba->id, ecc_err);
 	}
 
@@ -1994,14 +1994,14 @@ static irqreturn_t fatal_ecc_int_v1_hw(int irq, void *p)
 				HGC_DQ_ECC_ADDR_BAD_MSK) >>
 				HGC_DQ_ECC_ADDR_BAD_OFF;
 
-		panic("Fatal DQ RAM ECC interrupt on core %d @ 0x%08x\n",
+		panic("Fatal DQ RAM ECC interrupt on controller %d @ 0x%08x\n",
 			hisi_hba->id, addr);
 	}
 
 	if (ecc_int & SAS_ECC_INTR_IOST_ECC1B_MSK) {
 		u32 ecc_err = hisi_sas_read32(hisi_hba, HGC_ECC_ERR);
 
-		panic("Fatal IOST 1b ECC interrupt on core %d (0x%x)\n",
+		panic("Fatal IOST 1b ECC interrupt on controller %d (0x%x)\n",
 			hisi_hba->id, ecc_err);
 	}
 
@@ -2010,7 +2010,7 @@ static irqreturn_t fatal_ecc_int_v1_hw(int irq, void *p)
 				HGC_IOST_ECC_ADDR_BAD_MSK) >>
 				HGC_IOST_ECC_ADDR_BAD_OFF;
 
-		panic("Fatal IOST RAM ECC interrupt on core %d @ 0x%08x\n",
+		panic("Fatal IOST RAM ECC interrupt on controller %d @ 0x%08x\n",
 			hisi_hba->id, addr);
 	}
 
@@ -2019,14 +2019,14 @@ static irqreturn_t fatal_ecc_int_v1_hw(int irq, void *p)
 				HGC_ITCT_ECC_ADDR_BAD_MSK) >>
 				HGC_ITCT_ECC_ADDR_BAD_OFF;
 
-		panic("Fatal TCT RAM ECC interrupt on core %d @ 0x%08x\n",
+		panic("Fatal TCT RAM ECC interrupt on controller %d @ 0x%08x\n",
 			hisi_hba->id, addr);
 	}
 
 	if (ecc_int & SAS_ECC_INTR_ITCT_ECC1B_MSK) {
 		u32 ecc_err = hisi_sas_read32(hisi_hba, HGC_ECC_ERR);
 
-		panic("Fatal ITCT 1b ECC interrupt on core %d (0x%x)\n",
+		panic("Fatal ITCT 1b ECC interrupt on controller %d (0x%x)\n",
 			hisi_hba->id, ecc_err);
 	}
 
@@ -2042,19 +2042,19 @@ static irqreturn_t fatal_axi_int_v1_hw(int irq, void *p)
 	u32 axi_info = hisi_sas_read32(hisi_hba, HGC_AXI_FIFO_ERR_INFO);
 
 	if (axi_int & ENT_INT_SRC2_DQ_CFG_ERR_MSK)
-		panic("Fatal DQ_CFG_ERR interrupt on core %d (0x%x)\n",
+		panic("Fatal DQ_CFG_ERR interrupt on controller %d (0x%x)\n",
 			hisi_hba->id, axi_info);
 
 	if (axi_int & ENT_INT_SRC2_CQ_CFG_ERR_MSK)
-		panic("Fatal CQ_CFG_ERR interrupt on core %d (0x%x)\n",
+		panic("Fatal CQ_CFG_ERR interrupt on controller %d (0x%x)\n",
 			hisi_hba->id, axi_info);
 
 	if (axi_int & ENT_INT_SRC2_AXI_WRONG_INT_MSK)
-		panic("Fatal AXI_WRONG_INT interrupt on core %d (0x%x)\n",
+		panic("Fatal AXI_WRONG_INT interrupt on controller %d (0x%x)\n",
 			hisi_hba->id, axi_info);
 
 	if (axi_int & ENT_INT_SRC2_AXI_OVERLF_INT_MSK)
-		panic("Fatal AXI_OVERLF_INT incorrect interrupt on core %d (0x%x)\n",
+		panic("Fatal AXI_OVERLF_INT incorrect interrupt on controller %d (0x%x)\n",
 			hisi_hba->id, axi_info);
 
 	hisi_sas_write32(hisi_hba, ENT_INT_SRC2, axi_int | 0x30000000);

@@ -27,8 +27,6 @@
 
 #undef SAS_DIF
 
-#define HISI_SAS_MAX_CORE 3
-
 #define HISI_SAS_MAX_PHYS	9
 #define HISI_SAS_MAX_QUEUES	32
 #define HISI_SAS_QUEUE_SLOTS 512
@@ -226,6 +224,8 @@ struct hisi_hba {
 	dma_addr_t	initial_fis_dma;
 
 	int	n_phy;
+
+	int scan_finished;
 
 	struct timer_list timer;
 	struct workqueue_struct *wq;

@@ -1855,7 +1855,7 @@ static irqreturn_t sata_int_v2_hw(int phy_no, void *p)
 	struct dev_to_host_fis *fis = &initial_fis->fis;
 	int i;
 
-	dev_info(hisi_hba->dev, "%s core = %d, phy_no = %d\n",
+	dev_info(hisi_hba->dev, "%s controller = %d, phy_no = %d\n",
 		 __func__, hisi_hba->id, phy_no);
 
 	ent_msk = hisi_sas_read32(hisi_hba, ENT_INT_SRC_MSK1);
