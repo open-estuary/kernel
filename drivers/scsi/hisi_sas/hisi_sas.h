@@ -213,6 +213,7 @@ struct hisi_hba {
 	void __iomem *regs;
 	void __iomem *ctrl_regs;
 	unsigned int reset_reg;
+	unsigned int clock_reg;
 
 	u8 sas_addr[SAS_ADDR_SIZE];
 

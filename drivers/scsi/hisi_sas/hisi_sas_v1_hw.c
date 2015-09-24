@@ -799,9 +799,11 @@ static int reset_hw_v1_hw(struct hisi_hba *hisi_hba)
 
 	/* Apply reset */
 	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg);
+	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->clock_reg + 4);
 	mdelay(1);
 	/* De-reset (offset is 4) */
 	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg + 4);
+	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->clock_reg);
 
 	return 0;
 }
