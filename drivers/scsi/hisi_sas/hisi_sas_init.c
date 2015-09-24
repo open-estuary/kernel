@@ -486,7 +486,6 @@ static int hisi_sas_remove(struct platform_device *pdev)
 	sas_remove_host(sha->core.shost);
 	scsi_remove_host(sha->core.shost);
 
-	hisi_sas_free(hisi_hba);
 #ifdef CONFIG_DEBUG_FS
 	hisi_sas_debugfs_free(hisi_hba);
 #endif
