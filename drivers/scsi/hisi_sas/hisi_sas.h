@@ -266,13 +266,6 @@ struct hisi_hba {
 	struct dentry *dbg_dir;
 };
 
-struct hisi_hba_priv {
-	struct hisi_hba	*hisi_hba[HISI_SAS_MAX_CORE];
-	int n_core;
-	u8 n_phy;
-	u8 scan_finished;
-};
-
 #define HISI_SAS_DISP	(hisi_hba->hba_info->dispatch)
 
 extern const struct hisi_sas_hba_info hisi_sas_hba_info_v1_hw;
