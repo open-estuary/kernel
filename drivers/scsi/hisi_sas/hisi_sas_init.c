@@ -267,9 +267,9 @@ int hisi_sas_ioremap(struct hisi_hba *hisi_hba)
 }
 
 static const struct of_device_id sas_of_match[] = {
-	{ .compatible = "hisilicon,sas-core-v1",
+	{ .compatible = "hisilicon,sas-controller-v1",
 	.data = &hisi_sas_hba_info_v1_hw},
-	{ .compatible = "hisilicon,sas-core-v2",
+	{ .compatible = "hisilicon,sas-controller-v2",
 	.data = &hisi_sas_hba_info_v2_hw},
 	{},
 };
@@ -310,7 +310,7 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 	if (of_property_read_u32(np, "queue-count", &hisi_hba->queue_count))
 		goto err_out;
 
-	if (of_property_read_u32(np, "core-id", &hisi_hba->id))
+	if (of_property_read_u32(np, "controller-id", &hisi_hba->id))
 		goto err_out;
 
 	interrupt_count = of_property_count_u32_elems(np, "interrupts");
@@ -401,7 +401,8 @@ static int hisi_sas_probe(struct platform_device *pdev)
 		goto err_out_ha;
 	}
 
-	phy_nr = port_nr = HISI_SAS_MAX_PHYS;
+	phy_nr = port_nr = hisi_hba->n_phy;
+
 
 	arr_phy = devm_kcalloc(dev, phy_nr, sizeof(void *), GFP_KERNEL);
 	arr_port = devm_kcalloc(dev, port_nr, sizeof(void *), GFP_KERNEL);

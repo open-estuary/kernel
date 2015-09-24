@@ -461,7 +461,7 @@
 
 	sas0: sas@c1000000 {
 		compatible = "hisilicon,sas-controller-v1";
-		core-id = <0>;
+		controller-id = <0>;
 		reg = <0x0 0xc1000000 0x0 0x10000>,
 			<0x0 0xc0000000 0x0 0x10000>;
 		reset-reg = <0xa60>;
@@ -490,7 +490,7 @@
 
 	sas1: sas@b1000000 {
 		compatible = "hisilicon,sas-controller-v1";
-		core-id = <1>;
+		controller-id = <1>;
 		reg = <0x0 0xb1000000 0x0 0x10000>,
 			<0x0 0xb0000000 0x0 0x10000>;
 		reset-reg = <0xa18>;
