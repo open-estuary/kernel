@@ -334,6 +334,7 @@
 			reg = <0x0 0xc1000000 0x0 0x10000>,
 				<0x0 0xc0000000 0x0 0x10000>;
 			reset-reg = <0xa60>;
+			clock-reg = <0x338>;
 			queue-count = <32>;
 			phy-count = <8>;
 			interrupt-parent = <&mbigen_dsa>;
@@ -360,6 +361,7 @@
 			reg = <0x0 0xb1000000 0x0 0x10000>,
 				<0x0 0xb0000000 0x0 0x10000>;
 			reset-reg = <0xa18>;
+			clock-reg = <0x318>;
 			queue-count = <32>;
 			phy-count = <8>;
 			interrupt-parent = <&mbigen_pcie>;
