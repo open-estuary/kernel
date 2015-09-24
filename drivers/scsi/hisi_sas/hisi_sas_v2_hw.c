@@ -157,7 +157,7 @@
 #define AXI_CFG				(0x5100)
 #define AM_CFG_MAX_TRANS			(0x5010)
 #define AM_CFG_SINGLE_PORT_MAX_TRANS		(0x5014)
-#define CORE_RESET_VALUE		(0x7ffff)
+#define CONTROLLER_RESET_VALUE		(0x7ffff)
 
 enum {
 	HISI_SAS_PHY_HOTPLUG_TOUT,
@@ -543,12 +543,16 @@ static int reset_hw_v2_hw(struct hisi_hba *hisi_hba)
 	}
 
 	/* Apply reset & disable clock(offset is 4)*/
-	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg);
-	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->clock_reg + 4);
+	writel(CONTROLLER_RESET_VALUE,
+	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[0]);
+	writel(CONTROLLER_RESET_VALUE,
+	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[1] + 4);
 	mdelay(1);
-	/* De-reset (offset is 4) & enable clock*/
-	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg + 4);
-	writel(CORE_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->clock_reg);
+	/* De-reset (offset is 4) */
+	writel(CONTROLLER_RESET_VALUE,
+	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[0] + 4);
+	writel(CONTROLLER_RESET_VALUE,
+	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[1]);
 
 
 	return 0;
