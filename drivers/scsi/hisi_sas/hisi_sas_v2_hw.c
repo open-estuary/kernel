@@ -1226,7 +1226,7 @@ static int sata_done_v2_hw(struct hisi_hba *hisi_hba, struct sas_task *task,
 }
 
 static int slot_complete_v2_hw(struct hisi_hba *hisi_hba,
-		struct hisi_sas_slot *slot, u32 flags)
+		struct hisi_sas_slot *slot, int flags)
 {
 	struct sas_task *task = slot->task;
 	struct hisi_sas_device *hisi_sas_dev;
@@ -2022,12 +2022,12 @@ static int interrupt_init_v2_hw(struct hisi_hba *hisi_hba)
 			return -ENOENT;
 		}
 
-		(void)snprintf(&int_names[idx * HISI_SAS_INT_NAME_LENGTH],
-				HISI_SAS_INT_NAME_LENGTH,
+		(void)snprintf(&int_names[idx * HISI_SAS_NAME_LEN],
+				HISI_SAS_NAME_LEN,
 				DRV_NAME" %s [%d %d]", phy_int_names[i],
 				id, i);
 		rc = devm_request_irq(dev, irq, phy_interrupts[i], 0,
-				&int_names[idx * HISI_SAS_INT_NAME_LENGTH],
+				&int_names[idx * HISI_SAS_NAME_LEN],
 				hisi_hba);
 		if (rc) {
 			dev_err(dev, "%s [%d] could not request interrupt %d, rc=%d\n",
@@ -2041,11 +2041,11 @@ static int interrupt_init_v2_hw(struct hisi_hba *hisi_hba)
 		int idx = 72 + i;
 
 		irq = irq_map[idx];
-		(void)snprintf(&int_names[idx * HISI_SAS_INT_NAME_LENGTH],
-				HISI_SAS_INT_NAME_LENGTH,
+		(void)snprintf(&int_names[idx * HISI_SAS_NAME_LEN],
+				HISI_SAS_NAME_LEN,
 				DRV_NAME" %s [%d %d]", sata_int_name, id, i);
 		rc = devm_request_irq(dev, irq, sata_interrupts[i], 0,
-				&int_names[idx * HISI_SAS_INT_NAME_LENGTH],
+				&int_names[idx * HISI_SAS_NAME_LEN],
 				hisi_hba);
 		if (rc) {
 			dev_err(dev, "%s [%d] could not request interrupt %d, rc=%d\n",
@@ -2058,11 +2058,11 @@ static int interrupt_init_v2_hw(struct hisi_hba *hisi_hba)
 		int idx = 96 + i;
 
 		irq = irq_map[idx];
-		(void)snprintf(&int_names[idx * HISI_SAS_INT_NAME_LENGTH],
-				HISI_SAS_INT_NAME_LENGTH,
+		(void)snprintf(&int_names[idx * HISI_SAS_NAME_LEN],
+				HISI_SAS_NAME_LEN,
 				DRV_NAME" %s [%d %d]", cq_int_name, id, i);
 		rc = devm_request_irq(dev, irq, cq_interrupts[i], 0,
-				&int_names[idx * HISI_SAS_INT_NAME_LENGTH],
+				&int_names[idx * HISI_SAS_NAME_LEN],
 				hisi_hba);
 		if (rc) {
 			dev_err(dev, "%s [%d] could not request interrupt %d, rc=%d\n",
@@ -2083,11 +2083,11 @@ static int interrupt_init_v2_hw(struct hisi_hba *hisi_hba)
 				/*__func__, hisi_hba->id, idx);*/
 			/*return -ENOENT;*/
 		/*}*/
-		/*(void)snprintf(&int_names[idx * HISI_SAS_INT_NAME_LENGTH],*/
-				/*HISI_SAS_INT_NAME_LENGTH,*/
+		/*(void)snprintf(&int_names[idx * HISI_SAS_NAME_LEN],*/
+				/*HISI_SAS_NAME_LEN,*/
 				/*DRV_NAME" %s [%d]", fatal_int_name[i], id);*/
 		/*rc = devm_request_irq(dev, irq, fatal_interrupts[i], 0,*/
-				/*&int_names[idx * HISI_SAS_INT_NAME_LENGTH],*/
+				/*&int_names[idx * HISI_SAS_NAME_LEN],*/
 				/*hisi_hba);*/
 		/*if (rc) {*/
 			/*dev_err(dev, "%s [%d] could not request

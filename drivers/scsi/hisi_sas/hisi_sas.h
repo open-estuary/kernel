@@ -38,15 +38,17 @@
 #define HISI_SAS_IOST_ENTRY_SZ (sizeof(struct hisi_sas_iost))
 #define HISI_SAS_DQ_ENTRY_SZ (sizeof(struct hisi_sas_cmd_hdr))
 #define HISI_SAS_CQ_ENTRY_SZ (hisi_hba->hba_info->cq_hdr_sz)
-#define HISI_SAS_STATUS_BUF_SZ (sizeof(struct hisi_sas_err_record) + 1024)
+#define HISI_SAS_STATUS_BUF_SZ \
+		(sizeof(struct hisi_sas_err_record) + 1024)
 #define HISI_SAS_BREAKPOINT_ENTRY_SZ (sizeof(struct hisi_sas_breakpoint))
-#define HISI_SAS_COMMAND_TABLE_SZ (((sizeof(union hisi_sas_command_table)+3)/4)*4)
+#define HISI_SAS_COMMAND_TABLE_SZ \
+		(((sizeof(union hisi_sas_command_table)+3)/4)*4)
 
 #define HISI_SAS_MAX_SSP_RESP_SZ (sizeof(struct ssp_frame_hdr) + 1024) /* j00310691 see table 118 */
 #define HISI_SAS_MAX_SMP_RESP_SZ 1028 /* From spec 9.4.3 (1032-4 byte crc) */
 #define HISI_SAS_MAX_STP_RESP_SZ 28 /* DMA setup fis length http://samfreetime.blogspot.co.uk/2012/08/dma-setup-device-to-host-or-host-to.html */
 
-#define HISI_SAS_INT_NAME_LENGTH 32
+#define HISI_SAS_NAME_LEN 32
 #define HISI_SAS_RESET_REG_CNT 2
 
 enum {
@@ -161,7 +163,8 @@ struct hisi_sas_dispatch {
 	int (*phys_init)(struct hisi_hba *hisi_hba);
 	int (*interrupt_init)(struct hisi_hba *hisi_hba);
 	int (*interrupt_openall)(struct hisi_hba *hisi_hba);
-	void (*setup_itct)(struct hisi_hba *hisi_hba, struct hisi_sas_device *device);
+	void (*setup_itct)(struct hisi_hba *hisi_hba,
+			   struct hisi_sas_device *device);
 	int (*get_free_slot)(struct hisi_hba *hisi_hba, int *q, int *s);
 	void (*start_delivery)(struct hisi_hba *hisi_hba);
 	int (*prep_ssp)(struct hisi_hba *hisi_hba,
@@ -171,7 +174,8 @@ struct hisi_sas_dispatch {
 			struct hisi_sas_tei *tei);
 	int (*prep_stp)(struct hisi_hba *hisi_hba,
 			struct hisi_sas_tei *tei);
-	int (*slot_complete)(struct hisi_hba *hisi_hba, struct hisi_sas_slot *slot, u32 abort);
+	int (*slot_complete)(struct hisi_hba *hisi_hba,
+			     struct hisi_sas_slot *slot, int abort);
 	void (*phy_enable)(struct hisi_hba *hisi_hba, int phy_no);
 	void (*phy_disable)(struct hisi_hba *hisi_hba, int phy_no);
 	void (*hard_phy_reset)(struct hisi_hba *hisi_hba, int phy_no);

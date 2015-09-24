@@ -88,15 +88,19 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 		memset(hisi_hba->complete_hdr[i], 0, s);
 	}
 
-	sprintf(name, "%s%d", "hisi_sas_status_buffer_pool", hisi_hba->id);
+	sprintf(name, "%s%d", "hisi_sas_status_buffer_pool",
+		hisi_hba->id);
 	s = HISI_SAS_STATUS_BUF_SZ;
-	hisi_hba->status_buffer_pool = dma_pool_create(name, dev, s, 16, 0);
+	hisi_hba->status_buffer_pool = dma_pool_create(name,
+						       dev, s, 16, 0);
 	if (!hisi_hba->status_buffer_pool)
 		goto err_out;
 
-	sprintf(name, "%s%d", "hisi_sas_command_table_pool", hisi_hba->id);
+	sprintf(name, "%s%d", "hisi_sas_command_table_pool",
+		hisi_hba->id);
 	s = HISI_SAS_COMMAND_TABLE_SZ;
-	hisi_hba->command_table_pool = dma_pool_create(name, dev, s, 16, 0);
+	hisi_hba->command_table_pool = dma_pool_create(name,
+						       dev, s, 16, 0);
 	if (!hisi_hba->command_table_pool)
 		goto err_out;
 
@@ -319,9 +323,10 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 	if (of_property_read_u32(np, "#interrupt-cells", &interrupt_cells))
 		goto err_out;
 
-	hisi_hba->int_names = devm_kcalloc(&pdev->dev, interrupt_count / interrupt_cells,
-				HISI_SAS_INT_NAME_LENGTH,
-				GFP_KERNEL);
+	hisi_hba->int_names = devm_kcalloc(&pdev->dev,
+					   interrupt_count / interrupt_cells,
+					   HISI_SAS_NAME_LEN,
+					   GFP_KERNEL);
 	if (!hisi_hba->int_names)
 		goto err_out;
 
@@ -358,9 +363,11 @@ static void hisi_sas_init_add(struct hisi_hba *hisi_hba)
 	for (i = 0; i < hisi_hba->n_phy; i++) {
 		hisi_hba->phy[i].dev_sas_addr = 0x5001882016072015ULL;
 		hisi_hba->phy[i].dev_sas_addr =
-			cpu_to_be64((u64)(*(u64 *)&hisi_hba->phy[i].dev_sas_addr));
+			cpu_to_be64((u64)(*(u64 *)
+			&hisi_hba->phy[i].dev_sas_addr));
 	}
-	memcpy(hisi_hba->sas_addr, &hisi_hba->phy[0].dev_sas_addr, SAS_ADDR_SIZE);
+	memcpy(hisi_hba->sas_addr, &hisi_hba->phy[0].dev_sas_addr,
+	       SAS_ADDR_SIZE);
 }
 
 static int hisi_sas_probe(struct platform_device *pdev)
