@@ -298,10 +298,9 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 
 	init_timer(&hisi_hba->timer);
 
-	if (of_property_read_u32(np, "reset-reg", &hisi_hba->reset_reg))
-		goto err_out;
-
-	if (of_property_read_u32(np, "clock-reg", &hisi_hba->clock_reg))
+	if (of_property_read_u32_array(np, "reset-reg",
+				       (u32 *) &hisi_hba->reset_reg,
+				       HISI_SAS_RESET_REG_CNT))
 		goto err_out;
 
 	if (of_property_read_u32(np, "phy-count", &hisi_hba->n_phy))

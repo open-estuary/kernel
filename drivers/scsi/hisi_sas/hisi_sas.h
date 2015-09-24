@@ -47,6 +47,7 @@
 #define HISI_SAS_MAX_STP_RESP_SZ 28 /* DMA setup fis length http://samfreetime.blogspot.co.uk/2012/08/dma-setup-device-to-host-or-host-to.html */
 
 #define HISI_SAS_INT_NAME_LENGTH 32
+#define HISI_SAS_RESET_REG_CNT 2
 
 enum {
 	PORT_TYPE_SAS = (1U << 1),
@@ -210,8 +211,7 @@ struct hisi_hba {
 
 	void __iomem *regs;
 	void __iomem *ctrl_regs;
-	unsigned int reset_reg;
-	unsigned int clock_reg;
+	u32 reset_reg[HISI_SAS_RESET_REG_CNT];
 
 	u8 sas_addr[SAS_ADDR_SIZE];
 

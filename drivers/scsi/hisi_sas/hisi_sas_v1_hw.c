@@ -798,12 +798,16 @@ static int reset_hw_v1_hw(struct hisi_hba *hisi_hba)
 	}
 
 	/* Apply reset */
-	writel(CONTROLLER_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg);
-	writel(CONTROLLER_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->clock_reg + 4);
+	writel(CONTROLLER_RESET_VALUE,
+	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[0]);
+	writel(CONTROLLER_RESET_VALUE,
+	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[1] + 4);
 	mdelay(1);
 	/* De-reset (offset is 4) */
-	writel(CONTROLLER_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->reset_reg + 4);
-	writel(CONTROLLER_RESET_VALUE, hisi_hba->ctrl_regs + hisi_hba->clock_reg);
+	writel(CONTROLLER_RESET_VALUE,
+	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[0] + 4);
+	writel(CONTROLLER_RESET_VALUE,
+	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[1]);
 
 	return 0;
 }
