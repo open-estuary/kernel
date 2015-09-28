@@ -50,6 +50,7 @@
 #define REJECT_TO_OPEN_LIMIT_TIME	0xac
 #define CFG_AGING_TIME			0xbc
 #define HGC_DFX_CFG2			0xc0
+#define HGC_IOMB_PROC1_STATUS	0x104
 #define CFG_1US_TIMER_TRSH		0xcc
 #define HGC_INVLD_DQE_INFO		0x148
 #define HGC_INVLD_DQE_INFO_FB_CH0_OFF	9
@@ -161,7 +162,10 @@
 #define AXI_CFG				(0x5100)
 #define AM_CFG_MAX_TRANS			(0x5010)
 #define AM_CFG_SINGLE_PORT_MAX_TRANS		(0x5014)
-#define CONTROLLER_RESET_VALUE		(0x7ffff)
+#define SAS0_RESET_VALUE		(0x7ffff)
+#define SAS0_RESET_MSK  		(0x7ffff)
+#define SAS2_RESET_VALUE		(0x1fffff)
+#define SAS2_RESET_MSK			(0x1fffff)
 
 enum {
 	HISI_SAS_PHY_HOTPLUG_TOUT,
@@ -527,17 +531,24 @@ static int free_device_v2_hw(struct hisi_hba *hisi_hba,
 static int reset_hw_v2_hw(struct hisi_hba *hisi_hba)
 {
 	int i;
+	u32 reg_val;
+	u32 reset_val = SAS0_RESET_VALUE;
+	u32 status_msk = SAS0_RESET_MSK;
 	unsigned long end_time;
 
-	for (i = 0; i < hisi_hba->n_phy; i++) {
-		u32 phy_ctrl = hisi_sas_phy_read32(hisi_hba, i, PHY_CTRL);
+	/* 1.disable all of the DQ */
+	for (i = 0; i < HISI_SAS_MAX_QUEUES; i++)
+		hisi_sas_write32(hisi_hba, DLVRY_QUEUE_ENABLE, 0);
 
-		phy_ctrl |= PHY_CTRL_RESET_MSK;
-		hisi_sas_phy_write32(hisi_hba, i, PHY_CTRL, phy_ctrl);
+	/* 2.disable all of the PHY */
+	for (i = 0; i < hisi_hba->n_phy; i++) {
+		u32 phy_cfg = hisi_sas_phy_read32(hisi_hba, i, PHY_CFG);
+		phy_cfg &= ~PHY_CTRL_RESET_MSK;
+		hisi_sas_phy_write32(hisi_hba, i, PHY_CFG, phy_cfg);
 	}
 	udelay(50);
 
-	/* Ensure DMA tx & rx idle */
+	/* 3.Ensure DMA tx & rx idle */
 	for (i = 0; i < hisi_hba->n_phy; i++) {
 		u32 dma_tx_status, dma_rx_status;
 
@@ -559,7 +570,20 @@ static int reset_hw_v2_hw(struct hisi_hba *hisi_hba)
 		}
 	}
 
-	/* Ensure axi bus idle */
+	/* 4.wait for the CQ to be empty*/
+	end_time = jiffies + msecs_to_jiffies(1000);
+	while (1) {
+		u32 proc1_status =
+			hisi_sas_read32(hisi_hba, HGC_IOMB_PROC1_STATUS);
+		if (proc1_status == 0)
+			break;
+
+		msleep(20);
+		if (time_after(jiffies, end_time))
+			return -EIO;
+	}
+
+	/* 5.Ensure axi bus idle */
 	end_time = jiffies + msecs_to_jiffies(1000);
 	while (1) {
 		u32 axi_status =
@@ -573,22 +597,41 @@ static int reset_hw_v2_hw(struct hisi_hba *hisi_hba)
 			return -EIO;
 	}
 
-	/* Apply reset & disable clock(offset is 4)*/
-	writel(CONTROLLER_RESET_VALUE,
-	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[0]);
-	writel(CONTROLLER_RESET_VALUE,
-	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[1] + 4);
-	mdelay(1);
-	/* De-reset (offset is 4) */
-	writel(CONTROLLER_RESET_VALUE,
-	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[0] + 4);
-	writel(CONTROLLER_RESET_VALUE,
-	       hisi_hba->ctrl_regs + hisi_hba->reset_reg[1]);
+	if (2 == hisi_hba->id) {
+		reset_val = SAS2_RESET_VALUE;
+		status_msk = SAS2_RESET_MSK;
+	}
 
+	/* reset and check status*/
+	writel(reset_val, hisi_hba->ctrl_regs + hisi_hba->reset_reg[0]);
+	reg_val = readl(hisi_hba->ctrl_regs + hisi_hba->reset_status_reg[0]);
+	if (reset_val != (reg_val & status_msk))
+		pr_err("SAS %d reset fail.\n", hisi_hba->id);
+	mdelay(1);
+
+	/* disable clock and check status*/
+	writel(reset_val, hisi_hba->ctrl_regs + hisi_hba->reset_reg[1] + 4);
+	reg_val = readl(hisi_hba->ctrl_regs + hisi_hba->reset_status_reg[1]);
+	if (0 != (reg_val & status_msk))
+		pr_err("SAS %d disable clock fail.\n", hisi_hba->id);
+	mdelay(1);
+
+	/* dereset and check status*/
+	writel(reset_val, hisi_hba->ctrl_regs + hisi_hba->reset_reg[0] + 4);
+	reg_val = readl(hisi_hba->ctrl_regs + hisi_hba->reset_status_reg[0]);
+	if (0 != (reg_val & status_msk))
+		pr_err("SAS %d dereset fail.\n", hisi_hba->id);
+	mdelay(1);
+
+	/* enable clock and check status*/
+	writel(reset_val, hisi_hba->ctrl_regs + hisi_hba->reset_reg[1]);
+	reg_val = readl(hisi_hba->ctrl_regs + hisi_hba->reset_status_reg[1]);
+	if (reset_val != (reg_val & status_msk))
+		pr_err("SAS %d enable clock fail.\n", hisi_hba->id);
+	mdelay(1);
 
 	return 0;
 }
-
 
 static void init_reg_v2_hw(struct hisi_hba *hisi_hba)
 {
