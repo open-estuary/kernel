@@ -216,6 +216,7 @@ struct hisi_hba {
 	void __iomem *regs;
 	void __iomem *ctrl_regs;
 	u32 reset_reg[HISI_SAS_RESET_REG_CNT];
+	u32 reset_status_reg[HISI_SAS_RESET_REG_CNT];
 
 	u8 sas_addr[SAS_ADDR_SIZE];
 
