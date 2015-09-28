@@ -31,6 +31,9 @@
 #define PHY_CONN_RATE			0x30
 #define HGC_TRANS_TASK_CNT_LIMIT	0x38
 #define AXI_AHB_CLK_CFG			0x3c
+#define ITCT_CLR			0x44
+#define ITCT_CLR_EN_MSK	0x10000
+#define DEV_MSK			0x7ff
 #define AXI_USER1			0x48
 #define AXI_USER2			0x4c
 #define IO_SATA_BROKEN_MSG_ADDR_LO	0x58
@@ -66,6 +69,7 @@
 #define ENT_INT_SRC1_D2H_FIS_CH1_MSK	0x100
 #define ENT_INT_SRC2			0x1bc
 #define ENT_INT_SRC3			0x1c0
+#define ENT_INT_SRC3_ITC_INT_MSK	0x8000
 #define ENT_INT_SRC_MSK1		0x1c4
 #define ENT_INT_SRC_MSK2		0x1c8
 #define ENT_INT_SRC_MSK3		0x1cc
@@ -482,17 +486,44 @@ void hisi_sas_setup_itct_v2_hw(struct hisi_hba *hisi_hba,
 static int free_device_v2_hw(struct hisi_hba *hisi_hba,
 			     struct hisi_sas_device *dev)
 {
+	int i;
 	u64 dev_id = dev->device_id;
+	struct hisi_sas_itct_v2_hw *itct =
+		(struct hisi_sas_itct_v2_hw *)&hisi_hba->itct[dev_id];
 
-	/* Todo: fix hw interaction */
+	/* clear the itct interrupt state */
+	u32 reg_val = hisi_sas_read32(hisi_hba, ENT_INT_SRC3);
+	if (ENT_INT_SRC3_ITC_INT_MSK & reg_val) {
+		hisi_sas_write32(hisi_hba, ENT_INT_SRC3, ENT_INT_SRC3_ITC_INT_MSK);
+	}
 
-	memset(dev, 0, sizeof(*dev));
-	dev->device_id = dev_id;
-	dev->dev_type = SAS_PHY_UNUSED;
-	dev->dev_status = HISI_SAS_DEV_NORMAL;
+	/* clear the itct int*/
+	for (i = 0; i < 2; i++) {
+		/* clear the itct table*/
+		reg_val = hisi_sas_read32(hisi_hba, ITCT_CLR);
+		reg_val |= ITCT_CLR_EN_MSK | (dev_id & DEV_MSK);
+		hisi_sas_write32(hisi_hba, ITCT_CLR, reg_val);
 
+		udelay(10);
+		reg_val = hisi_sas_read32(hisi_hba, ENT_INT_SRC3);
+		if (ENT_INT_SRC3_ITC_INT_MSK & reg_val) {
+			dev_info(hisi_hba->dev, "got clear ITCT done interrupt\n");
+
+			/* invalid the itct state*/
+			itct->valid = 0;
+			hisi_sas_write32(hisi_hba, ENT_INT_SRC3, ENT_INT_SRC3_ITC_INT_MSK);
+			hisi_hba->devices[dev_id].dev_type = SAS_PHY_UNUSED;
+			hisi_hba->devices[dev_id].dev_status = HISI_SAS_DEV_NORMAL;
+
+			/* clear the itct */
+			hisi_sas_write32(hisi_hba, ITCT_CLR, 0);
+			dev_info(hisi_hba->dev, "clear ITCT ok\n");
+			break;
+		}
+	}
 	return 0;
 }
+
 static int reset_hw_v2_hw(struct hisi_hba *hisi_hba)
 {
 	int i;
@@ -2126,6 +2157,7 @@ static int interrupt_openall_v2_hw(struct hisi_hba *hisi_hba)
 	}
 	return 0;
 }
+
 
 const struct hisi_sas_dispatch hisi_sas_dispatch_v2_hw = {
 	.hw_init = hw_init_v2_hw,
