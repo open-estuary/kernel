@@ -181,9 +181,36 @@ int hisi_pcie_msi_host_init(struct pcie_port *pp, struct msi_controller *chip)
 	return 0;
 }
 
+static int hisi_pcie_cfg_write(struct pcie_port *pp, int where, int  size,
+				u32 val)
+{
+	u32 reg_val;
+	u32 reg;
+	struct hisi_pcie *pcie = to_hisi_pcie(pp);
+	void *walker = &reg_val;
+
+	walker += (where & 0x3);
+	reg = where & ~0x3;
+	if (size == 4)
+		hisi_pcie_apb_writel(pcie, val, reg);
+	else if (size == 2) {
+		reg_val = hisi_pcie_apb_readl(pcie, reg);
+		*(u16 __force *) walker = val;
+		hisi_pcie_apb_writel(pcie, reg_val, reg);
+	} else if (size == 1) {
+		reg_val = hisi_pcie_apb_readl(pcie, reg);
+		*(u8 __force *) walker = val;
+		hisi_pcie_apb_writel(pcie, reg_val, reg);
+	} else
+		return PCIBIOS_BAD_REGISTER_NUMBER;
+
+	return PCIBIOS_SUCCESSFUL;
+}
+
 static struct pcie_host_ops hisi_pcie_host_ops = {
 	.link_up = hisi_pcie_link_up,
 	.msi_host_init = hisi_pcie_msi_host_init,
+	.wr_own_conf = hisi_pcie_cfg_write,
 };
 
 static int hisi_add_pcie_port(struct pcie_port *pp,
