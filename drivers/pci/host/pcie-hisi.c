@@ -35,6 +35,12 @@
 #define PCIE_MSI_HIGH_ADDRESS                           0x1c4
 #define PCIE_MSI_ADDRESS_VAL                            0xb7010040
 
+#define PCIE_SYS_CTRL20_REG                             0x20
+#define PCIE_CFG_BAR0BASE                               0x10
+#define PCIE_DB2_ENABLE_SHIFT                           BIT(0)
+#define PCIE_DBI_CS2_ENABLE                             0x1
+#define PCIE_DBI_CS2_DISABLE                            0x0
+
 #define to_hisi_pcie(x)	container_of(x, struct hisi_pcie, pp)
 
 struct hisi_pcie {
@@ -128,6 +134,29 @@ static int hisi_pcie_link_up(struct pcie_port *pp)
 	return ((val & PCIE_LTSSM_STATE_MASK) == PCIE_LTSSM_LINKUP_STATE);
 }
 
+static void hisi_pcie_set_db2_enable(struct hisi_pcie *pcie, u32 enable)
+{
+	u32 dbi_ctrl;
+
+	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
+
+	dbi_ctrl = hisi_pcie_apb_readl(pcie, PCIE_SYS_CTRL20_REG);
+	if (enable)
+		dbi_ctrl |= PCIE_DB2_ENABLE_SHIFT;
+	else
+		dbi_ctrl &= ~PCIE_DB2_ENABLE_SHIFT;
+	hisi_pcie_apb_writel(pcie, dbi_ctrl, PCIE_SYS_CTRL20_REG);
+
+	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_DBI_MODE);
+}
+
+static void hisi_pcie_disabled_bar0(struct hisi_pcie *pcie)
+{
+	hisi_pcie_set_db2_enable(pcie, PCIE_DBI_CS2_ENABLE);
+	hisi_pcie_apb_writel(pcie, 0, PCIE_CFG_BAR0BASE);
+	hisi_pcie_set_db2_enable(pcie, PCIE_DBI_CS2_DISABLE);
+}
+
 static
 int hisi_pcie_msi_host_init(struct pcie_port *pp, struct msi_controller *chip)
 {
@@ -173,6 +202,14 @@ static int hisi_add_pcie_port(struct pcie_port *pp,
 		return -EINVAL;
 	}
 	hisi_pcie->port_id = port_id;
+
+	/*
+	 * The default size of BAR0 in p660 host bridge is 0x10000000,
+	 * which will bring problem when most resource has been allocated
+	 * to BAR0 in host bridge.However, we need not use BAR0 in host bridge
+	 * in RC mode. Here we just disable it
+	 */
+	hisi_pcie_disabled_bar0(hisi_pcie);
 
 	pp->ops = &hisi_pcie_host_ops;
 
