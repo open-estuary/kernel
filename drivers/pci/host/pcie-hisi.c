@@ -18,8 +18,12 @@
 #include <linux/of_pci.h>
 #include <linux/platform_device.h>
 #include <linux/of_address.h>
+#include <linux/of_device.h>
 
 #include "pcie-designware.h"
+
+#define PCIE_HOST_HIP05                                 0x660
+#define PCIE_HOST_HIP06                                 0x1610
 
 #define PCIE_SUBCTRL_MODE_REG                           0x2800
 #define PCIE_SUBCTRL_SYS_STATE4_REG                     0x6818
@@ -93,13 +97,21 @@
 #define PCIE_M_PCS_IN13_CFG                             0x34
 #define PCIE_PCS_RXDETECTED                             0xE4
 #define PCIE_PCS_SERDES_STATUS                          0x8108
-#define HIP05_PCIE_CORE_IS_RESET                        0x1
+#define HIP05_PCIE_CORE_RESET                           0x1
+#define HIP06_PCIE_CORE_RESET                           0x3
 #define PCIE_CORE_MODE_REG                              0xF8
 #define PCIE_LINK_WIDTH_SPEED_CONTROL                   0x80C
 #define PORT_LOGIC_SPEED_CHANGE                         (0x1 << 17)
 
 #define DS_API(lane) ((0x1FF6c + 8 * (15 - lane)) * 2)
 #define PCIE_DFE_ENABLE_VAL                             0x3851
+
+#define PCIE_RD_ERR_RESPONSE_EN                         BIT(31)
+#define PCIE_WR_ERR_RESPONSE_EN                         BIT(30)
+#define PCIE_PCS_APB_RESET_REQ                          0xAC8
+#define PCIE_PCS_APB_DRESET_REQ                         0xACC
+#define PCIE_CTRL_19_REG                                0x1c
+
 enum pcie_mac_phy_rate_e {
 	PCIE_GEN1 = 0,		/* PCIE 1.0 */
 	PCIE_GEN2 = 1,		/* PCIE 2.0 */
@@ -113,9 +125,11 @@ struct hisi_pcie {
 	void __iomem *reg_base;
 	void __iomem *phy_base;
 	void __iomem *serdes_base;
+	void __iomem *ctrl_base;
 	u32 port_id;
 	struct pcie_port pp;
 	u64 msi_addr;
+	int soc_type;
 };
 
 static inline void hisi_pcie_subctrl_writel(struct hisi_pcie *pcie,
@@ -156,6 +170,18 @@ static inline void hisi_pcie_serdes_writel(struct hisi_pcie *pcie,
 	writel(val, pcie->serdes_base + reg);
 }
 
+static inline void hisi_pcie_ctrl_writel(struct hisi_pcie *pcie, u32 val, u32 reg)
+{
+	return writel(val, pcie->ctrl_base + reg);
+}
+
+static inline u32 hisi_pcie_ctrl_readl(struct hisi_pcie *pcie, u32 reg)
+{
+	return readl(pcie->ctrl_base + reg);
+}
+
+#define PCIE_SYS_STATE4                                 0x31c
+#define PCIE_PCS_SERDES_STATUS_HIP06                    0x504
 /*
  * Change mode to indicate the same reg_base to base of PCIe host configure
  * registers, base of RC configure space or base of vmid/asid context table
@@ -187,60 +213,73 @@ static void hisi_pcie_config_context(struct hisi_pcie *pcie)
 	int i;
 	u32 val;
 
-	/* enable to clean vmid and asid tables though apb bus */
-	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
+	if (pcie->soc_type == PCIE_HOST_HIP05) {
+		/*
+		 * enable to clean vmid and asid tables though apb bus
+		 * */
+		hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
 
-	val = hisi_pcie_apb_readl(pcie, PCIE_SYS_CTRL20_REG);
-	/* enable ar channel */
-	val |= PCIE_RD_TAB_SEL | PCIE_RD_TAB_EN;
-	hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
+		val = hisi_pcie_apb_readl(pcie, PCIE_SYS_CTRL20_REG);
+		/* enable ar channel */
+		val |= PCIE_RD_TAB_SEL | PCIE_RD_TAB_EN;
+		hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
 
-	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_CONTENT_MODE);
-	for (i = 0; i < 0x800; i++)
-		hisi_pcie_apb_writel(pcie, 0x0, i * 4);
+		hisi_pcie_change_apb_mode(pcie, PCIE_SLV_CONTENT_MODE);
+		for (i = 0; i < 0x800; i++)
+			hisi_pcie_apb_writel(pcie, 0x0, i * 4);
 
-	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
-	/* enable aw channel */
-	val &= (~PCIE_RD_TAB_SEL);
-	val |= PCIE_RD_TAB_EN;
-	hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
+		hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
+		/* enable aw channel */
+		val &= (~PCIE_RD_TAB_SEL);
+		val |= PCIE_RD_TAB_EN;
+		hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
 
-	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_CONTENT_MODE);
+		hisi_pcie_change_apb_mode(pcie, PCIE_SLV_CONTENT_MODE);
 
-	/*
-	 * init vmid and asid tables for all PCIe devices as 0
-	 * vmid table: 0 ~ 0x3ff, asid table: 0x400 ~ 0x7ff
-	 */
-	for (i = 0; i < 0x800; i++)
-		hisi_pcie_apb_writel(pcie, 0x0, i * 4);
+		/*
+		 * init vmid and asid tables for all PCIe devices as 0
+		 * vmid table: 0 ~ 0x3ff, asid table: 0x400 ~ 0x7ff
+		 */
+		for (i = 0; i < 0x800; i++)
+			hisi_pcie_apb_writel(pcie, 0x0, i * 4);
 
-	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
+		hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
 
-	val = hisi_pcie_apb_readl(pcie, PCIE_SYS_CTRL20_REG);
-	/* disable ar channel */
-	val |= PCIE_RD_TAB_SEL;
-	val &= (~PCIE_RD_TAB_EN);
-	hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
-	/* disable aw channel */
-	val &= ((~PCIE_RD_TAB_SEL) & (~PCIE_RD_TAB_EN));
-	hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
+		val = hisi_pcie_apb_readl(pcie, PCIE_SYS_CTRL20_REG);
+		/* disable ar channel */
+		val |= PCIE_RD_TAB_SEL;
+		val &= (~PCIE_RD_TAB_EN);
+		hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
+		/* disable aw channel */
+		val &= ((~PCIE_RD_TAB_SEL) & (~PCIE_RD_TAB_EN));
+		hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
 
-	hisi_pcie_apb_writel(pcie, pcie->msi_addr & 0xffffffff, PCIE_MSI_LOW_ADDRESS);
-	hisi_pcie_apb_writel(pcie, pcie->msi_addr >> 32, PCIE_MSI_HIGH_ADDRESS);
-	hisi_pcie_apb_writel(pcie, PCIE_MSI_ASID_ENABLE | PCIE_MSI_ASID_VALUE,
-			     PCIE_SLV_MSI_ASID);
-	hisi_pcie_apb_writel(pcie, PCIE_MSI_TRANS_ENABLE, PCIE_MSI_TRANS_REG);
+		hisi_pcie_apb_writel(pcie, pcie->msi_addr & 0xffffffff, PCIE_MSI_LOW_ADDRESS);
+		hisi_pcie_apb_writel(pcie, pcie->msi_addr >> 32, PCIE_MSI_HIGH_ADDRESS);
+		hisi_pcie_apb_writel(pcie, PCIE_MSI_ASID_ENABLE | PCIE_MSI_ASID_VALUE,
+				     PCIE_SLV_MSI_ASID);
+		hisi_pcie_apb_writel(pcie, PCIE_MSI_TRANS_ENABLE, PCIE_MSI_TRANS_REG);
 
-	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_DBI_MODE);
+		hisi_pcie_change_apb_mode(pcie, PCIE_SLV_DBI_MODE);
+	} else {
+		hisi_pcie_ctrl_writel(pcie, pcie->msi_addr & 0xffffffff, PCIE_MSI_LOW_ADDRESS);
+		hisi_pcie_ctrl_writel(pcie, pcie->msi_addr >> 32, PCIE_MSI_HIGH_ADDRESS);
+		val = hisi_pcie_ctrl_readl(pcie, PCIE_MSI_TRANS_REG);
+		val |= PCIE_MSI_TRANS_ENABLE;
+		hisi_pcie_ctrl_writel(pcie, val, PCIE_MSI_TRANS_REG);
+	}
 }
 
 static int hisi_pcie_link_up(struct pcie_port *pp)
 {
-	u32 val;
+	u32 val = 0;
 	struct hisi_pcie *hisi_pcie = to_hisi_pcie(pp);
 
-	val = hisi_pcie_subctrl_readl(hisi_pcie, PCIE_SUBCTRL_SYS_STATE4_REG +
-				      0x100 * hisi_pcie->port_id);
+	if (hisi_pcie->soc_type == PCIE_HOST_HIP05)
+		val = hisi_pcie_subctrl_readl(hisi_pcie,
+				PCIE_SUBCTRL_SYS_STATE4_REG + 0x100 * hisi_pcie->port_id);
+	else if (hisi_pcie->soc_type == PCIE_HOST_HIP06)
+		val = hisi_pcie_ctrl_readl(hisi_pcie, PCIE_SYS_STATE4);
 
 	return ((val & PCIE_LTSSM_STATE_MASK) == PCIE_LTSSM_LINKUP_STATE);
 }
@@ -249,46 +288,65 @@ static void hisi_pcie_enable_ltssm(struct hisi_pcie *pcie, bool on)
 {
 	u32 val;
 
-	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
-
-	val = hisi_pcie_apb_readl(pcie, PCIE_CTRL_7_REG);
-	if (on)
-		val |= PCIE_LTSSM_ENABLE_SHIFT;
-	else
-		val &= ~(PCIE_LTSSM_ENABLE_SHIFT);
-	hisi_pcie_apb_writel(pcie, val, PCIE_CTRL_7_REG);
-
-	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_DBI_MODE);
+	if (pcie->soc_type == PCIE_HOST_HIP05) {
+		hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
+		val = hisi_pcie_apb_readl(pcie, PCIE_CTRL_7_REG);
+		if (on)
+			val |= PCIE_LTSSM_ENABLE_SHIFT;
+		else
+			val &= ~(PCIE_LTSSM_ENABLE_SHIFT);
+		hisi_pcie_apb_writel(pcie, val, PCIE_CTRL_7_REG);
+		hisi_pcie_change_apb_mode(pcie, PCIE_SLV_DBI_MODE);
+	} else if (pcie->soc_type == PCIE_HOST_HIP06) {
+		val = hisi_pcie_ctrl_readl(pcie, PCIE_CTRL_7_REG);
+		if (on)
+		/* In Hip06 host will fill all 1s in CFG cpu address space
+		 * when host sends a read CFG TLP with wrong BDF if we set
+		 * PCIE_RD_ERR_RESPONSE_EN as 1. And host will trigger a error
+		 * interrupt when host sends a read/write CFG TLP with wrong
+		 * BDF if we set PCIE_RD_ERR_RESPONSE_EN/PCIE_WR_ERR_RESPONSE_EN
+		 * as 1
+		 */
+			val |= PCIE_LTSSM_ENABLE_SHIFT |
+			       PCIE_RD_ERR_RESPONSE_EN |
+			       PCIE_WR_ERR_RESPONSE_EN;
+		else
+			val &= ~(PCIE_LTSSM_ENABLE_SHIFT);
+		hisi_pcie_ctrl_writel(pcie, val, PCIE_CTRL_7_REG);
+	}
 }
 
 static void hisi_pcie_gen3_dfe_enable(struct hisi_pcie *pcie)
 {
 	u32 val;
 	u32 lane;
-	u32 current_speed;
 	u32 port_id = pcie->port_id;
+	u32 current_speed;
 
-	if (port_id == 3)
-		return;
-
-	val = hisi_pcie_subctrl_readl(pcie,
-				      PCIE_SUBCTRL_SYS_STATE4_REG +
-				      0x100 * port_id);
-	current_speed = (val >> 6) & 0x3;
-
-	if (current_speed != PCIE_GEN3)
-		return;
-
-	for (lane = 0; lane < 8; lane++)
-		hisi_pcie_serdes_writel(pcie,
+	if (pcie->soc_type == PCIE_HOST_HIP05) {
+		if (port_id == 3)
+			return;
+		val = hisi_pcie_subctrl_readl(pcie,
+					      PCIE_SUBCTRL_SYS_STATE4_REG +
+					      0x100 * port_id);
+		current_speed = (val >> 6) & 0x3;
+		if (current_speed != PCIE_GEN3)
+			return;
+		for (lane = 0; lane < 8; lane++)
+			hisi_pcie_serdes_writel(pcie,
 					PCIE_DFE_ENABLE_VAL, DS_API(lane) + 4);
+	} else if (pcie->soc_type == PCIE_HOST_HIP06) {
+		val = hisi_pcie_apb_readl(pcie, 0x31c);
+		current_speed = (val >> 6) & 0x3;
+		if (current_speed != PCIE_GEN3)
+			return;
+	}
 
 	dev_info(pcie->pp.dev, "enable DFE success!\n");
 }
 
 
-static void hisi_pcie_core_reset_ctrl(struct hisi_pcie *pcie,
-			bool reset_on)
+static void hisi_pcie_core_reset_ctrl(struct hisi_pcie *pcie, bool reset_on)
 {
 	u32 reg_reset_ctrl;
 	u32 reg_dereset_ctrl;
@@ -313,19 +371,45 @@ static void hisi_pcie_core_reset_ctrl(struct hisi_pcie *pcie,
 		if (hisi_pcie_link_up(&pcie->pp))
 			hisi_pcie_enable_ltssm(pcie, 0);
 
-		hisi_pcie_subctrl_writel(pcie, 0x1, reg_reset_ctrl);
-	} else
-		hisi_pcie_subctrl_writel(pcie, 0x1, reg_dereset_ctrl);
+		if (pcie->soc_type == PCIE_HOST_HIP05)
+			hisi_pcie_subctrl_writel(pcie, HIP05_PCIE_CORE_RESET,
+					reg_reset_ctrl);
+		else if (pcie->soc_type == PCIE_HOST_HIP06)
+			hisi_pcie_subctrl_writel(pcie, HIP06_PCIE_CORE_RESET,
+					reg_reset_ctrl);
+	} else {
+		if (pcie->soc_type == PCIE_HOST_HIP05)
+			hisi_pcie_subctrl_writel(pcie, HIP05_PCIE_CORE_RESET,
+					reg_dereset_ctrl);
+		else if (pcie->soc_type == PCIE_HOST_HIP06)
+			hisi_pcie_subctrl_writel(pcie, HIP06_PCIE_CORE_RESET,
+					reg_dereset_ctrl);
+	}
 
+	/* wait a delay for 1s */
 	timeout = jiffies + HZ * 1;
+
 	do {
 		reset_status = hisi_pcie_subctrl_readl(pcie, reg_reset_status);
-		if (reset_on)
-			reset_status_checked = ((reset_status & 0x01) !=
-				HIP05_PCIE_CORE_IS_RESET);
-		else
-			reset_status_checked = ((reset_status & 0x01) != 0);
-
+		if (reset_on) {
+			if (pcie->soc_type == PCIE_HOST_HIP05) {
+				reset_status &= HIP05_PCIE_CORE_RESET;
+				reset_status_checked =
+						(reset_status != HIP05_PCIE_CORE_RESET);
+			} else if (pcie->soc_type == PCIE_HOST_HIP06) {
+				reset_status &= HIP06_PCIE_CORE_RESET;
+				reset_status_checked =
+						(reset_status != HIP06_PCIE_CORE_RESET);
+			}
+		} else {
+			if (pcie->soc_type == PCIE_HOST_HIP05) {
+				reset_status &= HIP05_PCIE_CORE_RESET;
+				reset_status_checked = (reset_status != 0);
+			} else if (pcie->soc_type == PCIE_HOST_HIP06) {
+				reset_status &= HIP06_PCIE_CORE_RESET;
+				reset_status_checked = (reset_status != 0);
+			}
+		}
 	} while ((reset_status_checked) && (time_before(jiffies, timeout)));
 
 	/* get a timeout error */
@@ -354,19 +438,31 @@ static void hisi_pcie_clock_ctrl(struct hisi_pcie *pcie, bool clock_on)
 		reg_clock_status = PCIE_SUBCTRL_SC_PCIE0_2_CLK_ST_REG(port_id);
 	}
 
-	if (clock_on)
-		hisi_pcie_subctrl_writel(pcie, 0x3, reg_clock_enable);
-	else
-		hisi_pcie_subctrl_writel(pcie, 0x3, reg_clock_disable);
-
+	if (clock_on) {
+		if (pcie->soc_type == PCIE_HOST_HIP05)
+			hisi_pcie_subctrl_writel(pcie, 0x3, reg_clock_enable);
+		else if (pcie->soc_type == PCIE_HOST_HIP06)
+			hisi_pcie_subctrl_writel(pcie, 0x7, reg_clock_enable);
+	} else {
+		if (pcie->soc_type == PCIE_HOST_HIP05)
+			hisi_pcie_subctrl_writel(pcie, 0x3, reg_clock_disable);
+		else if (pcie->soc_type == PCIE_HOST_HIP06)
+			hisi_pcie_subctrl_writel(pcie, 0x7, reg_clock_disable);
+	}
 	timeout = jiffies + HZ * 1;
 	do {
 		clock_status = hisi_pcie_subctrl_readl(pcie, reg_clock_status);
-		if (clock_on)
-			clock_status_checked = ((clock_status & 0x03) != 0x3);
-		else
-			clock_status_checked = ((clock_status & 0x03) != 0);
-
+		if (clock_on) {
+			if (pcie->soc_type == PCIE_HOST_HIP05)
+				clock_status_checked = ((clock_status & 0x03) != 0x3);
+			else if (pcie->soc_type == PCIE_HOST_HIP06)
+				clock_status_checked = ((clock_status & 0x07) != 0x7);
+		} else {
+			if (pcie->soc_type == PCIE_HOST_HIP05)
+				clock_status_checked = ((clock_status & 0x03) != 0);
+			else if (pcie->soc_type == PCIE_HOST_HIP06)
+				clock_status_checked = ((clock_status & 0x07) != 0);
+		}
 	} while ((clock_status_checked) && (time_before(jiffies, timeout)));
 
 	/* get a timeout error */
@@ -397,6 +493,9 @@ static void hisi_pcie_deassert_pcs_reset(struct hisi_pcie *pcie)
 
 	val = 1 << port_id;
 	hisi_pcie_subctrl_writel(pcie, val, PCIE_PCS_LOCAL_DRESET_REQ);
+
+	if (pcie->soc_type == PCIE_HOST_HIP06)
+		hisi_pcie_subctrl_writel(pcie, val, PCIE_PCS_APB_DRESET_REQ);
 
 	val = 0xff << (port_id << 3);
 	hisi_pcie_subctrl_writel(pcie, val, PCIE_PCS_DRESET_REQ_REG);
@@ -439,6 +538,9 @@ static void hisi_pcie_assert_pcs_reset(struct hisi_pcie *pcie)
 	reg = 1 << port_id;
 	hisi_pcie_subctrl_writel(pcie, reg, PCIE_PCS_LOCAL_RESET_REQ);
 
+	if (pcie->soc_type == PCIE_HOST_HIP06)
+		hisi_pcie_subctrl_writel(pcie, reg, PCIE_PCS_APB_RESET_REQ);
+
 	reg = 0xff << (port_id << 3);
 	hisi_pcie_subctrl_writel(pcie, reg, PCIE_PCS_RESET_REQ_REG);
 
@@ -474,40 +576,51 @@ static void hisi_pcie_init_pcs(struct hisi_pcie *pcie)
 	u32 i;
 	u32 lane_num = pcie->pp.lanes;
 
-	if (pcie->port_id <= 2) {
-		hisi_pcie_serdes_writel(pcie, 0x212, 0xc088);
+	if (pcie->soc_type == PCIE_HOST_HIP05) {
+		if (pcie->port_id <= 2) {
+			hisi_pcie_serdes_writel(pcie, 0x212, 0xc088);
 
-		hisi_pcie_pcs_writel(pcie, 0x2026044, 0x8020);
-		hisi_pcie_pcs_writel(pcie, 0x2126044, 0x8060);
-		hisi_pcie_pcs_writel(pcie, 0x2126044, 0x80c4);
-		hisi_pcie_pcs_writel(pcie, 0x2026044, 0x80e4);
-		hisi_pcie_pcs_writel(pcie, 0x4018, 0x80a0);
-		hisi_pcie_pcs_writel(pcie, 0x804018, 0x80a4);
-		hisi_pcie_pcs_writel(pcie, 0x11201100, 0x80c0);
-		hisi_pcie_pcs_writel(pcie, 0x3, 0x15c);
-		hisi_pcie_pcs_writel(pcie, 0x0, 0x158);
-	} else {
-		for (i = 0; i < lane_num; i++)
-			hisi_pcie_pcs_writel(pcie, 0x46e000,
-					     PCIE_M_PCS_IN15_CFG + (i << 2));
-		for (i = 0; i < lane_num; i++)
-			hisi_pcie_pcs_writel(pcie, 0x1001,
-					     PCIE_M_PCS_IN13_CFG + (i << 2));
+			hisi_pcie_pcs_writel(pcie, 0x2026044, 0x8020);
+			hisi_pcie_pcs_writel(pcie, 0x2126044, 0x8060);
+			hisi_pcie_pcs_writel(pcie, 0x2126044, 0x80c4);
+			hisi_pcie_pcs_writel(pcie, 0x2026044, 0x80e4);
+			hisi_pcie_pcs_writel(pcie, 0x4018, 0x80a0);
+			hisi_pcie_pcs_writel(pcie, 0x804018, 0x80a4);
+			hisi_pcie_pcs_writel(pcie, 0x11201100, 0x80c0);
+			hisi_pcie_pcs_writel(pcie, 0x3, 0x15c);
+			hisi_pcie_pcs_writel(pcie, 0x0, 0x158);
+		} else {
+			for (i = 0; i < lane_num; i++)
+				hisi_pcie_pcs_writel(pcie, 0x46e000,
+							 PCIE_M_PCS_IN15_CFG + (i << 2));
+			for (i = 0; i < lane_num; i++)
+				hisi_pcie_pcs_writel(pcie, 0x1001,
+							 PCIE_M_PCS_IN13_CFG + (i << 2));
 
-		hisi_pcie_pcs_writel(pcie, 0xffff, PCIE_PCS_RXDETECTED);
+			hisi_pcie_pcs_writel(pcie, 0xffff, PCIE_PCS_RXDETECTED);
+		}
+	} else if (pcie->soc_type == PCIE_HOST_HIP06) {
+		u32 val;
+
+		for (i = 0; i < lane_num; i++) {
+			val = hisi_pcie_pcs_readl(pcie, 0x204 + i * 0x4);
+			val |= (1u << 20);
+			hisi_pcie_pcs_writel(pcie, val, 0x204 + i * 0x4);
+		}
+		hisi_pcie_pcs_writel(pcie, 0x4e20, 0x264);
 	}
 }
 
-/*
- * In p660, pcie 3 do not support the 8Gbps speed we have no need to
- * use the equalization, but it has not affected to the funcion.
- */
 void pcie_equalization(struct hisi_pcie *pcie)
 {
-
 	u32 val;
 
-	hisi_pcie_apb_writel(pcie, 0x1400, 0x890);
+	if (pcie->soc_type == PCIE_HOST_HIP05) {
+		hisi_pcie_apb_writel(pcie, 0x1400, 0x890);
+	} else if (pcie->soc_type == PCIE_HOST_HIP06) {
+		hisi_pcie_apb_writel(pcie, 0x1c00, 0x890);
+	}
+
 	hisi_pcie_apb_writel(pcie, 0xfd7, 0x894);
 
 	hisi_pcie_apb_writel(pcie, 0x0, 0x89c);
@@ -532,21 +645,37 @@ void pcie_equalization(struct hisi_pcie *pcie)
 	hisi_pcie_apb_writel(pcie, 0xd0b, 0x898);
 	hisi_pcie_apb_writel(pcie, 0x103ff21, 0x8a8);
 
-	val = hisi_pcie_apb_readl(pcie, 0x80);
-	val |= 0x80;
-	hisi_pcie_apb_writel(pcie, val, 0x80);
+	if (pcie->soc_type == PCIE_HOST_HIP05) {
+		val = hisi_pcie_apb_readl(pcie, 0x80);
+		val |= 0x80;
+		hisi_pcie_apb_writel(pcie, val, 0x80);
 
-	hisi_pcie_apb_writel(pcie, 0x44444444, 0x184);
-	hisi_pcie_apb_writel(pcie, 0x44444444, 0x188);
-	hisi_pcie_apb_writel(pcie, 0x44444444, 0x18c);
-	hisi_pcie_apb_writel(pcie, 0x44444444, 0x190);
+		hisi_pcie_apb_writel(pcie, 0x44444444, 0x184);
+		hisi_pcie_apb_writel(pcie, 0x44444444, 0x188);
+		hisi_pcie_apb_writel(pcie, 0x44444444, 0x18c);
+		hisi_pcie_apb_writel(pcie, 0x44444444, 0x190);
+	} else if (pcie->soc_type == PCIE_HOST_HIP06) {
+		hisi_pcie_apb_writel(pcie, 0x44444444, 0x164);
+		hisi_pcie_apb_writel(pcie, 0x44444444, 0x168);
+		hisi_pcie_apb_writel(pcie, 0x44444444, 0x16c);
+		hisi_pcie_apb_writel(pcie, 0x44444444, 0x170);
+
+		val = hisi_pcie_ctrl_readl(pcie, 0x2d0);
+		val &= (~0x3f);
+		val |= 0x5;
+		hisi_pcie_ctrl_writel(pcie, val, 0x2d0);
+	}
 }
 
 static void hisi_pcie_mode_set(struct hisi_pcie *pcie)
 {
-	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
-	hisi_pcie_apb_writel(pcie, 0x4 << 28, PCIE_CORE_MODE_REG);
-	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_DBI_MODE);
+	if (pcie->soc_type == PCIE_HOST_HIP05) {
+		hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
+		hisi_pcie_apb_writel(pcie, 0x4 << 28, PCIE_CORE_MODE_REG);
+		hisi_pcie_change_apb_mode(pcie, PCIE_SLV_DBI_MODE);
+	} else if (pcie->soc_type == PCIE_HOST_HIP06) {
+		hisi_pcie_ctrl_writel(pcie, 0x4 << 28, PCIE_CORE_MODE_REG);
+	}
 }
 
 static void hisi_pcie_spd_set(struct hisi_pcie *pcie, u32 spd)
@@ -573,9 +702,21 @@ static void hisi_pcie_spd_control(struct hisi_pcie *pcie)
 	hisi_pcie_apb_writel(pcie, val, PCIE_LINK_WIDTH_SPEED_CONTROL);
 }
 
-void hisi_pcie_establish_link(struct hisi_pcie *pcie)
+static void hisi_pcie_portnum_set(struct hisi_pcie *pcie, u32 num)
 {
 	u32 val;
+
+	if (pcie->soc_type == PCIE_HOST_HIP06) {
+		val = hisi_pcie_ctrl_readl(pcie, PCIE_CTRL_19_REG);
+		val &= ~(0xff);
+		val |= num;
+		hisi_pcie_ctrl_writel(pcie, val, PCIE_CTRL_19_REG);
+	}
+}
+
+void hisi_pcie_establish_link(struct hisi_pcie *pcie)
+{
+	u32 val = 0;
 	int count = 0;
 
 	if (dw_pcie_link_up(&pcie->pp)) {
@@ -586,11 +727,17 @@ void hisi_pcie_establish_link(struct hisi_pcie *pcie)
 	hisi_pcie_assert_core_reset(pcie);
 	hisi_pcie_assert_pcs_reset(pcie);
 
-	/* de-assert phy reset */
-	hisi_pcie_deassert_pcs_reset(pcie);
-
-	/* de-assert core reset */
-	hisi_pcie_deassert_core_reset(pcie);
+	if (pcie->soc_type == PCIE_HOST_HIP05) {
+		/* de-assert phy reset */
+		hisi_pcie_deassert_pcs_reset(pcie);
+		/* de-assert core reset */
+		hisi_pcie_deassert_core_reset(pcie);
+	} else if (pcie->soc_type == PCIE_HOST_HIP06) {
+		/* de-assert core reset */
+		hisi_pcie_deassert_core_reset(pcie);
+		/* de-assert phy reset */
+		hisi_pcie_deassert_pcs_reset(pcie);
+	}
 
 	/* enable clock */
 	hisi_pcie_clock_ctrl(pcie, PCIE_CLOCK_ON);
@@ -603,6 +750,14 @@ void hisi_pcie_establish_link(struct hisi_pcie *pcie)
 
 	/* set target link speed */
 	hisi_pcie_spd_set(pcie, 3);
+
+	/* set pcie port num 0 for all controller, must be set 0 here.
+	 *
+	 * there is a bug about ITS. ITS uses request_id(BDF) + MSI_vector to
+	 * establish ITS table for PCIe devices. However, PCIe host send
+	 * port_id + request_id + MSI_vector to ITS TRANSLATION register
+	 */
+	hisi_pcie_portnum_set(pcie, 0);
 
 	/* set link speed control*/
 	hisi_pcie_spd_control(pcie);
@@ -620,7 +775,12 @@ void hisi_pcie_establish_link(struct hisi_pcie *pcie)
 		mdelay(100);
 		count++;
 		if (count == 10) {
-			val = hisi_pcie_pcs_readl(pcie, PCIE_PCS_SERDES_STATUS);
+			if (pcie->soc_type == PCIE_HOST_HIP05)
+				val = hisi_pcie_pcs_readl(pcie, PCIE_PCS_SERDES_STATUS);
+			else if (pcie->soc_type == PCIE_HOST_HIP06)
+				val = hisi_pcie_pcs_readl(pcie,
+						PCIE_PCS_SERDES_STATUS_HIP06);
+
 			dev_info(pcie->pp.dev,
 				 "PCIe Link Failed! PLL Locked: 0x%x\n", val);
 			return;
@@ -768,14 +928,26 @@ static int hisi_add_pcie_port(struct pcie_port *pp,
 	return 0;
 }
 
+static const struct of_device_id hisi_pcie_of_match[] = {
+	{
+		.compatible = "hisilicon,hip05-pcie",
+		.data = (void *) PCIE_HOST_HIP05,
+	},
+	{
+		.compatible = "hisilicon,hip06-pcie",
+		.data = (void *) PCIE_HOST_HIP06,
+	},
+	{},
+};
+
 static int hisi_pcie_probe(struct platform_device *pdev)
 {
 	struct hisi_pcie *hisi_pcie;
 	struct pcie_port *pp;
+	const struct of_device_id *match;
 	struct resource *reg;
 	struct resource *subctrl;
 	struct resource *phy;
-	struct resource *serdes;
 	int ret;
 
 	hisi_pcie = devm_kzalloc(&pdev->dev, sizeof(*hisi_pcie), GFP_KERNEL);
@@ -784,6 +956,9 @@ static int hisi_pcie_probe(struct platform_device *pdev)
 
 	pp = &hisi_pcie->pp;
 	pp->dev = &pdev->dev;
+
+	match = of_match_device(hisi_pcie_of_match, &pdev->dev);
+	hisi_pcie->soc_type = (int) match->data;
 
 	subctrl = platform_get_resource_byname(pdev, IORESOURCE_MEM, "subctrl");
 	hisi_pcie->subctrl_base = devm_ioremap_nocache(&pdev->dev,
@@ -796,7 +971,7 @@ static int hisi_pcie_probe(struct platform_device *pdev)
 	reg = platform_get_resource_byname(pdev, IORESOURCE_MEM, "rc_dbi");
 	hisi_pcie->reg_base = devm_ioremap_resource(&pdev->dev, reg);
 	if (IS_ERR(hisi_pcie->reg_base)) {
-		dev_err(pp->dev, "cannot get rc_dbi base\n");
+		dev_err(pp->dev, "cannot get reg base\n");
 		return PTR_ERR(hisi_pcie->reg_base);
 	}
 
@@ -809,12 +984,21 @@ static int hisi_pcie_probe(struct platform_device *pdev)
 		return PTR_ERR(hisi_pcie->phy_base);
 	}
 
-	serdes = platform_get_resource_byname(pdev, IORESOURCE_MEM, "serdes");
-	hisi_pcie->serdes_base = devm_ioremap_resource(&pdev->dev, serdes);
-	if (IS_ERR(hisi_pcie->serdes_base)) {
-		dev_err(pp->dev, "cannot get serdes base\n");
-		return PTR_ERR(hisi_pcie->serdes_base);
+	if (hisi_pcie->soc_type == PCIE_HOST_HIP05) {
+		struct resource *serdes;
+		serdes = platform_get_resource_byname(pdev, IORESOURCE_MEM, "serdes");
+		hisi_pcie->serdes_base = devm_ioremap_resource(&pdev->dev, serdes);
+		if (IS_ERR(hisi_pcie->serdes_base)) {
+			dev_err(pp->dev, "cannot get serdes base\n");
+			return PTR_ERR(hisi_pcie->serdes_base);
+		}
 	}
+
+	if (hisi_pcie->soc_type == PCIE_HOST_HIP06)
+		hisi_pcie->ctrl_base = hisi_pcie->reg_base + 0x1000;
+	else
+		hisi_pcie->ctrl_base = NULL;
+
 	ret = hisi_add_pcie_port(pp, pdev);
 	if (ret)
 		return ret;
@@ -823,11 +1007,6 @@ static int hisi_pcie_probe(struct platform_device *pdev)
 
 	return 0;
 }
-
-static const struct of_device_id hisi_pcie_of_match[] = {
-	{.compatible = "hisilicon,hip05-pcie",},
-	{},
-};
 
 MODULE_DEVICE_TABLE(of, hisi_pcie_of_match);
 
@@ -843,3 +1022,7 @@ static int __init hisi_pcie_init(void)
 	return platform_driver_probe(&hisi_pcie_driver, hisi_pcie_probe);
 }
 subsys_initcall(hisi_pcie_init);
+
+MODULE_AUTHOR("Zhou Wang <wangzhou1@hisilicon.com>");
+MODULE_AUTHOR("Dacai Zhu <zhudacai@hisilicon.com>");
+MODULE_LICENSE("GPL v2");
