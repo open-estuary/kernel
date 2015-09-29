@@ -226,15 +226,39 @@ static void hisi_pcie_init_pcs(struct pcie_port *pp)
 	u32 i;
 	struct hisi_pcie *hisi_pcie = to_hisi_pcie(pp);
 
-	for (i = 0; i < lane_num; i++)
-		hisi_pcie_pcs_writel(hisi_pcie, 0x46e000,
-				     PCIE_M_PCS_IN15_CFG + (i << 2));
+	if (hisi_pcie->port_id <= 2) {
+		u32 *addr = ioremap_nocache(0xb200c088, 0x100);
+		u32 *addr1 = ioremap_nocache(0xb210c088, 0x100);
+		u32 *addr2 = ioremap_nocache(0xb218c088, 0x100);
+		u32 *addr3 = ioremap_nocache(0xb208c088, 0x100);
+		*addr = 0x212;
+		*addr1 = 0x212;
+		*addr2 = 0x212;
+		*addr3 = 0x212;
+		iounmap(addr);
+		iounmap(addr1);
+		iounmap(addr2);
+		iounmap(addr3);
 
-	for (i = 0; i < lane_num; i++)
-		hisi_pcie_pcs_writel(hisi_pcie, 0x1001,
-				     PCIE_M_PCS_IN13_CFG + (i << 2));
+		hisi_pcie_pcs_writel(hisi_pcie, 0x2026044, 0x8020);
+		hisi_pcie_pcs_writel(hisi_pcie, 0x2126044, 0x8060);
+		hisi_pcie_pcs_writel(hisi_pcie, 0x2126044, 0x80c4);
+		hisi_pcie_pcs_writel(hisi_pcie, 0x2026044, 0x80e4);
+		hisi_pcie_pcs_writel(hisi_pcie, 0x4018, 0x80a0);
+		hisi_pcie_pcs_writel(hisi_pcie, 0x804018, 0x80a4);
+		hisi_pcie_pcs_writel(hisi_pcie, 0x11201100, 0x80c0);
+		hisi_pcie_pcs_writel(hisi_pcie, 0x3, 0x15c);
+		hisi_pcie_pcs_writel(hisi_pcie, 0x0, 0x158);
+	} else {
+		for (i = 0; i < lane_num; i++)
+			hisi_pcie_pcs_writel(hisi_pcie, 0x46e000,
+					     PCIE_M_PCS_IN15_CFG + (i << 2));
+		for (i = 0; i < lane_num; i++)
+			hisi_pcie_pcs_writel(hisi_pcie, 0x1001,
+					     PCIE_M_PCS_IN13_CFG + (i << 2));
 
-	hisi_pcie_pcs_writel(hisi_pcie, 0xffff, PCIE_PCS_RXDETECTED);
+		hisi_pcie_pcs_writel(hisi_pcie, 0xffff, PCIE_PCS_RXDETECTED);
+	}
 }
 
 /* will implement in BIOS */
@@ -290,6 +314,49 @@ static void hisi_pcie_mask_link_up_int(struct pcie_port *pp)
 	hisi_pcie_apb_slave_mode(pp, PCIE_SLV_DBI_MODE);
 }
 
+void pcie_equalization(struct pcie_port *pp)
+{
+	u32 val = 0;
+	struct hisi_pcie *hisi_pcie = to_hisi_pcie(pp);
+
+	if (hisi_pcie->port_id <= 2) {
+		hisi_pcie_apb_writel(hisi_pcie, 0x1400, 0x890);
+		hisi_pcie_apb_writel(hisi_pcie, 0xfd7, 0x894);
+
+		val = hisi_pcie_apb_readl(hisi_pcie, 0x80);
+		val |= 0x80;
+		hisi_pcie_apb_writel(hisi_pcie, val, 0x80);
+
+		hisi_pcie_apb_writel(hisi_pcie, 0x0, 0x89c);
+		hisi_pcie_apb_writel(hisi_pcie, 0xfc00, 0x898);
+		hisi_pcie_apb_writel(hisi_pcie, 0x1, 0x89c);
+		hisi_pcie_apb_writel(hisi_pcie, 0xdb00, 0x898);
+		hisi_pcie_apb_writel(hisi_pcie, 0x2, 0x89c);
+		hisi_pcie_apb_writel(hisi_pcie, 0xccc0, 0x898);
+		hisi_pcie_apb_writel(hisi_pcie, 0x3, 0x89c);
+		hisi_pcie_apb_writel(hisi_pcie, 0x8dc0, 0x898);
+		hisi_pcie_apb_writel(hisi_pcie, 0x4, 0x89c);
+		hisi_pcie_apb_writel(hisi_pcie, 0xfc0, 0x898);
+		hisi_pcie_apb_writel(hisi_pcie, 0x5, 0x89c);
+		hisi_pcie_apb_writel(hisi_pcie, 0xe46, 0x898);
+		hisi_pcie_apb_writel(hisi_pcie, 0x6, 0x89c);
+		hisi_pcie_apb_writel(hisi_pcie, 0x7, 0x89c);
+		hisi_pcie_apb_writel(hisi_pcie, 0xcb46, 0x898);
+		hisi_pcie_apb_writel(hisi_pcie, 0x8, 0x89c);
+		hisi_pcie_apb_writel(hisi_pcie, 0x8c07, 0x898);
+		hisi_pcie_apb_writel(hisi_pcie, 0x9, 0x89c);
+		hisi_pcie_apb_writel(hisi_pcie, 0xd0b, 0x898);
+		hisi_pcie_apb_writel(hisi_pcie, 0x103ff21, 0x8a8);
+
+		hisi_pcie_apb_writel(hisi_pcie, 0x44444444, 0x184);
+		hisi_pcie_apb_writel(hisi_pcie, 0x44444444, 0x188);
+		hisi_pcie_apb_writel(hisi_pcie, 0x44444444, 0x18c);
+		hisi_pcie_apb_writel(hisi_pcie, 0x44444444, 0x190);
+	} else {
+		hisi_pcie_apb_writel(hisi_pcie, 0x10e01, 0x890);
+	}
+}
+
 /* will implement in BIOS */
 static int hisi_pcie_establish_link(struct pcie_port *pp)
 {
@@ -320,6 +387,8 @@ static int hisi_pcie_establish_link(struct pcie_port *pp)
 
 	/* disable link up interrupt */
 	hisi_pcie_mask_link_up_int(pp);
+
+	pcie_equalization(pp);
 
 	/* assert LTSSM enable */
 	hisi_pcie_enable_ltssm(pp, 1);
