@@ -650,7 +650,7 @@
 	};
 
 	sas2: sas@a3000000 {
-		compatible = "hisilicon,hi1610-sas-core";
+		compatible = "hisilicon,sas-controller-v2";
 		controller-id = <2>;
 		reg = <0 0xa3000000 0 0x10000>,
 			  <0 0xa0000000 0 0x10000>;
