@@ -410,7 +410,9 @@ static int hisi_pcie_establish_link(struct pcie_port *pp)
 		}
 	}
 
-	mdelay(800);
+	/*add a 1s delay between linkup and enumeration,make sure
+	 the EP device'sconfiguration registers are prepared well */
+	mdelay(999);
 	dev_info(pp->dev, "Link up\n");
 
 	return 0;
