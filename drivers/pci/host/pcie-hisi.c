@@ -17,6 +17,7 @@
 #include <linux/of.h>
 #include <linux/of_pci.h>
 #include <linux/platform_device.h>
+#include <linux/of_address.h>
 
 #include "pcie-designware.h"
 
@@ -34,7 +35,7 @@
 #define PCIE_MSI_TRANS_REG                              0x1c8
 #define PCIE_MSI_LOW_ADDRESS                            0x1b4
 #define PCIE_MSI_HIGH_ADDRESS                           0x1c4
-#define PCIE_MSI_ADDRESS_VAL                            0xb7010040
+#define PCIE_GITS_TRANSLATER                            0x10040
 
 #define PCIE_SYS_CTRL20_REG                             0x20
 #define PCIE_RD_TAB_SEL                                 BIT(31)
@@ -114,6 +115,7 @@ struct hisi_pcie {
 	void __iomem *serdes_base;
 	u32 port_id;
 	struct pcie_port pp;
+	u64 msi_addr;
 };
 
 static inline void hisi_pcie_subctrl_writel(struct hisi_pcie *pcie,
@@ -223,8 +225,8 @@ static void hisi_pcie_config_context(struct hisi_pcie *pcie)
 	val &= ((~PCIE_RD_TAB_SEL) & (~PCIE_RD_TAB_EN));
 	hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
 
-	hisi_pcie_apb_writel(pcie, PCIE_MSI_ADDRESS_VAL, PCIE_MSI_LOW_ADDRESS);
-	hisi_pcie_apb_writel(pcie, 0x0, PCIE_MSI_HIGH_ADDRESS);
+	hisi_pcie_apb_writel(pcie, pcie->msi_addr & 0xffffffff, PCIE_MSI_LOW_ADDRESS);
+	hisi_pcie_apb_writel(pcie, pcie->msi_addr >> 32, PCIE_MSI_HIGH_ADDRESS);
 	hisi_pcie_apb_writel(pcie, PCIE_MSI_ASID_ENABLE | PCIE_MSI_ASID_VALUE,
 			     PCIE_SLV_MSI_ASID);
 	hisi_pcie_apb_writel(pcie, PCIE_MSI_TRANS_ENABLE, PCIE_MSI_TRANS_REG);
@@ -664,13 +666,20 @@ static int hisi_pcie_msi_host_init(struct pcie_port *pp,
 {
 	struct device_node *msi_node;
 	struct irq_domain *irq_domain;
+	struct resource res;
 	struct device_node *np = pp->dev->of_node;
+	struct hisi_pcie *pcie = to_hisi_pcie(pp);
+
 
 	msi_node = of_parse_phandle(np, "msi-parent", 0);
 	if (!msi_node) {
 		dev_err(pp->dev, "failed to find msi-parent\n");
 		return -ENODEV;
 	}
+
+	of_address_to_resource(msi_node, 0, &res);
+
+	pcie->msi_addr = res.start + PCIE_GITS_TRANSLATER;
 
 	irq_domain = irq_find_host(msi_node);
 	if (!irq_domain) {
