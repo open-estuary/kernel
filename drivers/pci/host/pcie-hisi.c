@@ -36,6 +36,8 @@
 #define PCIE_MSI_ADDRESS_VAL                            0xb7010040
 
 #define PCIE_SYS_CTRL20_REG                             0x20
+#define PCIE_RD_TAB_SEL                                 BIT(31)
+#define PCIE_RD_TAB_EN                                  BIT(30)
 #define PCIE_CFG_BAR0BASE                               0x10
 #define PCIE_DB2_ENABLE_SHIFT                           BIT(0)
 #define PCIE_DBI_CS2_ENABLE                             0x1
@@ -102,6 +104,27 @@ static void hisi_pcie_change_apb_mode(struct hisi_pcie *pcie, u32 mode)
 static void hisi_pcie_config_context(struct hisi_pcie *pcie)
 {
 	int i;
+	u32 val;
+
+	/*
+	 * enable to clean vmid and asid tables though apb bus
+	 * */
+	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
+
+	val = hisi_pcie_apb_readl(pcie, PCIE_SYS_CTRL20_REG);
+	/* enable ar channel */
+	val |= PCIE_RD_TAB_SEL | PCIE_RD_TAB_EN;
+	hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
+
+	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_CONTENT_MODE);
+	for (i = 0; i < 0x800; i++)
+		hisi_pcie_apb_writel(pcie, 0x0, i * 4);
+
+	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
+	/* enable aw channel */
+	val &= (~PCIE_RD_TAB_SEL);
+	val |= PCIE_RD_TAB_EN;
+	hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
 
 	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_CONTENT_MODE);
 
@@ -113,6 +136,15 @@ static void hisi_pcie_config_context(struct hisi_pcie *pcie)
 		hisi_pcie_apb_writel(pcie, 0x0, i * 4);
 
 	hisi_pcie_change_apb_mode(pcie, PCIE_SLV_SYSCTRL_MODE);
+
+	val = hisi_pcie_apb_readl(pcie, PCIE_SYS_CTRL20_REG);
+	/* disable ar channel */
+	val |= PCIE_RD_TAB_SEL;
+	val &= (~PCIE_RD_TAB_EN);
+	hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
+	/* disable aw channel */
+	val &= ((~PCIE_RD_TAB_SEL) & (~PCIE_RD_TAB_EN));
+	hisi_pcie_apb_writel(pcie, val, PCIE_SYS_CTRL20_REG);
 
 	hisi_pcie_apb_writel(pcie, PCIE_MSI_ADDRESS_VAL, PCIE_MSI_LOW_ADDRESS);
 	hisi_pcie_apb_writel(pcie, 0x0, PCIE_MSI_HIGH_ADDRESS);
