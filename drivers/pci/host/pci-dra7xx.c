@@ -146,15 +146,15 @@ static void dra7xx_pcie_host_init(struct pcie_port *pp)
 {
 	dw_pcie_setup_rc(pp);
 
-	if (pp->io_mod_base)
-		pp->io_mod_base &= CPU_TO_BUS_ADDR;
+	if (pp->io_base)
+		pp->io_base &= CPU_TO_BUS_ADDR;
 
-	if (pp->mem_mod_base)
-		pp->mem_mod_base &= CPU_TO_BUS_ADDR;
+	if (pp->mem_base)
+		pp->mem_base &= CPU_TO_BUS_ADDR;
 
-	if (pp->cfg0_mod_base) {
-		pp->cfg0_mod_base &= CPU_TO_BUS_ADDR;
-		pp->cfg1_mod_base &= CPU_TO_BUS_ADDR;
+	if (pp->cfg0_base) {
+		pp->cfg0_base &= CPU_TO_BUS_ADDR;
+		pp->cfg1_base &= CPU_TO_BUS_ADDR;
 	}
 
 	dra7xx_pcie_establish_link(pp);
