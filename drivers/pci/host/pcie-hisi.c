@@ -26,11 +26,40 @@
 #include "pcie-designware.h"
 
 #define PCIE_SYS_CTRL20_REG                             (0x20)
+
 #define PCIE_SUBCTRL_RESET_REQ_REG                      (0xA00)
+#define PCIE0_2_SUBCTRL_RESET_REQ_REG(port_id) \
+	(PCIE_SUBCTRL_RESET_REQ_REG + (port_id << 3))
 #define PCIE3_SUBCTRL_RESET_REQ_REG                     (0xA68)
+
 #define PCIE_SUBCTRL_DRESET_REQ_REG                     (0xA04)
+#define PCIE0_2_SUBCTRL_DRESET_REQ_REG(port_id) \
+	(PCIE_SUBCTRL_DRESET_REQ_REG + (port_id << 3))
 #define PCIE3_SUBCTRL_DRESET_REQ_REG                    (0xA6C)
+
 #define PCIE_SUBCTRL_CLKREQ_REG                         (0x2800)
+
+#define PCIE_SUBCTRL_RESET_ST_REG                       (0x5A00)
+#define PCIE0_2_SUBCTRL_RESET_ST_REG(port_id) \
+	(PCIE_SUBCTRL_RESET_ST_REG + (port_id << 2))
+#define PCIE3_SUBCTRL_RESET_ST_REG                      (0x5A34)
+
+#define PCIE_SUBCTRL_SC_PCIE0_CLK_DIS_REG               (0x304)
+#define PCIE_SUBCTRL_SC_PCIE0_2_CLK_DIS_REG(port_id) \
+	(PCIE_SUBCTRL_SC_PCIE0_CLK_DIS_REG + port_id * 0x8)
+#define PCIE_SUBCTRL_SC_PCIE3_CLK_DIS_REG               (0x324)
+
+#define PCIE_SUBCTRL_SC_PCIE0_CLK_ST_REG                (0x5300)
+#define PCIE_SUBCTRL_SC_PCIE0_2_CLK_ST_REG(port_id) \
+	(PCIE_SUBCTRL_SC_PCIE0_CLK_ST_REG + port_id * 0x4)
+#define PCIE_SUBCTRL_SC_PCIE3_CLK_ST_REG                (0x5310)
+
+#define PCIE_SUBCTRL_SC_PCIE0_CLK_EN_REG                (0x300)
+#define PCIE_SUBCTRL_SC_PCIE0_2_CLK_EN_REG(port_id) \
+	(PCIE_SUBCTRL_SC_PCIE0_CLK_EN_REG + port_id * 0x8)
+#define PCIE_SUBCTRL_SC_PCIE3_CLK_EN_REG                (0x320)
+
+#define PCIE_PCS_LOCAL_RESET_ST                         (0x5A60)
 
 #define PCIE_SUBCTRL_SYS_STATE4_REG                     (0x6818)
 
@@ -57,6 +86,11 @@
 #define PCIE_PCS_RXDETECTED                             (0xE4)
 #define PCIE_MSI_CONTEXT_VALUE                          (0x1011000)
 #define PCIE_MSI_TRANS_ENABLE                           (0x1ff0)
+
+#define PCIE_ASSERT_RESET_ON                            (1)
+#define PCIE_DEASSERT_RESET_ON                          (0)
+#define PCIE_CLOCK_ON                                   (1)
+#define PCIE_CLOCK_OFF                                  (0)
 
 #define to_hisi_pcie(x)	container_of(x, struct hisi_pcie, pp)
 
@@ -160,53 +194,136 @@ static void hisi_pcie_enable_ltssm(struct pcie_port *pp, bool on)
 	hisi_pcie_apb_slave_mode(pp, PCIE_SLV_DBI_MODE);
 }
 
-/* will implement in BIOS */
-static void hisi_pcie_assert_core_reset(struct pcie_port *pp)
+static void hisi_pcie_core_reset_ctrl(struct pcie_port *pp, bool reset_on)
 {
-	u32 reg;
+	u32 reg_reset_ctrl;
+	u32 reg_dereset_ctrl;
+	u32 reg_reset_status;
+
+	u32 reset_status;
+	u32 reset_status_checked;
+
+	unsigned long timeout;
+
 	struct hisi_pcie *hisi_pcie = to_hisi_pcie(pp);
 	u32 port_id = hisi_pcie->port_id;
 
-	/* if core link up, first step to stop ltssm state machine */
-	if (hisi_pcie_link_up(pp))
-		hisi_pcie_enable_ltssm(pp, 0);
+	if (port_id == 3) {
+		reg_reset_ctrl = PCIE3_SUBCTRL_RESET_REQ_REG;
+		reg_dereset_ctrl = PCIE3_SUBCTRL_DRESET_REQ_REG;
+		reg_reset_status = PCIE3_SUBCTRL_RESET_ST_REG;
+	} else {
+		reg_reset_ctrl = PCIE0_2_SUBCTRL_RESET_REQ_REG(port_id);
+		reg_dereset_ctrl = PCIE0_2_SUBCTRL_DRESET_REQ_REG(port_id);
+		reg_reset_status = PCIE0_2_SUBCTRL_RESET_ST_REG(port_id);
+	}
 
-	if (port_id >= 3)
-		reg = PCIE3_SUBCTRL_RESET_REQ_REG;
-	else
-		reg = PCIE_SUBCTRL_RESET_REQ_REG + (port_id << 3);
+	if (reset_on) {
+		/* if core is link up, stop the ltssm state machine first */
+		if (hisi_pcie_link_up(pp))
+			hisi_pcie_enable_ltssm(pp, 0);
 
-	/* reset port */
-	hisi_pcie_subctrl_writel(hisi_pcie, 0x1, reg);
+		/* reset port */
+		hisi_pcie_subctrl_writel(hisi_pcie, 0x1, reg_reset_ctrl);
+	} else {
+		/* dreset port */
+		hisi_pcie_subctrl_writel(hisi_pcie, 0x1, reg_dereset_ctrl);
+	}
 
-	/* wait for a while, make sure it is ok */
-	msleep(1);
+	timeout = jiffies + HZ*1;
+
+	do {
+		reset_status = hisi_pcie_subctrl_readl(hisi_pcie,
+							reg_reset_status);
+		if (reset_on)
+			reset_status_checked = ((reset_status & 0x01) != 1);
+		else
+			reset_status_checked = ((reset_status & 0x01) != 0);
+
+	} while ((reset_status_checked) && (time_before(jiffies, timeout)));
+
+	/* get a timeout error */
+	if (reset_status_checked)
+		dev_err(pp->dev, "error:pcie core reset or dereset failed!\n");
+}
+
+static void hisi_pcie_clock_ctrl(struct pcie_port *pp, bool clock_on)
+{
+	u32 reg_clock_disable;
+	u32 reg_clock_enable;
+	u32 reg_clock_status;
+
+	u32 clock_status;
+	u32 clock_status_checked;
+
+	unsigned long timeout;
+
+	struct hisi_pcie *hisi_pcie = to_hisi_pcie(pp);
+	u32 port_id = hisi_pcie->port_id;
+
+	if (port_id == 3) {
+		reg_clock_disable = PCIE_SUBCTRL_SC_PCIE3_CLK_DIS_REG;
+		reg_clock_enable = PCIE_SUBCTRL_SC_PCIE3_CLK_EN_REG;
+		reg_clock_status = PCIE_SUBCTRL_SC_PCIE3_CLK_ST_REG;
+	} else {
+		reg_clock_disable =
+				PCIE_SUBCTRL_SC_PCIE0_2_CLK_DIS_REG(port_id);
+		reg_clock_enable = PCIE_SUBCTRL_SC_PCIE0_2_CLK_EN_REG(port_id);
+		reg_clock_status = PCIE_SUBCTRL_SC_PCIE0_2_CLK_ST_REG(port_id);
+	}
+
+	if (clock_on) {
+		/* switch on pcie core clock */
+		hisi_pcie_subctrl_writel(hisi_pcie, 0x3, reg_clock_enable);
+	} else {
+		/* switch off pcie core clock */
+		hisi_pcie_subctrl_writel(hisi_pcie, 0x3, reg_clock_disable);
+	}
+
+	timeout = jiffies + HZ*1;
+
+	do {
+		clock_status = hisi_pcie_subctrl_readl(hisi_pcie,
+						reg_clock_status);
+		if (clock_on)
+			clock_status_checked = ((clock_status & 0x03) != 0x3);
+		else
+			clock_status_checked = ((clock_status & 0x03) != 0);
+
+	} while ((clock_status_checked) && (time_before(jiffies, timeout)));
+
+	/* get a timeout error */
+	if (clock_status_checked)
+		dev_err(pp->dev, "error:clock operation failed!\n");
+}
+
+/* will implement in BIOS */
+static void hisi_pcie_assert_core_reset(struct pcie_port *pp)
+{
+	hisi_pcie_core_reset_ctrl(pp, PCIE_ASSERT_RESET_ON);
+	hisi_pcie_clock_ctrl(pp, PCIE_CLOCK_OFF);
 }
 
 /* will implement in BIOS */
 static void hisi_pcie_deassert_core_reset(struct pcie_port *pp)
 {
-	u32 reg;
-	struct hisi_pcie *hisi_pcie = to_hisi_pcie(pp);
-	u32 port_id = hisi_pcie->port_id;
-
-	if (port_id >= 3)
-		reg = PCIE3_SUBCTRL_DRESET_REQ_REG;
-	else
-		reg = PCIE_SUBCTRL_DRESET_REQ_REG + (port_id << 3);
-
-	/* reset port */
-	hisi_pcie_subctrl_writel(hisi_pcie, 0x1, reg);
-
-	/* wait for a while, make sure it is ok */
-	msleep(1);
+	hisi_pcie_core_reset_ctrl(pp, PCIE_DEASSERT_RESET_ON);
+	hisi_pcie_clock_ctrl(pp, PCIE_CLOCK_ON);
 }
-
 
 /* will implement in BIOS */
 static void hisi_pcie_deassert_pcs_reset(struct pcie_port *pp)
 {
 	u32 val0;
+
+	u32 hilink_reset_status;
+	u32 pcs_local_status;
+
+	u32 hilink_status_checked;
+	u32 pcs_local_status_checked;
+
+	unsigned long timeout;
+
 	struct hisi_pcie *hisi_pcie = to_hisi_pcie(pp);
 	u32 port_id = hisi_pcie->port_id;
 
@@ -216,7 +333,79 @@ static void hisi_pcie_deassert_pcs_reset(struct pcie_port *pp)
 	val0 = 0xff << (port_id * 8);
 	hisi_pcie_subctrl_writel(hisi_pcie, val0, PCIE_PCS_DRESET_REQ_REG);
 
-	msleep(1);
+	timeout = jiffies + HZ*1;
+
+	/*read reset status,make sure pcs is deassert */
+	do {
+		pcs_local_status = hisi_pcie_subctrl_readl(hisi_pcie,
+						 PCIE_PCS_LOCAL_RESET_ST);
+		pcs_local_status_checked = (pcs_local_status & (1 << port_id));
+	} while ((pcs_local_status_checked) && (time_before(jiffies, timeout)));
+
+	/* get a timeout error */
+	if (pcs_local_status_checked)
+		dev_err(pp->dev, "pcs deassert reset failed!\n");
+
+	timeout = jiffies + HZ*1;
+
+	do {
+		hilink_reset_status = hisi_pcie_subctrl_readl(hisi_pcie,
+						 PCIE_PCS_RESET_REG_ST);
+		hilink_status_checked = (hilink_reset_status &
+						(0xff << (port_id * 8)));
+	} while ((hilink_status_checked) && (time_before(jiffies, timeout)));
+
+	if (hilink_status_checked)
+		dev_err(pp->dev, "pcs deassert reset  failed!\n");
+}
+
+/* will implement in BIOS */
+static void hisi_pcie_assert_pcs_reset(struct pcie_port *pp)
+{
+	u32 reg;
+	u32 hilink_reset_status;
+	u32 pcs_local_reset_status;
+
+	u32 hilink_status_checked;
+	u32 pcs_local_status_checked;
+
+	unsigned long timeout;
+
+	struct hisi_pcie *hisi_pcie = to_hisi_pcie(pp);
+	u32 port_id = hisi_pcie->port_id;
+
+	reg = 1 << port_id;
+	hisi_pcie_subctrl_writel(hisi_pcie, reg, PCIE_PCS_LOCAL_RESET_REQ);
+
+	reg = 0xff << (port_id * 8);
+	hisi_pcie_subctrl_writel(hisi_pcie, reg, PCIE_PCS_RESET_REQ_REG);
+
+	timeout = jiffies + HZ*1;
+
+	/*read reset status,make sure pcs is reset */
+	do {
+		pcs_local_reset_status = hisi_pcie_subctrl_readl(hisi_pcie,
+						 PCIE_PCS_LOCAL_RESET_ST);
+		pcs_local_status_checked =
+		  ((pcs_local_reset_status & (1 << port_id)) != (1 << port_id));
+
+	} while ((pcs_local_status_checked) && (time_before(jiffies, timeout)));
+
+	if (pcs_local_status_checked)
+		dev_err(pp->dev, "pcs local reset status read failed\n");
+
+	timeout = jiffies + HZ*1;
+
+	do {
+		hilink_reset_status = hisi_pcie_subctrl_readl(hisi_pcie,
+						 PCIE_PCS_RESET_REG_ST);
+		hilink_status_checked =
+			((hilink_reset_status & (0xff << (port_id << 3))) !=
+					(0xff << (port_id << 3)));
+	} while ((hilink_status_checked) && (time_before(jiffies, timeout)));
+
+	if (hilink_status_checked)
+		dev_err(pp->dev, "error:pcs assert reset failed\n");
 }
 
 /* will implement in BIOS */
@@ -259,23 +448,6 @@ static void hisi_pcie_init_pcs(struct pcie_port *pp)
 
 		hisi_pcie_pcs_writel(hisi_pcie, 0xffff, PCIE_PCS_RXDETECTED);
 	}
-}
-
-/* will implement in BIOS */
-static void hisi_pcie_assert_pcs_reset(struct pcie_port *pp)
-{
-	u32 reg;
-	struct hisi_pcie *hisi_pcie = to_hisi_pcie(pp);
-	u32 port_id = hisi_pcie->port_id;
-
-	reg = 1 << port_id;
-	hisi_pcie_subctrl_writel(hisi_pcie, reg, PCIE_PCS_LOCAL_RESET_REQ);
-
-	reg = 0xff << (port_id * 8);
-	hisi_pcie_subctrl_writel(hisi_pcie, reg, PCIE_PCS_RESET_REQ_REG);
-
-	/* wait for a while, make sure it is ok */
-	udelay(0x100);
 }
 
 static void hisi_pcie_config_context(struct pcie_port *pp)
