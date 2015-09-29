@@ -410,6 +410,7 @@ static int hisi_pcie_establish_link(struct pcie_port *pp)
 		}
 	}
 
+	mdelay(800);
 	dev_info(pp->dev, "Link up\n");
 
 	return 0;
