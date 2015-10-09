@@ -18,6 +18,7 @@
 #include <linux/smp.h>
 #include <linux/errno.h>
 #include <linux/io.h>
+#include <linux/iort.h>
 #include <linux/slab.h>
 #include <linux/irqdomain.h>
 #include <linux/of_irq.h>
@@ -1366,6 +1367,8 @@ u32 pci_msi_domain_get_msi_rid(struct irq_domain *domain, struct pci_dev *pdev)
 	of_node = irq_domain_get_of_node(domain);
 	if (of_node)
 		rid = of_msi_map_rid(&pdev->dev, of_node, rid);
+	else
+		iort_find_pci_id(pdev, rid, &rid);
 
 	return rid;
 }
