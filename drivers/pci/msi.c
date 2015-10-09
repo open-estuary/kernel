@@ -21,6 +21,7 @@
 #include <linux/slab.h>
 #include <linux/irqdomain.h>
 #include <linux/of_irq.h>
+#include <linux/iort.h>
 
 #include "pci.h"
 
@@ -1364,8 +1365,14 @@ u32 pci_msi_domain_get_msi_rid(struct irq_domain *domain, struct pci_dev *pdev)
 	pci_for_each_dma_alias(pdev, get_msi_id_cb, &rid);
 
 	of_node = irq_domain_get_of_node(domain);
-	if (of_node)
+	if (of_node) {
 		rid = of_msi_map_rid(&pdev->dev, of_node, rid);
+	} else {
+		u32 rid_out;
+
+		if (!iort_find_pci_id(pdev, rid, &rid_out))
+			rid = rid_out;
+	}
 
 	return rid;
 }
