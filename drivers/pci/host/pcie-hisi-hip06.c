@@ -17,10 +17,14 @@
 #include "pcie-designware.h"
 #include "pcie-hisi.h"
 
-
 #define HIP06_PCIE_CLK_CTRL                             0x7
 #define HIP06_PCS_SERDES_STATUS                         0x504
 #define HIP06_PCIE_CORE_RESET                           0x3
+
+#define PCIE_SYS_CTRL_13_REG                            0x4
+#define PCIE_MST_BYPASS_SMMU_EN                         BIT(10)
+#define PCIE_MST_AW_BYPASS_SMMU_EN                      BIT(12)
+#define PCIE_MST_AR_BYPASS_SMMU_EN                      BIT(13)
 
 /*Check if the link is up*/
 static int hisi_pcie_link_up_hip06(struct hisi_pcie *pcie)
@@ -100,7 +104,19 @@ void pcie_equalization_hip06(struct hisi_pcie *pcie)
 
 static void hisi_pcie_mode_set_hip06(struct hisi_pcie *pcie)
 {
+	u32 val;
+
 	hisi_pcie_ctrl_writel(pcie, 0x4 << 28, PCIE_CORE_MODE_REG);
+
+	/*
+	 * bypass SMMU. SMMU only allocates memory for stream ID 0, however,
+	 * stream ID sent to SMMU by PCIe controller is BDF of PCIe device,
+	 * which will bring error.
+	 */
+	val = hisi_pcie_ctrl_readl(pcie, PCIE_SYS_CTRL_13_REG);
+	val |= PCIE_MST_BYPASS_SMMU_EN | PCIE_MST_AW_BYPASS_SMMU_EN |
+	       PCIE_MST_AR_BYPASS_SMMU_EN;
+	hisi_pcie_ctrl_writel(pcie, val, PCIE_SYS_CTRL_13_REG);
 }
 
 static void hisi_pcie_portnum_set_hip06(struct hisi_pcie *pcie, u32 num)
