@@ -1358,6 +1358,9 @@ static int __init gic_v2_acpi_init(struct acpi_subtable_header *header,
 
 	__gic_init_bases(0, -1, dist_base, cpu_base, 0, domain_handle);
 
+	if (IS_ENABLED(CONFIG_ARM_GIC_V2M))
+		gicv2m_acpi_init(gic_data[0].domain);
+
 	acpi_set_irq_model(ACPI_IRQ_MODEL_GIC, domain_handle);
 	return 0;
 }
