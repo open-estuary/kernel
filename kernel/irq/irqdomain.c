@@ -79,6 +79,24 @@ void irq_domain_free_fwnode(struct fwnode_handle *fwnode)
 }
 
 /**
+ * irq_domain_get_irqchip_fwnode_name - Retrieve associated name of
+ *                                      specified irqchip fwnode
+ * @fwnode: Specified fwnode_handle
+ *
+ * Returns associated name of the specified fwnode, or NULL on failure.
+ */
+const char *irq_domain_get_irqchip_fwnode_name(struct fwnode_handle *fwnode)
+{
+	struct irqchip_fwid *fwid;
+
+	if (!is_fwnode_irqchip(fwnode))
+		return NULL;
+
+	fwid = container_of(fwnode, struct irqchip_fwid, fwnode);
+	return fwid->name;
+}
+
+/**
  * __irq_domain_add() - Allocate a new irq_domain data structure
  * @of_node: optional device-tree node of the interrupt controller
  * @size: Size of linear map; 0 for radix mapping only
