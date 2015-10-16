@@ -42,6 +42,11 @@ obj-$(CONFIG_SPARC_LEON) += setup-irq.o
 obj-$(CONFIG_M68K) += setup-irq.o
 
 #
+# Enhanced Configuration Access Mechanism (ECAM)
+#
+obj-$(CONFIG_PCI_ECAM)	+= ecam.o
+
+#
 # ACPI Related PCI FW Functions
 # ACPI _DSM provided firmware instance and string name
 #
