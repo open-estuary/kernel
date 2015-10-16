@@ -104,3 +104,19 @@
 	clock-frequency = <400000>;
 	status = "okay";
 };
+
+&eth0 {
+	status = "okay";
+};
+
+&eth1 {
+	status = "okay";
+};
+
+&eth4 {
+	status = "okay";
+};
+
+&eth5 {
+	status = "okay";
+};

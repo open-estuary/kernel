@@ -516,4 +516,7 @@
 				<381 4>; /* chip fatal error irq(125) */
 		status = "okay";
 	};
+
+	/include/ "hip05_pcie.dtsi"
+	/include/ "hip05_xge.dtsi"
 };
