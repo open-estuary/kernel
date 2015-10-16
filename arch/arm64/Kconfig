@@ -92,6 +92,7 @@ config ARM64
 	select SPARSE_IRQ
 	select SYSCTL_EXCEPTION_TRACE
 	select HAVE_CONTEXT_TRACKING
+	select HAVE_PCI_ECAM
 	help
 	  ARM 64-bit (AArch64) Linux support.
 
@@ -206,6 +207,11 @@ config PCI_SYSCALL
 source "drivers/pci/Kconfig"
 source "drivers/pci/pcie/Kconfig"
 source "drivers/pci/hotplug/Kconfig"
+
+config PCI_MMCONFIG
+	def_bool y
+	select PCI_ECAM
+	depends on ACPI
 
 endmenu
 
