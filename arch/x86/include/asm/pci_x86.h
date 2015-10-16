@@ -129,6 +129,11 @@ extern void pci_mmcfg_arch_unmap(struct pci_mmcfg_region *cfg);
 extern int pci_mmconfig_insert(struct device *dev, u16 seg, u8 start, u8 end,
 			       phys_addr_t addr);
 
+int pci_mmcfg_read(unsigned int seg, unsigned int bus, unsigned int devfn,
+		   int reg, int len, u32 *value);
+int pci_mmcfg_write(unsigned int seg, unsigned int bus, unsigned int devfn,
+		    int reg, int len, u32 value);
+
 /*
  * AMD Fam10h CPUs are buggy, and cannot access MMIO config space
  * on their northbrige except through the * %eax register. As such, you MUST
