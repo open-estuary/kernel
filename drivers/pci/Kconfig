@@ -26,6 +26,13 @@ config PCI_MSI_IRQ_DOMAIN
 	depends on PCI_MSI
 	select GENERIC_MSI_IRQ_DOMAIN
 
+config PCI_ECAM
+	bool "Enhanced Configuration Access Mechanism (ECAM)"
+	depends on PCI && HAVE_PCI_ECAM
+
+config HAVE_PCI_ECAM
+	bool
+
 config PCI_DEBUG
 	bool "PCI Debugging"
 	depends on PCI && DEBUG_KERNEL
