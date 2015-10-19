@@ -34,7 +34,7 @@
 #include <linux/module.h>
 #include <linux/notifier.h>
 
-#define HNAE_DRIVER_VERSION "1.3.1"
+#define HNAE_DRIVER_VERSION "2.1.0"
 #define HNAE_DRIVER_NAME "hns"
 #define HNAE_COPYRIGHT "Copyright(c) 2015 - 2019 Huawei Corporation."
 #define HNAE_DRIVER_STRING "Hilisicon Network Subsystem Driver"
@@ -298,8 +298,10 @@ struct hnae_buf_ops {
 
 struct hnae_queue {
 	void __iomem *io_base;
-	struct hnae_ae_dev *dev;	/* the device who use this queue */
-	struct hnae_ring rx_ring, tx_ring;
+
+	struct hnae_ae_dev *dev; /* the device who use this queue */
+	struct hnae_ring rx_ring ____cacheline_internodealigned_in_smp;
+	struct hnae_ring tx_ring ____cacheline_internodealigned_in_smp;
 	struct hnae_handle *handle;
 };
 

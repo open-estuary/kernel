@@ -219,8 +219,9 @@ static int hns_nic_set_settings(struct net_device *net_dev,
 	if (priv->phy)
 		return phy_ethtool_sset(priv->phy, cmd);
 
-	if ((speed != SPEED_10 && speed != SPEED_100 && speed != SPEED_1000) ||
-	    (cmd->duplex != DUPLEX_HALF && cmd->duplex != DUPLEX_FULL))
+	if ((speed != SPEED_10 && speed != SPEED_100 &&
+	     speed != SPEED_1000) || (cmd->duplex != DUPLEX_HALF &&
+	    cmd->duplex != DUPLEX_FULL))
 		return -EINVAL;
 	} else {
 		netdev_err(net_dev, "Not supported!");
