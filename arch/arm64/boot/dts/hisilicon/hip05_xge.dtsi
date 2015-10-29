@@ -155,48 +155,56 @@ soc0: soc@000000000 {
 		compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "0";
+		local-mac-address = [00 00 00 01 00 58];
 		status = "disabled";
 	};
 	eth1: ethernet@1{
 		compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "1";
+		local-mac-address = [00 00 00 01 00 59];
 		status = "disabled";
 	};
 	eth2: ethernet@2{
 		compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "2";
+		local-mac-address = [00 00 00 01 00 5a];
 		status = "disabled";
 	};
 	eth3: ethernet@3{
 		compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "3";
+		local-mac-address = [00 00 00 01 00 5b];
 		status = "disabled";
 	};
 	eth4: ethernet@4{
 		compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "4";
+		local-mac-address = [00 00 00 01 00 5c];
 		status = "disabled";
 	};
 	eth5: ethernet@5{
 		compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "5";
+		local-mac-address = [00 00 00 01 00 5d];
 		status = "disabled";
 	};
 	eth6: ethernet@6{
 		compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "6";
+		local-mac-address = [00 00 00 01 00 5e];
 		status = "disabled";
 	};
 	eth7: ethernet@7{
 		compatible = "hisilicon,hns-nic";
 		ae-name = "soc0-n4";
 		ae-opts = "7";
+		local-mac-address = [00 00 00 01 00 5f];
 		status = "disabled";
 	};
 };
