@@ -257,8 +257,10 @@ static int mbigen_domain_translate(struct irq_domain *d,
 		if (fwspec->param_count != 2)
 			return -EINVAL;
 
-		*hwirq = fwspec->param[0];
+		*hwirq = fwspec->param[0] + HW_IRQ_OFFSET;
 		*type = fwspec->param[1] & IRQ_TYPE_SENSE_MASK;
+
+		fwspec->param[0] = *hwirq;
 
 		return 0;
 	}
@@ -276,8 +278,6 @@ static int mbigen_irq_domain_alloc(struct irq_domain *domain,
 	struct mbigen_device *mgn_chip;
 	struct mbigen_irq_data *mgn_irq_data;
 	int i, err = 0;
-
-	hwirq += HW_IRQ_OFFSET;
 
 	/* set related information of this irq */
 	mgn_irq_data = set_mbigen_irq_data(hwirq, type);
