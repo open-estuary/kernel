@@ -319,6 +319,33 @@
 			reg = <0x98000000 0x100>;
 		};
 
+		pc_sysctrl0: system-controller@80010000 {
+			compatible = "hisilicon,hip05-sysctrl", "syscon";
+			reg = <0x80010000 0x10000>;
+		};
+
+		s0_tc_llc: s0_tc_llc@0 {
+			compatible = "hisilicon,hip05-llc";
+			system-controller = <&pc_sysctrl0 1>;
+			interrupt-parent = <&mbigen_pc>;
+			interrupts = <141 4>,<142 4>,
+					<143 4>,<144 4>;
+			status = "okay";
+		};
+
+                s0_tc_mn: s0_tc_mn@0 {
+                        compatible = "hisilicon,hip05-mn";
+                        system-controller = <&pc_sysctrl0 1>;
+                        status = "okay";
+                };
+
+		s0_tc_ddrc: s0_tc_ddrc@0 {
+			compatible = "hisilicon,hip05-ddr";
+			reg = <0x80348000 0x10000>,
+				<0x80358000 0x10000>;
+	      		status = "okay";
+		};
+
 		uart0: uart@80300000 {
 			compatible = "snps,dw-apb-uart";
 			reg = <0x80300000 0x10000>;
