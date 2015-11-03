@@ -18,6 +18,7 @@
 #include <linux/string.h>
 #include <linux/vmalloc.h>
 #include "hisi_drv.h"
+#include "hisi_cursor.h"
 #include "hisi_hw.h"
 
 
@@ -37,6 +38,7 @@ static int hisifb_ops_set_par(struct fb_info *);
 static int hisifb_ops_setcolreg(unsigned, unsigned, unsigned,
 	unsigned, unsigned, struct fb_info *);
 static int hisifb_ops_blank(int, struct fb_info *);
+static int hisifb_ops_cursor(struct fb_info *, struct fb_cursor *);
 
 typedef void (*PROC_SPEC_SETUP)(struct hisi_share *, char *);
 typedef int (*PROC_SPEC_MAP)(struct hisi_share *, struct pci_dev *);
@@ -128,6 +130,63 @@ static struct pci_driver hisifb_driver = {
 #endif
 };
 
+static int hisifb_ops_cursor(struct fb_info *info, struct fb_cursor *fbcursor)
+{
+	struct hisifb_par *par;
+	struct hisifb_crtc *crtc;
+	struct hisi_cursor *cursor;
+
+	par = info->par;
+	crtc = &par->crtc;
+	cursor = &crtc->cursor;
+
+	if (fbcursor->image.width > cursor->maxW ||
+		fbcursor->image.height > cursor->maxH ||
+		 fbcursor->image.depth > 1){
+		return -ENXIO;
+	}
+
+	cursor->disable(cursor);
+	if (fbcursor->set & FB_CUR_SETSIZE)
+		cursor->set_size(cursor, fbcursor->image.width,
+				 fbcursor->image.height);
+
+
+	if (fbcursor->set & FB_CUR_SETPOS)
+		cursor->set_pos(cursor, fbcursor->image.dx - info->var.xoffset,
+				fbcursor->image.dy - info->var.yoffset);
+
+	if (fbcursor->set & FB_CUR_SETCMAP) {
+		/* get the 16bit color of kernel means */
+		u16 fg, bg;
+
+		fg =
+		((info->cmap.red[fbcursor->image.fg_color] & 0xf800)) |
+		((info->cmap.green[fbcursor->image.fg_color] & 0xfc00) >> 5)|
+		((info->cmap.blue[fbcursor->image.fg_color] & 0xf800) >> 11);
+
+		bg =
+		((info->cmap.red[fbcursor->image.bg_color] & 0xf800))|
+		((info->cmap.green[fbcursor->image.bg_color] & 0xfc00) >> 5)|
+		((info->cmap.blue[fbcursor->image.bg_color] & 0xf800) >> 11);
+
+		cursor->set_color(cursor, fg, bg);
+	}
+
+
+	if (fbcursor->set & (FB_CUR_SETSHAPE | FB_CUR_SETIMAGE)) {
+		cursor->set_data(cursor,
+				 fbcursor->rop,
+				 fbcursor->image.data,
+				 fbcursor->mask);
+	}
+
+	if (fbcursor->enable)
+		cursor->enable(cursor);
+
+	return 0;
+}
+
 static struct fb_ops hisifb_ops = {
 	.owner = THIS_MODULE,
 	.fb_check_var =  hisifb_ops_check_var,
@@ -138,6 +197,8 @@ static struct fb_ops hisifb_ops = {
 	.fb_fillrect = cfb_fillrect,
 	.fb_imageblit = cfb_imageblit,
 	.fb_copyarea = cfb_copyarea,
+	/* cursor */
+	.fb_cursor = hisifb_ops_cursor,
 };
 
 #ifdef CONFIG_PM
@@ -620,6 +681,33 @@ static int hisifb_set_fbinfo(struct fb_info *info, int index)
 	par->index = index;
 	output->channel = &crtc->channel;
 	hisifb_set_drv(par);
+
+	/*
+	 * Set current cursor variable and proc pointer,
+	 * must be set after crtc member initialized.
+	 */
+	crtc->cursor.offset = crtc->oscreen +
+		crtc->vidmem_size - 1024;
+	crtc->cursor.mmio = share->pvreg + 0x800f0 +
+		(int)crtc->channel * 0x140;
+
+	inf_msg("crtc->cursor.mmio = %p\n", crtc->cursor.mmio);
+	crtc->cursor.maxH = crtc->cursor.maxW = 64;
+	crtc->cursor.size = crtc->cursor.maxH *
+		crtc->cursor.maxW * 2 / 8;
+	crtc->cursor.disable = hw_cursor_disable;
+	crtc->cursor.enable = hw_cursor_enable;
+	crtc->cursor.set_color = hw_cursor_set_color;
+	crtc->cursor.set_pos = hw_cursor_set_pos;
+	crtc->cursor.set_size = hw_cursor_set_size;
+	crtc->cursor.set_data = hw_cursor_set_data;
+	crtc->cursor.vstart = crtc->vscreen + crtc->cursor.offset;
+
+	crtc->cursor.share = share;
+	if (!g_hwcursor) {
+		hisifb_ops.fb_cursor = NULL;
+		crtc->cursor.disable(&crtc->cursor);
+	}
 
 	/* set info->fbops, must be set before fb_find_mode */
 
