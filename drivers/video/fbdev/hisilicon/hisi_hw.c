@@ -18,6 +18,7 @@
 #include <linux/string.h>
 #include <linux/vmalloc.h>
 #include "hisi_drv.h"
+#include "hisi_accel.h"
 #include "hisi_help.h"
 #include "hisi_hw.h"
 #include "hisi_mode.h"
@@ -138,14 +139,34 @@ int hw_hisi_crtc_setmode(struct hisifb_crtc *crtc,
 	struct fb_var_screeninfo *var,
 	struct fb_fix_screeninfo *fix)
 {
-	int ret;
+	int ret, fmt;
 	u32 reg;
 	struct mode_para modparm;
 	enum clock_type clock;
+	struct hisi_share *share;
 	struct hisifb_par *par;
 
 	ret = 0;
 	par = container_of(crtc, struct hisifb_par, crtc);
+	share = par->share;
+
+	if (!share->accel_off) {
+		/* set 2d engine pixel format according to mode bpp */
+		switch (var->bits_per_pixel) {
+		case 8:
+			fmt = 0;
+			break;
+		case 16:
+			fmt = 1;
+			break;
+		case 32:
+		default:
+			fmt = 2;
+			break;
+		}
+		hw_set_2dformat(&share->accel, fmt);
+	}
+
 	/* set timing */
 	modparm.pixel_clock = ps_to_hz(var->pixclock);
 	modparm.vsync_polarity =
