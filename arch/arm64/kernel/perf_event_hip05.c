@@ -36,6 +36,7 @@
 #include <asm/irq.h>
 #include <asm/irq_regs.h>
 #include <asm/pmu.h>
+#include <asm/atomic.h>
 #include "perf_event_hip05.h"
 #include "djtag.h"
 
@@ -81,15 +82,15 @@ int gtc_ddr_idx = -1;
 /* These shall be optimized after we change event code
  * to contan die and socket information */
 DECLARE_BITMAP(hisi_llc_s0_tc_event_used_mask,
-				HISI_ARMV8_MAX_CFG_LLC_EVENTS);
+				HISI_ARMV8_MAX_CFG_LLC_CNTR);
 DECLARE_BITMAP(hisi_llc_s0_ta_event_used_mask,
-				HISI_ARMV8_MAX_CFG_LLC_EVENTS);
+				HISI_ARMV8_MAX_CFG_LLC_CNTR);
 DECLARE_BITMAP(hisi_mn_s0_tc_event_used_mask,
-				HISI_ARMV8_MAX_CFG_MN_EVENTS);
+				HISI_ARMV8_MAX_CFG_MN_CNTR);
 DECLARE_BITMAP(hisi_mn_s0_ta_event_used_mask,
-				HISI_ARMV8_MAX_CFG_MN_EVENTS);
+				HISI_ARMV8_MAX_CFG_MN_CNTR);
 DECLARE_BITMAP(hisi_ddr_event_used_mask,
-				HISI_ARMV8_MAX_CFG_DDR_EVENTS);
+				HISI_ARMV8_MAX_CFG_DDR_CNTR);
 
 static inline u64 update_ddr_event_data(unsigned evtype,
 					local64_t *pevent_start_count) {
@@ -169,10 +170,11 @@ u64 hisi_llc_event_update(struct perf_event *event,
                                  struct hw_perf_event *hwc, int idx) {
 	struct arm_pmu *armpmu = to_arm_pmu(event->pmu);
 	struct hisi_llc_hwc_data_info *phisi_hwc_data = hwc->perf_event_data;
-	u64 delta, prev_raw_count, new_raw_count = 0;
+	u64 delta, delta_ovflw, prev_raw_count, new_raw_count = 0;
 	u64 djtag_address;
 	u32 llc_idx = 0;
 	u32 cfg_en;
+	u32 ovfl_cnt = 0;
 	int counter_idx;
 	int i, j = 0;
 
@@ -225,10 +227,22 @@ again:
 								prev_raw_count)
 			goto again;
 
-		delta = (new_raw_count - prev_raw_count) &
+		/* update the interrupt count also */
+		ovfl_cnt = atomic_read(&llc_data[llc_idx].bank[i].cntr_ovflw[counter_idx]);
+		if (0 != ovfl_cnt) {
+			delta_ovflw =
+				(0xFFFFFFFF - prev_raw_count) +
+					 ((ovfl_cnt - 1) * 0xFFFFFFFF);
+			delta = (delta_ovflw + new_raw_count) &
 						armpmu->max_period;
-		/*pr_info("delta is %llu\n", delta);*/
+			//pr_info("delta ovflw is %llu\n", delta_ovflw);
+		}
+		else {
+			delta = (new_raw_count - prev_raw_count) &
+						armpmu->max_period;
+		}
 
+		/*pr_info("delta is %llu\n", delta);*/
 		local64_add(delta, &event->count);
 		local64_sub(delta, &hwc->period_left);
 	}
@@ -331,7 +345,7 @@ void hisi_armv8_pmustub_enable_counting(void)
 
 	/* Set event_bus_en bit of LLC_AUCTRL for the first event counting */
 	value = __bitmap_weight(hisi_llc_event_used_mask,
-					HISI_ARMV8_MAX_CFG_LLC_EVENTS);
+					HISI_ARMV8_MAX_CFG_LLC_CNTR);
 	if (0 == value) {
 		/* Set the event_bus_en bit in LLC AUCNTRL to enable counting
 		 * for all LLC banks */
@@ -432,7 +446,7 @@ int hisi_armv8_pmustub_clear_event_idx(int idx)
 	/* Clear event_bus_en bit of LLC_AUCTRL if no event counting in
 	 * progress */
 	value = __bitmap_weight(hisi_llc_event_used_mask,
-				HISI_ARMV8_MAX_CFG_LLC_EVENTS);
+				HISI_ARMV8_MAX_CFG_LLC_CNTR);
 	if (0 == value) {
 		ret = hisi_djtag_readreg(HISI_LLC_BANK0_MODULE_ID,
 				HISI_LLC_BANK0_CFGEN, /* Cfg_enable */
@@ -462,9 +476,9 @@ int hisi_armv8_pmustub_get_event_idx(unsigned long evtype)
 
 		event_idx =
 			find_first_zero_bit(hisi_llc_s0_tc_event_used_mask,
-						HISI_ARMV8_MAX_CFG_LLC_EVENTS);
+						HISI_ARMV8_MAX_CFG_LLC_CNTR);
 
-		if (event_idx == HISI_ARMV8_MAX_CFG_LLC_EVENTS)
+		if (event_idx == HISI_ARMV8_MAX_CFG_LLC_CNTR)
 			return -EAGAIN;
 
 		__set_bit(event_idx, hisi_llc_s0_tc_event_used_mask);
@@ -477,9 +491,9 @@ int hisi_armv8_pmustub_get_event_idx(unsigned long evtype)
 
                 event_idx =
 			find_first_zero_bit(hisi_llc_s0_ta_event_used_mask,
-                                		HISI_ARMV8_MAX_CFG_LLC_EVENTS);
+						HISI_ARMV8_MAX_CFG_LLC_CNTR);
 
-                if (event_idx == HISI_ARMV8_MAX_CFG_LLC_EVENTS)
+                if (event_idx == HISI_ARMV8_MAX_CFG_LLC_CNTR)
                         return -EAGAIN;
 
                 __set_bit(event_idx, hisi_llc_s0_ta_event_used_mask);
@@ -493,9 +507,9 @@ int hisi_armv8_pmustub_get_event_idx(unsigned long evtype)
 
 		event_idx =
 			find_first_zero_bit(hisi_mn_s0_tc_event_used_mask,
-						HISI_ARMV8_MAX_CFG_MN_EVENTS);
+						HISI_ARMV8_MAX_CFG_MN_CNTR);
 
-		if (event_idx == HISI_ARMV8_MAX_CFG_MN_EVENTS)
+		if (event_idx == HISI_ARMV8_MAX_CFG_MN_CNTR)
 			return -EAGAIN;
 
 		__set_bit(event_idx, hisi_mn_s0_tc_event_used_mask);
@@ -507,9 +521,9 @@ int hisi_armv8_pmustub_get_event_idx(unsigned long evtype)
 			return -EOPNOTSUPP;
 
 		event_idx = find_first_zero_bit(hisi_mn_s0_ta_event_used_mask,
-				HISI_ARMV8_MAX_CFG_MN_EVENTS);
+				HISI_ARMV8_MAX_CFG_MN_CNTR);
 
-		if (event_idx == HISI_ARMV8_MAX_CFG_MN_EVENTS)
+		if (event_idx == HISI_ARMV8_MAX_CFG_MN_CNTR)
 			return -EAGAIN;
 
 		__set_bit(event_idx, hisi_mn_s0_ta_event_used_mask);
@@ -519,9 +533,9 @@ int hisi_armv8_pmustub_get_event_idx(unsigned long evtype)
 			evtype < ARMV8_HISI_PERFCTR_EVENT_MAX) {
                 //pr_info("Event index for DDR is %lx..\n", evtype);
 		event_idx = find_first_zero_bit(hisi_ddr_event_used_mask,
-				HISI_ARMV8_MAX_CFG_DDR_EVENTS);
+				HISI_ARMV8_MAX_CFG_DDR_CNTR);
 
-		if (event_idx == HISI_ARMV8_MAX_CFG_DDR_EVENTS)
+		if (event_idx == HISI_ARMV8_MAX_CFG_DDR_CNTR)
 			return -EAGAIN;
 
 		__set_bit(event_idx, hisi_ddr_event_used_mask);
@@ -1115,8 +1129,8 @@ u64 hisi_read_ddr_counter(unsigned long evtype) {
 	}
 
 	DDR_REG_READ(ddr_data[ddr_idx].ddrc_reg_map + reg_offset, value);
-	pr_info("-VALUE READ for evtype=%lx from ofset:%d IS %d-\n",
-						evtype, reg_offset, value);
+	//pr_info("-VALUE READ for evtype=%lx from ofset:%d IS %d-\n",
+	//					evtype, reg_offset, value);
 	return (value);
 }
 
@@ -1256,51 +1270,55 @@ int hisi_pmustub_write_counter(int idx, u32 value)
 irqreturn_t hisi_llc_event_handle_irq(int irq_num, void *dev)
 {
 	u64 djtag_address;
-//	hisi_llc_data *pllc_data = platform_get_drvdata(dev);
 	u32 num_banks = NUM_LLC_BANKS;
 	u32 cfg_en;
 	u32 value;
-	//u32 write_val;
-	int i, j = 0;
-
-	pr_info("Inside handle_irq... irqnum=%d\n", irq_num);
+	u32 bit_value;
+	u32 counter_idx;
+	int llc_idx;
+	int bit_pos;
+	int i = 0;
 
 	/* Identify the bank and the ITS Register */
-	for (i = 0; i < gnum_llc; i++) {
-		for (j = 0; j < num_banks; j++) {
-		if (irq_num ==
-			llc_data[i].bank[j].irq)
-			break;
+	for (llc_idx = 0; llc_idx < gnum_llc; llc_idx++) {
+		for (i = 0; i < num_banks; i++) {
+			if (irq_num ==
+					llc_data[llc_idx].bank[i].irq) {
+				//pr_info("irq:%d matched with bank:%d\n",
+				//				 irq_num, i);
+				break;
+			}
 		}
+		if (num_banks != i)
+			break;
 	}
+
+	if (i == num_banks)
+		return IRQ_NONE;
 
 	/* Find the djtag address of the Die */
 	djtag_address =
-		llc_data[i].djtag_reg_map;
+		llc_data[llc_idx].djtag_reg_map;
 	//pr_info("djtag address=%llx\n", djtag_address);
 
-	if (j == num_banks)
-		return IRQ_HANDLED;
-
-	cfg_en = llc_data[i].bank[j].cfg_en;
+	cfg_en = llc_data[llc_idx].bank[i].cfg_en;
 
 	/* Read the staus register if any bit is set */
 	hisi_djtag_readreg(HISI_LLC_BANK_MODULE_ID,
 			cfg_en,
 			HISI_LLC_BANK_INTS,
 			djtag_address, &value);
-	pr_info("Value read for cfg_en=0x%x is 0x%x\n",
-			cfg_en, value);
+	//pr_info("Value read for cfg_en=0x%x is 0x%x\n",
+	//		cfg_en, value);
 
 	/* Find the bits sets and clear them */
-	for (i = 1; i <= HISI_ARMV8_MAX_CFG_LLC_EVENTS; i++)
+	for (bit_pos = 0; bit_pos <= HISI_ARMV8_MAX_CFG_LLC_CNTR; bit_pos++)
 	{
-		if(test_bit(i, &value)) {
-			pr_info("Bit %d is set\n", i);
+		if(test_bit(bit_pos, &value)) {
+			//pr_info("Bit %d is set\n", bit_pos);
 
 			/* Reset the IRQ status flag */
-			value &= ~i;
-			pr_info("Value to write is 0x%x\n", value);
+			value &= ~bit_pos;
 
 			hisi_djtag_writereg(HISI_LLC_BANK_MODULE_ID,
 					cfg_en,
@@ -1308,66 +1326,28 @@ irqreturn_t hisi_llc_event_handle_irq(int irq_num, void *dev)
 					value,
 					djtag_address);
 
-			/* Read the staus register if any bit is set */
+			/* Read the staus register to confirm */
 			hisi_djtag_readreg(HISI_LLC_BANK_MODULE_ID,
 					cfg_en,
 					HISI_LLC_BANK_INTS,
 					djtag_address, &value);
-			pr_info("Value read for cfg_en=0x%x after reset:0x%x\n",
-					cfg_en, value);
+			//pr_info("Value read for cfg_en=0x%x after reset:0x%x\n",
+			//		cfg_en, value);
 
+			/* Find the counter_idx */
+			if (llc_idx == gs0_tc_llc_idx)
+				counter_idx = bit_pos + ARMV8_HISI_IDX_LLC_S0_TC_COUNTER0;
+			else if (llc_idx == gs0_tc_llc_idx)
+				counter_idx = bit_pos + ARMV8_HISI_IDX_LLC_S0_TA_COUNTER0;
+			else
+				return IRQ_NONE;
+
+			/* Update overflow times to refer in event_update */
+			bit_value = atomic_read(&llc_data[llc_idx].bank[i].cntr_ovflw[bit_pos]);
+			//pr_info("The counter overflow value read is %d\n", bit_value); 
+			atomic_inc(&llc_data[llc_idx].bank[i].cntr_ovflw[bit_pos]);
 		}
 	}
-#if 0
-        /* Reset the IRQ status flag */
-	value &= ~(HISI_LLC_BANK_INT_EVENT0);
-	pr_info("Value to write is 0x%x\n", value);
-
-	hisi_djtag_writereg(HISI_LLC_BANK_MODULE_ID,
-			cfg_en,
-			HISI_LLC_BANK_INTC,
-			value,
-			djtag_address);
-
-
-        /* Check which counter has overflow and map to the event index */
-
-             counter_idx = idx - ARMV8_HISI_IDX_LLC_S0_TC_COUNTER0;
-                        event_value = (val - ARMV8_HISI_PERFCTR_LLC_S0_TC_READ_ALLOCATE);
-                }
-                else
-                        return;
-        }
-        else {
-                pr_info("Unsupported event index:%d!\n", idx);
-                return;
-        }
-
-        /* Select the appropriate Event select register */
-        if (counter_idx <= 3)
-                reg_offset = HISI_LLC_EVENT_TYPE0_REG_OFF;
-        else
-                reg_offset = HISI_LLC_EVENT_TYPE1_REG_OFF;
-
-        /* Value to write to event type register */
-        val = event_value << (8 * counter_idx);
-
-        djtag_address = llc_data[llc_idx].djtag_reg_map;
-//        pr_info("djtag address is 0x%llx\n", djtag_address);
-
-        /* Set the event in LLC_EVENT_TYPEx Register
-         * for all LLC banks */
-        for (i = 0; i < NUM_LLC_BANKS; i++) {
-                cfg_en = llc_data[llc_idx].bank[i].cfg_en;
-
-                hisi_djtag_readreg(HISI_LLC_BANK_MODULE_ID,
-                                cfg_en,
-                                reg_offset,
-                                djtag_address, &value);
-
-
-#endif
-        /* Event update */
 
         /* Event set new period */
 
@@ -1413,11 +1393,9 @@ static int init_hisi_llc_banks(hisi_llc_data *pllc_data,
 				"Stub counters\n", irq);
 			goto err;
 		}
-
+		//pr_info("IRQ:%d assigned to bank:%d\n", irq, i);
 		pllc_data->bank[i].irq = irq;
         }
-
-//	platform_set_drvdata(pdev, pllc_data);
 
 	return 0;
 err:
@@ -1438,26 +1416,18 @@ static void llc_update_index(const char *name, int idx) {
 	if (strstr(name, HISI_LLC_S0_TOTEMA_DTS_NAME)) {
 		if (-1 == gs0_ta_llc_idx)
 			gs0_ta_llc_idx = idx;
-		pr_info("update gs0_ta_llc_idx=%d to %d\n",
-				gs0_ta_llc_idx, idx);
 	}
 	else if (strstr(name, HISI_LLC_S1_TOTEMA_DTS_NAME)) {
 		if (-1 == gs1_ta_llc_idx)
 			gs1_ta_llc_idx = idx;
-		pr_info("update gs1_ta_llc_idx=%d to %d\n",
-				gs1_ta_llc_idx, idx);
 	}
 	else if(strstr(name, HISI_LLC_S0_TOTEMC_DTS_NAME)) {
 		if (-1 == gs0_tc_llc_idx)
 			gs0_tc_llc_idx = idx;
-		pr_info("update gs0_tc_llc_idx=%d to %d\n",
-				gs0_tc_llc_idx, idx);
 	}
 	else if(strstr(name, HISI_LLC_S1_TOTEMC_DTS_NAME)) {
 		if (-1 == gs1_tc_llc_idx)
 			gs1_tc_llc_idx = idx;
-		pr_info("update gs1_tc_llc_idx=%d to %d\n",
-				gs1_tc_llc_idx, idx);
 	}
 }
 
@@ -1465,8 +1435,7 @@ static u64 ioremap_djtag_tmp(u64 djtag_base_addr, u32 size)
 {
 	u64 djtag_address;
 
-	djtag_address = (u64)ioremap_nocache(
-                                djtag_base_addr, size);
+	djtag_address = (u64)ioremap_nocache(djtag_base_addr, size);
 	return djtag_address;
 }
 
@@ -1477,7 +1446,7 @@ static int init_hisi_llc_data(struct platform_device *pdev)
 	struct of_phandle_args arg;
 	struct regmap *djtag_map;
 	struct resource res;
-	int ret, i, die;
+	int ret, i, die, llc_idx;
 
 	for (i = 0; i < MAX_DIE; i++) {
 		ret = of_parse_phandle_with_fixed_args(node,
@@ -1508,20 +1477,19 @@ static int init_hisi_llc_data(struct platform_device *pdev)
                 //pr_info("res->name=%s res->start is 0x%llx size=0x%x ..\n",
                 //                res.name, res.start, resource_size(&res));
 
-		if (!llc_data[die].djtag_reg_map) {
-			llc_data[die].djtag_reg_map =
+		llc_idx = die -1;
+		if (!llc_data[llc_idx].djtag_reg_map) {
+			llc_data[llc_idx].djtag_reg_map =
 				ioremap_djtag_tmp(res.start,
 						resource_size(&res));
-			soc_djtag_regmap[die].djtag_reg_map = djtag_map;
-			llc_data[die].reg_map = &soc_djtag_regmap[die];
-			pr_info("%s: Die value read is %d\n",
-						 arg.np->full_name, die);
+			soc_djtag_regmap[llc_idx].djtag_reg_map = djtag_map;
+			llc_data[llc_idx].reg_map = &soc_djtag_regmap[llc_idx];
 
-			ret = init_hisi_llc_banks(&llc_data[die], pdev);
+			ret = init_hisi_llc_banks(&llc_data[llc_idx], pdev);
 			if (ret)
 				return ret;
 
-			llc_update_index(node->name, die);
+			llc_update_index(node->name, llc_idx);
 		}
 	}
 	gnum_llc++;
@@ -1695,26 +1663,18 @@ static void mn_update_index(const char *name, int idx) {
         if (strstr(name, HISI_MN_S0_TOTEMA_DTS_NAME)) {
                 if (-1 == gs0_ta_mn_idx)
                         gs0_ta_mn_idx = idx;
-                //pr_info("update gs0_ta_mn_idx=%d to %d\n",
-                //                gs0_ta_mn_idx, idx);
         }
         else if (strstr(name, HISI_MN_S1_TOTEMA_DTS_NAME)) {
                 if (-1 == gs1_ta_mn_idx)
                         gs1_ta_mn_idx = idx;
-                //pr_info("update gs1_ta_mn_idx=%d to %d\n",
-                //                gs1_ta_mn_idx, idx);
         }
         else if(strstr(name, HISI_MN_S0_TOTEMC_DTS_NAME)) {
                 if (-1 == gs0_tc_mn_idx)
                         gs0_tc_mn_idx = idx;
-                //pr_info("update gs0_tc_mn_idx=%d to %d\n",
-                //                gs0_tc_mn_idx, idx);
         }
         else if(strstr(name, HISI_MN_S1_TOTEMC_DTS_NAME)) {
                 if (-1 == gs1_tc_mn_idx)
                         gs0_tc_mn_idx = idx;
-                //pr_info("update gs0_tc_mn_idx=%d to %d\n",
-                //                gs0_tc_mn_idx, idx);
 	}
 
 }
@@ -1726,7 +1686,7 @@ static int init_hisi_mn_data(struct platform_device *pdev)
 	struct of_phandle_args arg;
 	struct regmap *djtag_map;
 	struct resource res;
-	int ret, i, die;
+	int ret, i, die, mn_idx;
 
 	for (i = 0; i < MAX_DIE; i++) {
 		ret = of_parse_phandle_with_fixed_args(node,
@@ -1756,13 +1716,12 @@ static int init_hisi_mn_data(struct platform_device *pdev)
                 //pr_info("res->name=%s res->start is 0x%llx size=0x%x ..\n",
                 //                res.name, res.start, resource_size(&res));
 
-		if (!mn_data[die].djtag_reg_map) {
-			mn_data[die].djtag_reg_map =
+		mn_idx = die - 1;
+		if (!mn_data[mn_idx].djtag_reg_map) {
+			mn_data[mn_idx].djtag_reg_map =
 				ioremap_djtag_tmp(res.start,
 						resource_size(&res));
-			//pr_info("%s: Die value read is %d\n",
-			//			 arg.np->full_name, die);
-                        mn_update_index(node->name, die);
+                        mn_update_index(node->name, mn_idx);
 		}
 	}
 
