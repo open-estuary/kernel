@@ -246,9 +246,9 @@ enum armv8_hisi_hw_module_types {
 #define HISI_MN_MAX_EVENTS 9
 
 #define	HISI_ARMV8_EVTYPE_EVENT	0x3ff
-#define HISI_ARMV8_MAX_CFG_LLC_EVENTS 0x08
-#define HISI_ARMV8_MAX_CFG_MN_EVENTS 0x04
-#define HISI_ARMV8_MAX_CFG_DDR_EVENTS 0x0D
+#define HISI_ARMV8_MAX_CFG_LLC_CNTR 0x08
+#define HISI_ARMV8_MAX_CFG_MN_CNTR 0x04
+#define HISI_ARMV8_MAX_CFG_DDR_CNTR 0x0D
 #define HISI_ARMV8_MAX_CFG_EVENTS_MASK 0xff
 
 #define HISI_MN_EVENT_CNT0      0x30
@@ -281,11 +281,6 @@ enum armv8_hisi_hw_module_types {
 #define MAX_HW_MODULES 6
 #define MAX_DIE 8
 
-typedef struct bank_info_t {
-	u32 cfg_en;
-	int irq;
-} bank_info;
-
 struct hisi_hwc_prev_counter {
 	local64_t prev_count;
 };
@@ -309,6 +304,14 @@ typedef struct hisi_syscon_reg_map_t {
 	int die_type;
 	struct regmap *djtag_reg_map;
 } hisi_syscon_reg_map;
+
+typedef struct bank_info_t {
+	u32 cfg_en;
+	int irq;
+	/* ToDO: This need to change to bitmap with 4 bits for each cnt idx */
+	/* Overflow counter for each cnt idx */
+	atomic_t cntr_ovflw[HISI_ARMV8_MAX_CFG_LLC_CNTR];
+} bank_info;
 
 typedef struct hisi_llc_data_t {
         u64 djtag_reg_map;
