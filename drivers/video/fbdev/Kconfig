@@ -2492,3 +2492,16 @@ config FB_SM712
 	  This driver is also available as a module. The module will be
 	  called sm712fb. If you want to compile it as a module, say M
 	  here and read <file:Documentation/kbuild/modules.txt>.
+config FB_HISILICON
+	tristate "Hisilicon Hi1710 framebuffer support"
+	depends on FB && PCI
+	select FB_MODE_HELPERS
+	select FB_CFB_FILLRECT
+	select FB_CFB_COPYAREA
+	select FB_CFB_IMAGEBLIT
+	help
+	  Frame buffer driver for Hisilicon Hi1710 integrited graphics chip.
+
+	  This driver is also available as a module. The module will be
+	  called hisiliconfb. If you want to compile it as a module, say M
+	  here and read <file:Documentation/kbuild/modules.txt>.
