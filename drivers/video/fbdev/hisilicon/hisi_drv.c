@@ -20,6 +20,7 @@
 #include "hisi_drv.h"
 #include "hisi_cursor.h"
 #include "hisi_hw.h"
+#include "hisi_accel.h"
 
 
 /* chip specific setup routine */
@@ -185,6 +186,103 @@ static int hisifb_ops_cursor(struct fb_info *info, struct fb_cursor *fbcursor)
 		cursor->enable(cursor);
 
 	return 0;
+}
+
+static void hisifb_ops_fillrect(struct fb_info *info,
+	const struct fb_fillrect *region)
+{
+	struct hisifb_par *par;
+	struct hisi_share *share;
+	unsigned int base, pitch, Bpp, rop;
+	u32 color;
+
+	if (info->state != FBINFO_STATE_RUNNING)
+		return;
+
+	par = info->par;
+	share = par->share;
+
+	/*
+	 * each time 2d function begin to work,below three variable always need
+	 * be set, seems we can put them together in some place
+	 */
+	base = par->crtc.oscreen;
+	pitch = info->fix.line_length;
+	Bpp = info->var.bits_per_pixel >> 3;
+
+	color = (Bpp == 1) ? region->color :
+		((u32 *)info->pseudo_palette)[region->color];
+	rop = (region->rop != ROP_COPY) ?
+		HW_ROP2_XOR : HW_ROP2_COPY;
+
+	share->accel.de_fillrect(&share->accel,
+				 base, pitch, Bpp, region->dx,
+				 region->dy, region->width,
+				 region->height, color, rop);
+}
+
+static void hisifb_ops_copyarea(struct fb_info *info,
+	const struct fb_copyarea *region)
+{
+	struct hisifb_par *par;
+	struct hisi_share *share;
+	unsigned int base, pitch, Bpp;
+
+	par = info->par;
+	share = par->share;
+
+	/*
+	 * each time 2d function begin to work,below three variable always need
+	 * be set, seems we can put them together in some place
+	 */
+	base = par->crtc.oscreen;
+	pitch = info->fix.line_length;
+	Bpp = info->var.bits_per_pixel >> 3;
+
+	share->accel.de_copyarea(&share->accel, base, pitch,
+				 region->sx, region->sy, base,
+				 pitch, Bpp, region->dx, region->dy,
+				 region->width, region->height,
+				 HW_ROP2_COPY);
+}
+
+static void hisifb_ops_imageblit(struct fb_info *info,
+	const struct fb_image *image)
+{
+	unsigned int base, pitch, Bpp;
+	unsigned int fgcol, bgcol;
+	struct hisifb_par *par;
+	struct hisi_share *share;
+
+	par = info->par;
+	share = par->share;
+	/*
+	 * each time 2d function begin to work,below three variable always need
+	 * be set, seems we can put them together in some place
+	 */
+	base = par->crtc.oscreen;
+	pitch = info->fix.line_length;
+	Bpp = info->var.bits_per_pixel >> 3;
+
+	if (image->depth == 1) {
+		if (info->fix.visual == FB_VISUAL_TRUECOLOR ||
+			info->fix.visual == FB_VISUAL_DIRECTCOLOR) {
+			fgcol = ((u32 *)info->pseudo_palette)[image->fg_color];
+			bgcol = ((u32 *)info->pseudo_palette)[image->bg_color];
+		} else {
+			fgcol = image->fg_color;
+			bgcol = image->bg_color;
+		}
+		goto _do_work;
+	}
+	return;
+_do_work:
+	share->accel.de_imageblit(&share->accel,
+				  image->data, image->width >> 3, 0,
+				  base, pitch, Bpp,
+				  image->dx, image->dy,
+				  image->width, image->height,
+				  fgcol, bgcol, HW_ROP2_COPY);
 }
 
 static struct fb_ops hisifb_ops = {
@@ -710,7 +808,12 @@ static int hisifb_set_fbinfo(struct fb_info *info, int index)
 	}
 
 	/* set info->fbops, must be set before fb_find_mode */
-
+	if (!share->accel_off) {
+		/* use 2d acceleration */
+		hisifb_ops.fb_fillrect = hisifb_ops_fillrect;
+		hisifb_ops.fb_copyarea = hisifb_ops_copyarea;
+		hisifb_ops.fb_imageblit = hisifb_ops_imageblit;
+	}
 	info->fbops = &hisifb_ops;
 
 	if (!g_fbmode[index]) {
@@ -879,6 +982,23 @@ static int hisifb_pci_probe(struct pci_dev *pdev,
 #endif
 	share->accel_off = g_noaccel;
 	share->dual = g_dualview;
+
+
+	if (!share->accel_off) {
+		/*
+		 * hook deInit and 2d routines, notes that below hw_xxx
+		 * routine can work on most of hisi chips,if some chip need
+		 *  specific function,please hook it in smXXX_set_drv
+		 * routine
+		 */
+		share->accel.de_init = hw_de_init;
+		share->accel.de_fillrect = hw_fillrect;
+		share->accel.de_copyarea = hw_copyarea;
+		share->accel.de_imageblit = hw_imageblit;
+		inf_msg("enable 2d acceleration\n");
+	} else {
+		inf_msg("disable 2d acceleration\n");
+	}
 
 	/* call chip specific setup routine  */
 	hisi_fb_setup(share, g_settings);
