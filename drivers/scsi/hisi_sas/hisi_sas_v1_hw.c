@@ -1934,7 +1934,7 @@ static irqreturn_t int_abnormal_v1_hw(int phy_no, void *p)
 			phy_no,
 			(phy_state & 1 << phy_no) ? 1 : 0);
 		#ifdef SAS_12G
-		serdes_lane_reset(hisi_hba, phy_no);
+		serdes_lane_reset_v1_hw(hisi_hba, phy_no);
 		phy->eye_diag_done = 0;
 		if (timer_pending(timer))
 			del_timer(timer);
@@ -1993,7 +1993,7 @@ static irqreturn_t int_int1_v1_hw(int phy_no, void *p)
 		struct hisi_sas_phy *phy = &hisi_hba->phy[phy_no];
 
 		if (!phy->eye_diag_done) {
-			phy_rx_eye_diag_done(hisi_hba, phy_no);
+			phy_rx_eye_diag_done_v1_hw(hisi_hba, phy_no);
 			phy->eye_diag_done = 1;
 		}
 		#endif
