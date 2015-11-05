@@ -79,6 +79,15 @@ extern struct pci_bus *acpi_pci_root_create(struct acpi_pci_root *root,
 void acpi_pci_add_bus(struct pci_bus *bus);
 void acpi_pci_remove_bus(struct pci_bus *bus);
 
+#ifdef	CONFIG_PCI_MMCONFIG
+int pci_mmcfg_setup_map(struct acpi_pci_root_info *ci);
+void pci_mmcfg_teardown_map(struct acpi_pci_root_info *ci);
+#else
+static inline int pci_mmcfg_setup_map(struct acpi_pci_root_info *ci)
+{ return 0; }
+static inline void pci_mmcfg_teardown_map(struct acpi_pci_root_info *ci) { }
+#endif
+
 #ifdef	CONFIG_ACPI_PCI_SLOT
 void acpi_pci_slot_init(void);
 void acpi_pci_slot_enumerate(struct pci_bus *bus);
