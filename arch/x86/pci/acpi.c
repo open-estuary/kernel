@@ -201,28 +201,10 @@ static int setup_mcfg_map(struct acpi_pci_root_info *ci)
 
 	return 0;
 }
-
-static void teardown_mcfg_map(struct acpi_pci_root_info *ci)
-{
-	struct acpi_pci_root *root = ci->root;
-	struct pci_mmcfg_region *cfg;
-
-	cfg = pci_mmconfig_lookup(root->segment, root->secondary.start);
-	if (!cfg)
-		return;
-
-	if (cfg->hot_added)
-		pci_mmconfig_delete(root->segment, root->secondary.start,
-				    root->secondary.end);
-}
 #else
 static int setup_mcfg_map(struct acpi_pci_root_info *ci)
 {
 	return 0;
-}
-
-static void teardown_mcfg_map(struct acpi_pci_root_info *ci)
-{
 }
 #endif
 
@@ -251,7 +233,7 @@ static int pci_acpi_root_init_info(struct acpi_pci_root_info *ci)
 
 static void pci_acpi_root_release_info(struct acpi_pci_root_info *ci)
 {
-	teardown_mcfg_map(ci);
+	pci_mmcfg_teardown_map(ci);
 	kfree(container_of(ci, struct pci_root_info, common));
 }
 
