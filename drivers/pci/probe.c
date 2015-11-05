@@ -12,6 +12,7 @@
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/cpumask.h>
+#include <linux/pci-acpi.h>
 #include <linux/pci-aspm.h>
 #include <linux/aer.h>
 #include <linux/acpi.h>
@@ -2067,10 +2068,12 @@ int __weak pcibios_root_bridge_prepare(struct pci_host_bridge *bridge)
 
 void __weak pcibios_add_bus(struct pci_bus *bus)
 {
+	acpi_pci_add_bus(bus);
 }
 
 void __weak pcibios_remove_bus(struct pci_bus *bus)
 {
+	acpi_pci_remove_bus(bus);
 }
 
 struct pci_bus *pci_create_root_bus(struct device *parent, int bus,
