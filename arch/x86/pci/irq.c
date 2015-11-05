@@ -876,9 +876,8 @@ static struct irq_info *pirq_get_info(struct pci_dev *dev)
 	return NULL;
 }
 
-static int pcibios_lookup_irq(struct pci_dev *dev, int assign)
+static int pcibios_lookup_irq(struct pci_dev *dev, u8 pin, int assign)
 {
-	u8 pin;
 	struct irq_info *info;
 	int i, pirq, newirq;
 	int irq = 0;
@@ -888,7 +887,6 @@ static int pcibios_lookup_irq(struct pci_dev *dev, int assign)
 	char *msg = NULL;
 
 	/* Find IRQ pin */
-	pci_read_config_byte(dev, PCI_INTERRUPT_PIN, &pin);
 	if (!pin) {
 		dev_dbg(&dev->dev, "no interrupt pin\n");
 		return 0;
@@ -1021,47 +1019,38 @@ static int pcibios_lookup_irq(struct pci_dev *dev, int assign)
 	return 1;
 }
 
-void __init pcibios_fixup_irqs(void)
+int pcibios_fixup_irq(struct pci_dev *dev, u8 pin)
 {
-	struct pci_dev *dev = NULL;
-	u8 pin;
-
+	int irq = dev->irq;
 	DBG(KERN_DEBUG "PCI: IRQ fixup\n");
-	for_each_pci_dev(dev) {
-		/*
-		 * If the BIOS has set an out of range IRQ number, just
-		 * ignore it.  Also keep track of which IRQ's are
-		 * already in use.
-		 */
-		if (dev->irq >= 16) {
-			dev_dbg(&dev->dev, "ignoring bogus IRQ %d\n", dev->irq);
-			dev->irq = 0;
-		}
-		/*
-		 * If the IRQ is already assigned to a PCI device,
-		 * ignore its ISA use penalty
-		 */
-		if (pirq_penalty[dev->irq] >= 100 &&
-				pirq_penalty[dev->irq] < 100000)
-			pirq_penalty[dev->irq] = 0;
-		pirq_penalty[dev->irq]++;
+	/*
+	 * If the BIOS has set an out of range IRQ number, just
+	 * ignore it.  Also keep track of which IRQ's are
+	 * already in use.
+	 */
+	if (irq >= 16) {
+		dev_dbg(&dev->dev, "ignoring bogus IRQ %d\n", irq);
+		irq = 0;
 	}
+	/*
+	 * If the IRQ is already assigned to a PCI device,
+	 * ignore its ISA use penalty
+	 */
+	if (pirq_penalty[irq] >= 100 &&
+			pirq_penalty[irq] < 100000)
+		pirq_penalty[irq] = 0;
+	pirq_penalty[irq]++;
 
-	if (io_apic_assign_pci_irqs)
-		return;
+	if (io_apic_assign_pci_irqs || !pin)
+		return irq;
 
-	dev = NULL;
-	for_each_pci_dev(dev) {
-		pci_read_config_byte(dev, PCI_INTERRUPT_PIN, &pin);
-		if (!pin)
-			continue;
+	/*
+	 * Still no IRQ? Try to lookup one...
+	 */
+	if (!irq && pcibios_lookup_irq(dev, pin, 0))
+		irq = dev->irq;
 
-		/*
-		 * Still no IRQ? Try to lookup one...
-		 */
-		if (!dev->irq)
-			pcibios_lookup_irq(dev, 0);
-	}
+	return irq;
 }
 
 /*
@@ -1162,6 +1151,12 @@ void __init pcibios_irq_init(void)
 	}
 }
 
+int pcibios_root_bridge_prepare(struct pci_host_bridge *bridge)
+{
+	bridge->map_irq = pci_map_irq;
+	return 0;
+}
+
 static void pirq_penalize_isa_irq(int irq, int active)
 {
 	/*
@@ -1186,12 +1181,20 @@ void pcibios_penalize_isa_irq(int irq, int active)
 		pirq_penalize_isa_irq(irq, active);
 }
 
+int pci_map_irq(struct pci_dev *dev, u8 slot, u8 pin)
+{
+	dev->irq = pcibios_fixup_irq(dev, pin);
+	if (pcibios_enable_irq(dev))
+		return -1;
+	return dev->irq;
+}
+
 static int pirq_enable_irq(struct pci_dev *dev)
 {
 	u8 pin = 0;
 
 	pci_read_config_byte(dev, PCI_INTERRUPT_PIN, &pin);
-	if (pin && !pcibios_lookup_irq(dev, 1)) {
+	if (pin && !pcibios_lookup_irq(dev, pin, 1)) {
 		char *msg = "";
 
 		if (!io_apic_assign_pci_irqs && dev->irq)
