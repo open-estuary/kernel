@@ -10,6 +10,7 @@
 #include <linux/acpi.h>
 #include <linux/ecam.h>
 #include <linux/pci.h>
+#include <linux/pci-acpi.h>
 
 #define	PREFIX	"MCFG: "
 
@@ -75,6 +76,43 @@ int __init acpi_parse_mcfg(struct acpi_table_header *header)
 	}
 
 	return 0;
+}
+
+int pci_mmcfg_setup_map(struct acpi_pci_root_info *ci)
+{
+	struct pci_mmcfg_region *cfg;
+	struct acpi_pci_root *root;
+	int seg, start, end, err;
+
+	root = ci->root;
+	seg = root->segment;
+	start = root->secondary.start;
+	end = root->secondary.end;
+
+	cfg = pci_mmconfig_lookup(seg, start);
+	if (cfg)
+		return 0;
+
+	cfg = pci_mmconfig_alloc(seg, start, end, root->mcfg_addr);
+	if (!cfg)
+		return -ENOMEM;
+
+	err = pci_mmconfig_inject(cfg);
+	return err;
+}
+
+void pci_mmcfg_teardown_map(struct acpi_pci_root_info *ci)
+{
+	struct acpi_pci_root *root = ci->root;
+	struct pci_mmcfg_region *cfg;
+
+	cfg = pci_mmconfig_lookup(root->segment, root->secondary.start);
+	if (!cfg)
+		return;
+
+	if (cfg->hot_added)
+		pci_mmconfig_delete(root->segment, root->secondary.start,
+				    root->secondary.end);
 }
 
 int __init __weak acpi_mcfg_check_entry(struct acpi_table_mcfg *mcfg,
