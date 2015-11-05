@@ -1313,7 +1313,6 @@ unsigned int HRD_SubPcieInit(void)
 	return OS_SUCCESS;
 }
 
-
 /*****************************************************************************
     : HRD_SubPcieExit
   : SUB PCIE CRG
@@ -1344,6 +1343,7 @@ static void HRD_SubPcieExit(void)
 		iounmap((void *)sub_pcie_base_addr_slavecpu);
 }
 #endif
+
 static unsigned long long HRD_CommonSubPcieGetBase(unsigned int node)
 {
 	/* node=0 */
@@ -1352,6 +1352,7 @@ static unsigned long long HRD_CommonSubPcieGetBase(unsigned int node)
 
 	return sub_pcie_base_addr_slavecpu;
 }
+
 
 static inline unsigned int SYSTEM_REG_READ(unsigned int node,
 	unsigned long long pRegBase)

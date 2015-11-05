@@ -13,6 +13,8 @@
 
 static struct scsi_transport_template *hisi_sas_stt;
 
+struct workqueue_struct *hisi_sas_wq;
+
 static struct scsi_host_template hisi_sas_sht = {
 	.module			= THIS_MODULE,
 	.name			= DRV_NAME,
