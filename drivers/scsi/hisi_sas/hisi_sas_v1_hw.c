@@ -1418,6 +1418,7 @@ static int prep_ssp_v1_hw(struct hisi_hba *hisi_hba,
 		default:
 			dw1->ssp_frame_type = 0;
 		}
+		hdr->data_transfer_len = scsi_transfer_length(scsi_cmnd);
 	}
 
 	dw1->device_id = hisi_sas_dev->device_id; /* map itct entry */
@@ -1447,7 +1448,7 @@ static int prep_ssp_v1_hw(struct hisi_hba *hisi_hba,
 	}
 
 	/* dw4 */
-	hdr->data_transfer_len = scsi_transfer_length(scsi_cmnd);
+	/*hdr->data_transfer_len = scsi_transfer_length(scsi_cmnd);*/
 	/* dw5 */
 	/* hdr->first_burst_num not set in Higgs code */
 
@@ -1511,6 +1512,7 @@ static void slot_err_v1_hw(struct hisi_hba *hisi_hba,
 {
 	struct task_status_struct *tstat = &task->task_status;
 	struct hisi_sas_err_record *err_record = slot->status_buffer;
+	int rc = -1;
 
 	switch (task->task_proto) {
 	case SAS_PROTOCOL_SSP:
@@ -1587,6 +1589,18 @@ static void slot_err_v1_hw(struct hisi_hba *hisi_hba,
 		case TRANS_TX_ACK_NAK_TIMEOUT_ERR:
 		{
 			tstat->stat = SAS_NAK_R_ERR;
+			break;
+		}
+		case TRANS_TX_CREDIT_TIMEOUT_ERR:
+		case TRANS_TX_CLOSE_NORMAL_ERR:
+		{
+			task->task_state_flags &= ~SAS_TASK_STATE_DONE;
+			rc = hisi_sas_handle_event(hisi_hba, task,
+					SAS_ABORT_AND_RETRY);
+			if (!rc) {
+				tstat->stat = HISI_INTERNAL_EH_STAT;
+				return;
+			}
 			break;
 		}
 		default:
@@ -1711,14 +1725,12 @@ static int slot_complete_v1_hw(struct hisi_hba *hisi_hba,
 		goto out;
 	}
 
-	if (!complete_hdr->err_rcrd_xfrd) {
-		if (!complete_hdr->cmd_complt || !complete_hdr->rspns_xfrd) {
-			tstat->stat = SAS_DATA_OVERRUN;
-			/* j00310691 in IT we get DID_ERROR, but in sas_end_task we need to use overrun to get DID_ERROR */
-			goto out;
-		}
-	} else {
+	if (complete_hdr->err_rcrd_xfrd && !complete_hdr->rspns_xfrd) {
 		slot_err_v1_hw(hisi_hba, task, slot);
+
+		if (tstat->stat == HISI_INTERNAL_EH_STAT)
+			return 0;
+
 		goto out;
 	}
 

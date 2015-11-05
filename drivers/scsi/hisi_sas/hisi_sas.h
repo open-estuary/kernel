@@ -117,6 +117,13 @@ struct hisi_sas_device {
 	u64 reserved;
 };
 
+struct hisi_sas_work {
+	struct work_struct work;
+	struct hisi_hba *hisi_hba;
+	void *data;
+	int handler;
+};
+
 struct hisi_sas_slot {
 	struct list_head entry;
 	struct sas_task *task;
@@ -158,6 +165,30 @@ struct hisi_sas_tei {
 
 struct hisi_hba;
 
+/* use for abort in pm8001 */
+struct task_abort_req {
+	__le32	tag;
+	__le32	device_id;
+	__le32	tag_to_abort;
+	__le32	abort_all;
+	u32	reserved[11];
+} __packed;
+
+/* These flags used for SSP SMP & SATA Abort */
+#define ABORT_MASK		0x3
+#define ABORT_SINGLE		0x0
+#define ABORT_ALL		0x1
+#define SAS_ABORT_AND_RETRY		0x0
+
+#define HISI_INTERNAL_EH_STAT 0x11
+
+struct task_abort_resp {
+	__le32	tag;
+	__le32	status;
+	__le32	scp;
+	u32	reserved[12];
+} __packed;
+
 struct hisi_sas_dispatch {
 	int (*hw_init)(struct hisi_hba *hisi_hba);
 	int (*phys_init)(struct hisi_hba *hisi_hba);
@@ -174,6 +205,9 @@ struct hisi_sas_dispatch {
 			struct hisi_sas_tei *tei);
 	int (*prep_stp)(struct hisi_hba *hisi_hba,
 			struct hisi_sas_tei *tei);
+	int (*prep_abort)(struct hisi_hba *hisi_hba,
+		struct hisi_sas_tei *tei,
+		struct task_abort_req *task_abort);
 	int (*slot_complete)(struct hisi_hba *hisi_hba,
 			     struct hisi_sas_slot *slot, int abort);
 	void (*phy_enable)(struct hisi_hba *hisi_hba, int phy_no);
@@ -515,6 +549,7 @@ void hisi_sas_bytes_dmaed(struct hisi_hba *hisi_hba, int phy_no);
 void hisi_sas_port_notify_formed(struct asd_sas_phy *sas_phy, int lock);
 void hisi_sas_slot_task_free(struct hisi_hba *hisi_hba, struct sas_task *task,
 			struct hisi_sas_slot *slot);
+int hisi_sas_handle_event(struct hisi_hba *hisi_hba, void *data, int handler);
 #ifdef CONFIG_DEBUG_FS
 int hisi_sas_debugfs_init(struct hisi_hba *hisi_hba);
 void hisi_sas_debugfs_free(struct hisi_hba *hisi_hba);
