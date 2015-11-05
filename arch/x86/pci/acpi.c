@@ -333,7 +333,6 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 		struct pci_sysdata sd = {
 			.domain = domain,
 			.node = node,
-			.companion = root->device
 		};
 
 		memcpy(bus->sysdata, &sd, sizeof(sd));
@@ -348,7 +347,6 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 		else {
 			info->sd.domain = domain;
 			info->sd.node = node;
-			info->sd.companion = root->device;
 			bus = acpi_pci_root_create(root, &acpi_pci_root_ops,
 						   &info->common, &info->sd);
 		}
