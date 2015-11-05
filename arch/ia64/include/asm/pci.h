@@ -65,7 +65,6 @@ extern int pci_mmap_legacy_page_range(struct pci_bus *bus,
 #define pci_legacy_write platform_pci_legacy_write
 
 struct pci_controller {
-	struct acpi_device *companion;
 	void *iommu;
 	int segment;
 	int node;		/* nearest node with memory or NUMA_NO_NODE for global allocation */
