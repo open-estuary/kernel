@@ -168,12 +168,10 @@ armpmu_event_set_period(struct perf_event *event,
 	s64 period = hwc->sample_period;
 	int ret = 0;
 #ifdef CONFIG_HISI_PERFCTR
-	struct hisi_hwc_data_info *phisi_hwc_data = hwc->perf_event_data;
-	u32 num_banks;
-	u32 num_llc_modules = hisi_soc_hwc_info_table.num_llc;
-	u32 llc_die_idx;
-	u32 llc_mod_idx;
-	int i, j, k = 0;
+	struct hisi_llc_hwc_data_info *phisi_hwc_llc_data = hwc->perf_event_data;
+	struct hisi_mn_hwc_data_info *phisi_hwc_mn_data = hwc->perf_event_data;
+	u32 num_banks = NUM_LLC_BANKS;
+	int i;
 #endif
 	if (unlikely(left <= -period)) {
 		left = period;
@@ -199,26 +197,20 @@ armpmu_event_set_period(struct perf_event *event,
 		left = armpmu->max_period >> 1;
 
 #ifdef CONFIG_HISI_PERFCTR
-	if (idx >= ARMV8_HISI_IDX_LLC_COUNTER0 &&
-			 idx < ARMV8_HISI_IDX_COUNTER_MAX) {
-		for (i = 0; i < num_llc_modules; i++) {
-			/* Now find the LLC module die index */
-			llc_die_idx =
-				hisi_soc_hwc_info_table.llc_idxs[i].die_idx;
-			llc_mod_idx =
-				hisi_soc_hwc_info_table.llc_idxs[i].mod_idx;
-
-			/* Find the no of LLC modules and set for each */
-			num_banks =
-			hisi_die_info_table[llc_die_idx].hw_mod_info[llc_mod_idx].num_banks;
-
-			for (j = 0; j < num_banks; j++, k++)
-				local64_set(&phisi_hwc_data->hwc_prev_counters[k].prev_count,
+	if (idx >= ARMV8_HISI_IDX_LLC_S0_TC_COUNTER0 &&
+			 idx <= ARMV8_HISI_IDX_LLC_COUNTER_MAX) {
+			for (i = 0; i < num_banks; i++) {
+				local64_set(&phisi_hwc_llc_data->hwc_prev_counters[i].prev_count,
 										 (u64)-left);
 		}
 	}
-	else if (ARMV8_HISI_IDX_MN_COUNTER0 <= idx && idx <=
+	else if (ARMV8_HISI_IDX_MN_S0_TC_COUNTER0 <= idx && idx <=
 					ARMV8_HISI_IDX_MN_COUNTER_MAX) {
+		local64_set(&phisi_hwc_mn_data->event_start_count, (u64)-left);
+	}
+	else if (ARMV8_HISI_IDX_DDR_S0_TC_COUNTER0 <= idx && idx <=
+					ARMV8_HISI_IDX_DDR_COUNTER_MAX) {
+		//pr_info("event_set_period for DDR idx=%d\n", idx);
 	}
 
 	armpmu->write_counter(idx, (u64)(-left) & 0xffffffff);
@@ -244,7 +236,7 @@ armpmu_event_update(struct perf_event *event,
 	u64 delta, prev_raw_count, new_raw_count;
 
 #ifdef CONFIG_HISI_PERFCTR
-	if (idx >= ARMV8_HISI_IDX_LLC_COUNTER0 &&
+	if (idx >= ARMV8_HISI_IDX_LLC_S0_TC_COUNTER0 &&
 				 idx < ARMV8_HISI_IDX_COUNTER_MAX) {
 		new_raw_count = hisi_armv8_pmustub_event_update(event,
 								 hwc, idx);
@@ -338,11 +330,11 @@ armpmu_del(struct perf_event *event, int flags)
 	clear_bit(idx, hw_events->used_mask);
 
 #ifdef CONFIG_HISI_PERFCTR
-	if (idx >= ARMV8_HISI_IDX_LLC_COUNTER0 &&
-				 idx < ARMV8_HISI_IDX_COUNTER_MAX)
+	if (idx >= ARMV8_HISI_IDX_LLC_S0_TC_COUNTER0 &&
+				 idx < ARMV8_HISI_IDX_COUNTER_MAX) {
 		hisi_armv8_pmustub_clear_event_idx(idx);
+	}
 #endif
-
 	perf_event_update_userpage(event);
 }
 
@@ -376,12 +368,16 @@ armpmu_add(struct perf_event *event, int flags)
 	if (flags & PERF_EF_START)
 		armpmu_start(event, PERF_EF_RELOAD);
 
-#if 0
 #ifdef CONFIG_HISI_PERFCTR
-	if (idx >= ARMV8_HISI_IDX_LLC_COUNTER0 &&
-				 idx < ARMV8_HISI_IDX_COUNTER_MAX)
-		hisi_armv8_pmustub_enable_counting();
-#endif
+	if (idx >= ARMV8_HISI_IDX_LLC_S0_TC_COUNTER0 &&
+				 idx <= ARMV8_HISI_IDX_LLC_COUNTER_MAX) {
+	//	hisi_armv8_pmustub_enable_counting();
+	}
+	else if (idx >= ARMV8_HISI_IDX_DDR_S0_TC_COUNTER0 &&
+                                 idx <= ARMV8_HISI_IDX_DDR_COUNTER_MAX) {
+//		pr_info("Get the start count Here for idx=%d...\n", idx);
+		hisi_armv8_ddr_update_start_value(event, hwc, idx);
+	}
 #endif
 	/* Propagate our changes to the userspace mapping. */
 	perf_event_update_userpage(event);
@@ -579,8 +575,9 @@ hw_perf_event_destroy(struct perf_event *event)
 	atomic_t *active_events	 = &armpmu->active_events;
 	struct mutex *pmu_reserve_mutex = &armpmu->reserve_mutex;
 #ifdef CONFIG_HISI_PERFCTR
-	struct hisi_hwc_data_info *phisi_hwc_data;
 	struct hw_perf_event *hwc = &event->hw;
+	void *phisi_hwc_data = hwc->perf_event_data;
+	unsigned long evtype = hwc->config_base & HISI_ARMV8_EVTYPE_EVENT;
 #endif
 
 	if (atomic_dec_and_mutex_lock(active_events, pmu_reserve_mutex)) {
@@ -588,11 +585,22 @@ hw_perf_event_destroy(struct perf_event *event)
 		mutex_unlock(pmu_reserve_mutex);
 	}
 #ifdef CONFIG_HISI_PERFCTR
-	phisi_hwc_data = hwc->perf_event_data;
-	if (NULL != phisi_hwc_data) {
-		if (NULL != phisi_hwc_data->hwc_prev_counters)
-			kfree(phisi_hwc_data->hwc_prev_counters);
-		kfree(phisi_hwc_data);
+	/* If event type is LLC events */
+	if (evtype >= ARMV8_HISI_PERFCTR_LLC_S0_TC_READ_ALLOCATE &&
+		evtype <= ARMV8_HISI_PERFCTR_LLC_S0_TA_DGRAM_1B_ECC) {
+		if (NULL != phisi_hwc_data) {
+			if (NULL !=
+			 ((struct hisi_llc_hwc_data_info *)phisi_hwc_data)->hwc_prev_counters)
+				kfree(((struct hisi_llc_hwc_data_info *)phisi_hwc_data)->hwc_prev_counters);
+			kfree(phisi_hwc_data);
+		}
+	}
+	else if((evtype >= ARMV8_HISI_PERFCTR_DDRC0_TC_FLUX_READ_BW &&
+				evtype < ARMV8_HISI_PERFCTR_EVENT_MAX) ||
+			(evtype >= ARMV8_HISI_PERFCTR_MN_S0_TC_EO_BARR_REQ &&
+			 evtype <= ARMV8_HISI_PERFCTR_MN_S0_TA_RETRY_REQ)) {
+		if (NULL != phisi_hwc_data)
+			kfree(phisi_hwc_data);
 	}
 #endif
 }
@@ -612,7 +620,6 @@ __hw_perf_event_init(struct perf_event *event)
 	int mapping, err;
 #ifdef CONFIG_HISI_PERFCTR
 	unsigned long evtype;
-	struct hisi_hwc_data_info *phisi_hwc_data;
 #endif
 
 	mapping = armpmu->map_event(event);
@@ -674,22 +681,30 @@ __hw_perf_event_init(struct perf_event *event)
 	evtype = hwc->config_base & HISI_ARMV8_EVTYPE_EVENT;
 
 	/* If event type is LLC events */
-	if (evtype >= ARMV8_HISI_PERFCTR_LLC_READ_ALLOCATE &&
-				evtype <= ARMV8_HISI_PERFCTR__DGRAM_1B_ECC) {
+	if (evtype >= ARMV8_HISI_PERFCTR_LLC_S0_TC_READ_ALLOCATE &&
+				evtype <= ARMV8_HISI_PERFCTR_LLC_S0_TA_DGRAM_1B_ECC) {
 		/* Find num of banks and have counter variables to store
 		 * prev counts for each */
 		err = hisi_init_llc_hw_perf_event(hwc);
 		if (err)
 			return err;
-		phisi_hwc_data = hwc->perf_event_data;
 	}
 	/* If event type is for MN */
-	else if (evtype >= ARMV8_HISI_PERFCTR_MN_EO_BARR_REQ &&
-				evtype < ARMV8_HISI_PERFCTR_EVENT_MAX) {
+	else if (evtype >= ARMV8_HISI_PERFCTR_MN_S0_TC_EO_BARR_REQ &&
+				evtype <= ARMV8_HISI_PERFCTR_MN_S0_TA_RETRY_REQ) {
+		err = hisi_init_mn_hw_perf_event(hwc);
+		if (err)
+			return err;
 
 	}
+	/* If event type is for DDR */
+	else if (evtype >= ARMV8_HISI_PERFCTR_DDRC0_TC_FLUX_READ_BW &&
+			evtype < ARMV8_HISI_PERFCTR_EVENT_MAX) {
+		err = hisi_init_ddr_hw_perf_event(hwc);
+		if (err)
+			return err;
+	}
 #endif
-
 	return err;
 }
 
@@ -1050,7 +1065,7 @@ static inline u32 armv8pmu_read_counter(int idx)
 #if 0
 #ifdef CONFIG_HISI_PERFCTR
 	if (armv8_hisi_counter_valid(idx))
-		value = hisi_pmustub_read_counter(idx, 0);
+		value = hisi_pmustub_read_counter(idx);
 #endif
 #endif
 	else if (armv8pmu_select_counter(idx) == idx)
@@ -1364,7 +1379,7 @@ static void armv8pmu_stop(void)
 }
 
 static int armv8pmu_get_event_idx(struct pmu_hw_events *cpuc,
-				struct hw_perf_event *event)
+				  struct hw_perf_event *event)
 {
 	int idx;
 	unsigned long evtype = event->config_base & ARMV8_EVTYPE_EVENT;
@@ -1377,19 +1392,20 @@ static int armv8pmu_get_event_idx(struct pmu_hw_events *cpuc,
 	}
 
 #ifdef CONFIG_HISI_PERFCTR
-	/* For HiSilicon SoC LLC, return appropriate counter index */
-	if (evtype >= ARMV8_HISI_PERFCTR_LLC_READ_ALLOCATE &&
+	/* For HiSilicon SoC LLC, MN, DDR return appropriate counter index */
+	if (evtype >= ARMV8_HISI_PERFCTR_LLC_S0_TC_READ_ALLOCATE &&
 				evtype < ARMV8_HISI_PERFCTR_EVENT_MAX) {
 		/* Find counter index corresponding to the Event type register
 		 * FIXME: As I have 8 counters and max 8 events cfg in event
 		 * select register, event index to counter index is a direct
 		 * mapping.
 		 * To avoid collision with armv8 counter index Hisilicon index
-		 * will start from ARMV8_HISI_IDX_LLC_COUNTER0.
+		 * will start from ARMV8_HISI_IDX_LLC_COUNTER0 for LLC and
+		 * correspondingly for MN and DDR.
 		 */
 		idx = hisi_armv8_pmustub_get_event_idx(evtype);
 		if (idx >= 0)
-			return (idx + ARMV8_HISI_IDX_LLC_COUNTER0);
+			return idx;
 		else
 			return -EAGAIN;
 	}

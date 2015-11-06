@@ -589,7 +589,7 @@ config HISI_PERFCTR
 	default n
 	help
 	 Enable hardware event counter support for Hisilicon SoC LLC,
-	 Bus, DDR events.
+	 MN and DDR events.
 
 config SYS_SUPPORTS_HUGETLBFS
 	def_bool y
