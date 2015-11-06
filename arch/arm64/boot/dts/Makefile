@@ -7,6 +7,7 @@ dts-dirs += freescale
 dts-dirs += mediatek
 dts-dirs += qcom
 dts-dirs += sprd
+dts-dirs += hisilicon
 dts-dirs += xilinx
 dts-dirs += hisilicon
 

@@ -13,6 +13,8 @@
 
 static struct scsi_transport_template *hisi_sas_stt;
 
+struct workqueue_struct *hisi_sas_wq;
+
 static struct scsi_host_template hisi_sas_sht = {
 	.module			= THIS_MODULE,
 	.name			= DRV_NAME,
@@ -46,71 +48,33 @@ static struct sas_domain_function_template hisi_sas_transport_ops = {
 	.lldd_I_T_nexus_reset	= hisi_sas_I_T_nexus_reset,
 	.lldd_lu_reset		= hisi_sas_lu_reset,
 	.lldd_query_task	= hisi_sas_query_task,
-	.lldd_abort_task_set	= hisi_sas_abort_task_set,
 	.lldd_port_formed	= hisi_sas_port_formed,
 	.lldd_port_deformed	= hisi_sas_port_deformed,
 };
 
-static int hisi_sas_prep_ha_init(struct device *dev, struct Scsi_Host *shost,
-				 int n_core)
-{
-	int phy_nr, port_nr;
-	struct asd_sas_phy **arr_phy;
-	struct asd_sas_port **arr_port;
-	struct sas_ha_struct *sha = SHOST_TO_SAS_HA(shost);
-
-	phy_nr = HISI_SAS_MAX_PHYS * n_core;
-	port_nr = phy_nr;
-
-	arr_phy = devm_kcalloc(dev, phy_nr, sizeof(void *), GFP_KERNEL);
-	arr_port = devm_kcalloc(dev, port_nr, sizeof(void *), GFP_KERNEL);
-	if (!arr_phy || !arr_port)
-		return -ENOMEM;
-
-	sha->sas_phy = arr_phy;
-	sha->sas_port = arr_port;
-	sha->core.shost = shost;
-
-	sha->lldd_ha = devm_kzalloc(dev, sizeof(struct hisi_hba_priv),
-				    GFP_KERNEL);
-	if (!sha->lldd_ha)
-		return -ENOMEM;
-
-	((struct hisi_hba_priv *)sha->lldd_ha)->n_core = n_core;
-
-	shost->transportt = hisi_sas_stt;
-	shost->max_id = HISI_SAS_MAX_DEVICES;
-	shost->max_lun = ~0;
-	shost->max_channel = 1;
-	shost->max_cmd_len = 16;
-
-	return 0;
-}
-
 static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 {
 	int i, s;
-	char pool_name[32];
+	char name[32];
 	struct device *dev = hisi_hba->dev;
 
 	spin_lock_init(&hisi_hba->lock);
 	for (i = 0; i < hisi_hba->n_phy; i++) {
 		hisi_sas_phy_init(hisi_hba, i);
 		hisi_hba->port[i].port_attached = 0;
+		hisi_hba->port[i].id = -1;
 		INIT_LIST_HEAD(&hisi_hba->port[i].list);
 	}
 
 	for (i = 0; i < HISI_SAS_MAX_DEVICES; i++) {
-		hisi_hba->devices[i].taskfileset = HISI_SAS_ID_NOT_MAPPED;
 		hisi_hba->devices[i].dev_type = SAS_PHY_UNUSED;
 		hisi_hba->devices[i].device_id = i;
 		hisi_hba->devices[i].dev_status = HISI_SAS_DEV_NORMAL;
-		init_timer(&hisi_hba->devices[i].timer);
 	}
 
 	for (i = 0; i < hisi_hba->queue_count; i++) {
 		/* Delivery queue */
-		s = sizeof(struct hisi_sas_cmd_hdr) * HISI_SAS_QUEUE_SLOTS;
+		s = HISI_SAS_DQ_ENTRY_SZ * HISI_SAS_QUEUE_SLOTS;
 		hisi_hba->cmd_hdr[i] = dma_alloc_coherent(dev, s,
 					&hisi_hba->cmd_hdr_dma[i], GFP_KERNEL);
 		if (!hisi_hba->cmd_hdr[i])
@@ -118,7 +82,7 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 		memset(hisi_hba->cmd_hdr[i], 0, s);
 
 		/* Completion queue */
-		s = sizeof(struct hisi_sas_complete_hdr) * HISI_SAS_QUEUE_SLOTS;
+		s = HISI_SAS_CQ_ENTRY_SZ * HISI_SAS_QUEUE_SLOTS;
 		hisi_hba->complete_hdr[i] = dma_alloc_coherent(dev, s,
 				&hisi_hba->complete_hdr_dma[i], GFP_KERNEL);
 		if (!hisi_hba->complete_hdr[i])
@@ -126,15 +90,19 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 		memset(hisi_hba->complete_hdr[i], 0, s);
 	}
 
-	sprintf(pool_name, "%s%d", "hisi_sas_status_buffer_pool", hisi_hba->id);
+	sprintf(name, "%s%d", "hisi_sas_status_buffer_pool",
+		hisi_hba->id);
 	s = HISI_SAS_STATUS_BUF_SZ;
-	hisi_hba->status_buffer_pool = dma_pool_create(pool_name, dev, s, 16, 0);
+	hisi_hba->status_buffer_pool = dma_pool_create(name,
+						       dev, s, 16, 0);
 	if (!hisi_hba->status_buffer_pool)
 		goto err_out;
 
-	sprintf(pool_name, "%s%d", "hisi_sas_command_table_pool", hisi_hba->id);
+	sprintf(name, "%s%d", "hisi_sas_command_table_pool",
+		hisi_hba->id);
 	s = HISI_SAS_COMMAND_TABLE_SZ;
-	hisi_hba->command_table_pool = dma_pool_create(pool_name, dev, s, 16, 0);
+	hisi_hba->command_table_pool = dma_pool_create(name,
+						       dev, s, 16, 0);
 	if (!hisi_hba->command_table_pool)
 		goto err_out;
 
@@ -168,18 +136,25 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 
 	memset(hisi_hba->breakpoint, 0, s);
 
-	hisi_hba->iptt_count = HISI_SAS_COMMAND_ENTRIES;
-	s = hisi_hba->iptt_count / sizeof(unsigned long);
-	hisi_hba->iptt_tags = devm_kzalloc(dev, s, GFP_KERNEL);
-	if (!hisi_hba->iptt_tags)
+	hisi_hba->slot_index_count = HISI_SAS_COMMAND_ENTRIES;
+	s = hisi_hba->slot_index_count / sizeof(unsigned long);
+	hisi_hba->slot_index_tags = devm_kzalloc(dev, s, GFP_KERNEL);
+	if (!hisi_hba->slot_index_tags)
 		goto err_out;
 
-	sprintf(pool_name, "%s%d", "hisi_sas_status_sge_pool", hisi_hba->id);
-	hisi_hba->sge_page_pool = dma_pool_create(pool_name, hisi_hba->dev,
+	sprintf(name, "%s%d", "hisi_sas_status_sge_pool", hisi_hba->id);
+	hisi_hba->sge_page_pool = dma_pool_create(name, hisi_hba->dev,
 				sizeof(struct hisi_sas_sge_page), 16, 0);
 	if (!hisi_hba->sge_page_pool)
 		goto err_out;
-
+#ifdef SAS_DIF
+	sprintf(name, "%s%d",
+			"hisi_sas_status_dif_sge_pool", hisi_hba->id);
+	hisi_hba->sge_dif_page_pool = dma_pool_create(name, hisi_hba->dev,
+				sizeof(struct hisi_sas_sge_page), 16, 0);
+	if (!hisi_hba->sge_dif_page_pool)
+		goto err_out;
+#endif
 	s = sizeof(struct hisi_sas_initial_fis) * HISI_SAS_MAX_PHYS;
 	hisi_hba->initial_fis = dma_alloc_coherent(dev, s,
 				&hisi_hba->initial_fis_dma, GFP_KERNEL);
@@ -194,7 +169,14 @@ static int hisi_sas_alloc(struct hisi_hba *hisi_hba, struct Scsi_Host *shost)
 		goto err_out;
 	memset(hisi_hba->sata_breakpoint, 0, s);
 
-	hisi_sas_iptt_init(hisi_hba);
+	hisi_sas_slot_index_init(hisi_hba);
+
+	sprintf(name, "%s%d", "hisi_sas", hisi_hba->id);
+	hisi_hba->wq = create_singlethread_workqueue(name);
+	if (!hisi_hba->wq) {
+		dev_err(dev, "Failed to create workqueue\n");
+		goto err_out;
+	}
 
 	return 0;
 err_out:
@@ -206,18 +188,24 @@ static void hisi_sas_free(struct hisi_hba *hisi_hba)
 	int i, s;
 
 	for (i = 0; i < hisi_hba->queue_count; i++) {
-		s = sizeof(struct hisi_sas_cmd_hdr) * HISI_SAS_QUEUE_SLOTS;
+		s = HISI_SAS_DQ_ENTRY_SZ * HISI_SAS_QUEUE_SLOTS;
 		if (hisi_hba->cmd_hdr[i])
 			dma_free_coherent(hisi_hba->dev, s,
 					  hisi_hba->cmd_hdr[i],
 					  hisi_hba->cmd_hdr_dma[i]);
 
-		s = sizeof(struct hisi_sas_complete_hdr) * HISI_SAS_QUEUE_SLOTS;
+		s = HISI_SAS_CQ_ENTRY_SZ * HISI_SAS_QUEUE_SLOTS;
 		if (hisi_hba->complete_hdr[i])
 			dma_free_coherent(hisi_hba->dev, s,
 					  hisi_hba->complete_hdr[i],
 					  hisi_hba->complete_hdr_dma[i]);
 	}
+
+	if (hisi_hba->status_buffer_pool)
+		dma_pool_destroy(hisi_hba->status_buffer_pool);
+
+	if (hisi_hba->command_table_pool)
+		dma_pool_destroy(hisi_hba->command_table_pool);
 
 	s = HISI_SAS_MAX_ITCT_ENTRIES * HISI_SAS_ITCT_ENTRY_SZ;
 	if (hisi_hba->itct)
@@ -235,14 +223,27 @@ static void hisi_sas_free(struct hisi_hba *hisi_hba)
 				  hisi_hba->breakpoint,
 				  hisi_hba->breakpoint_dma);
 
-	if (hisi_hba->status_buffer_pool)
-		dma_pool_destroy(hisi_hba->status_buffer_pool);
-
-	if (hisi_hba->command_table_pool)
-		dma_pool_destroy(hisi_hba->command_table_pool);
-
 	if (hisi_hba->sge_page_pool)
 		dma_pool_destroy(hisi_hba->sge_page_pool);
+
+#ifdef SAS_DIF
+	if (hisi_hba->sge_dif_page_pool)
+		dma_pool_destroy(hisi_hba->sge_dif_page_pool);
+#endif
+	s = sizeof(struct hisi_sas_initial_fis) * HISI_SAS_MAX_PHYS;
+	if (hisi_hba->initial_fis)
+		dma_free_coherent(hisi_hba->dev, s,
+				  hisi_hba->initial_fis,
+				  hisi_hba->initial_fis_dma);
+
+	s = HISI_SAS_COMMAND_ENTRIES * HISI_SAS_BREAKPOINT_ENTRY_SZ * 2;
+	if (hisi_hba->sata_breakpoint)
+		dma_free_coherent(hisi_hba->dev, s,
+				  hisi_hba->sata_breakpoint,
+				  hisi_hba->sata_breakpoint_dma);
+
+	if (hisi_hba->wq)
+		destroy_workqueue(hisi_hba->wq);
 }
 
 int hisi_sas_ioremap(struct hisi_hba *hisi_hba)
@@ -259,24 +260,36 @@ int hisi_sas_ioremap(struct hisi_hba *hisi_hba)
 	if (IS_ERR(hisi_hba->regs))
 		return PTR_ERR(hisi_hba->regs);
 
+	err = of_address_to_resource(hisi_hba->np, 1, &res);
+	if (err)
+		return err;
+
+	hisi_hba->ctrl_regs = devm_ioremap(&pdev->dev,
+			res.start, resource_size(&res));
+	if (IS_ERR(hisi_hba->regs))
+		return PTR_ERR(hisi_hba->regs);
+
 	return 0;
 }
 
-static const struct of_device_id sas_core_of_match[] = {
-	{ .compatible = "hisilicon,p660-sas-core",
-	.data = &hisi_sas_p660_dispatch},
+static const struct of_device_id sas_of_match[] = {
+	{ .compatible = "hisilicon,sas-controller-v1",
+	.data = &hisi_sas_hba_info_v1_hw},
+	{ .compatible = "hisilicon,sas-controller-v2",
+	.data = &hisi_sas_hba_info_v2_hw},
 	{},
 };
+MODULE_DEVICE_TABLE(of, sas_of_match);
 
 static struct hisi_hba *hisi_sas_platform_dev_alloc(
 			struct platform_device *pdev,
 			struct Scsi_Host *shost,
 			struct device_node *np)
 {
-	int interrupt_count;
+	int interrupt_count, interrupt_cells;
 	struct hisi_hba *hisi_hba;
 	struct sas_ha_struct *sha = SHOST_TO_SAS_HA(shost);
-	const struct of_device_id *match = of_match_node(sas_core_of_match, np);
+	const struct of_device_id *match = of_match_node(sas_of_match, np);
 
 	if (!match)
 		goto err_out;
@@ -289,31 +302,48 @@ static struct hisi_hba *hisi_sas_platform_dev_alloc(
 	hisi_hba->dev = &pdev->dev;
 	hisi_hba->np = np;
 
+	init_timer(&hisi_hba->timer);
+
+	if (of_property_read_u32_array(np, "reset-reg",
+				       (u32 *) &hisi_hba->reset_reg,
+				       HISI_SAS_RESET_REG_CNT))
+		goto err_out;
+
+	if (of_property_read_u32_array(np, "reset-status-reg",
+				       (u32 *) &hisi_hba->reset_status_reg,
+				       HISI_SAS_RESET_REG_CNT))
+		goto err_out;
+
 	if (of_property_read_u32(np, "phy-count", &hisi_hba->n_phy))
 		goto err_out;
 
 	if (of_property_read_u32(np, "queue-count", &hisi_hba->queue_count))
 		goto err_out;
 
-	if (of_property_read_u32(np, "core-id", &hisi_hba->id))
+	if (of_property_read_u32(np, "controller-id", &hisi_hba->id))
 		goto err_out;
 
 	interrupt_count = of_property_count_u32_elems(np, "interrupts");
 	if (interrupt_count < 0)
 		goto err_out;
 
-	hisi_hba->int_names = devm_kcalloc(&pdev->dev, interrupt_count / 2,
-				HISI_SAS_INT_NAME_LENGTH,
-				GFP_KERNEL);
+	if (of_property_read_u32(np, "#interrupt-cells", &interrupt_cells))
+		goto err_out;
+
+	hisi_hba->int_names = devm_kcalloc(&pdev->dev,
+					   interrupt_count / interrupt_cells,
+					   HISI_SAS_NAME_LEN,
+					   GFP_KERNEL);
 	if (!hisi_hba->int_names)
 		goto err_out;
 
-	hisi_hba->dispatch = match->data;
+	hisi_hba->hba_info = match->data;
 
-	INIT_LIST_HEAD(&hisi_hba->wq_list);
-
-	((struct hisi_hba_priv *)sha->lldd_ha)->hisi_hba[hisi_hba->id] = hisi_hba;
-	((struct hisi_hba_priv *)sha->lldd_ha)->n_phy = hisi_hba->n_phy;
+#ifdef SAS_DIF
+	/* turn on DIF support */
+	scsi_host_set_prot(shost, hisi_hba->hba_info->prot_cap);
+	scsi_host_set_guard(shost, SHOST_DIX_GUARD_CRC);
+#endif
 
 	hisi_hba->sas = sha;
 	hisi_hba->shost = shost;
@@ -340,52 +370,23 @@ static void hisi_sas_init_add(struct hisi_hba *hisi_hba)
 	for (i = 0; i < hisi_hba->n_phy; i++) {
 		hisi_hba->phy[i].dev_sas_addr = 0x5001882016072015ULL;
 		hisi_hba->phy[i].dev_sas_addr =
-			cpu_to_be64((u64)(*(u64 *)&hisi_hba->phy[i].dev_sas_addr));
+			cpu_to_be64((u64)(*(u64 *)
+			&hisi_hba->phy[i].dev_sas_addr));
 	}
-	memcpy(hisi_hba->sas_addr, &hisi_hba->phy[0].dev_sas_addr, SAS_ADDR_SIZE);
-}
-
-static void hisi_sas_post_ha_init(struct Scsi_Host *shost, int n_core)
-{
-	int i, j;
-	struct hisi_hba *hisi_hba = NULL;
-	struct sas_ha_struct *sha = SHOST_TO_SAS_HA(shost);
-	int n_phy = 0;
-
-	for (j = 0; j < n_core; j++) {
-		hisi_hba = ((struct hisi_hba_priv *)sha->lldd_ha)->hisi_hba[j];
-		for (i = 0; i < hisi_hba->n_phy; i++) {
-
-			sha->sas_phy[n_phy] =
-				&hisi_hba->phy[i].sas_phy;
-			sha->sas_port[n_phy] =
-				&hisi_hba->port[i].sas_port;
-			n_phy++;
-		}
-	}
-
-	sha->sas_ha_name = DRV_NAME;
-	sha->dev = hisi_hba->dev;
-	sha->lldd_module = THIS_MODULE;
-	sha->sas_addr = &hisi_hba->sas_addr[0];
-
-	sha->num_phys = n_phy;
-
-	shost->sg_tablesize = min_t(u16, SG_ALL, HISI_SAS_SGE_PAGE_CNT); // SG_ALL=SCSI_MAX_SG_SEGMENTS=128
-	shost->can_queue = HISI_SAS_COMMAND_ENTRIES;
-	shost->cmd_per_lun = HISI_SAS_COMMAND_ENTRIES;
-	sha->core.shost = hisi_hba->shost;
+	memcpy(hisi_hba->sas_addr, &hisi_hba->phy[0].dev_sas_addr,
+	       SAS_ADDR_SIZE);
 }
 
 static int hisi_sas_probe(struct platform_device *pdev)
 {
 	struct Scsi_Host *shost;
 	struct hisi_hba *hisi_hba;
-	struct device_node *node = pdev->dev.of_node, *np;
-	int rc, n_core;
-
-	if (of_property_read_u32(node, "core-count", &n_core) || (n_core == 0))
-		return -ENOMEM;
+	struct device_node *np = pdev->dev.of_node;
+	struct device *dev = &pdev->dev;
+	struct asd_sas_phy **arr_phy;
+	struct asd_sas_port **arr_port;
+	struct sas_ha_struct *sha;
+	int rc, phy_nr, port_nr, i;
 
 	shost = scsi_host_alloc(&hisi_sas_sht, sizeof(void *));
 	if (!shost)
@@ -398,46 +399,76 @@ static int hisi_sas_probe(struct platform_device *pdev)
 		rc = -ENOMEM;
 		goto err_out_ha;
 	}
-	platform_set_drvdata(pdev, SHOST_TO_SAS_HA(shost));
+	sha = SHOST_TO_SAS_HA(shost);
+	platform_set_drvdata(pdev, sha);
 
-	rc = hisi_sas_prep_ha_init(&pdev->dev, shost, n_core);
+	/*l00293075 bug http://hulk.huawei.com/bugzilla/show_bug.cgi?id=731*/
+	if (dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64))) {
+		rc = -ENOMEM;
+		goto err_out_ha;
+	}
+
+	hisi_hba = hisi_sas_platform_dev_alloc(pdev, shost, np);
+	if (!hisi_hba) {
+		rc = -ENOMEM;
+		goto err_out_ha;
+	}
+
+	phy_nr = port_nr = hisi_hba->n_phy;
+
+
+	arr_phy = devm_kcalloc(dev, phy_nr, sizeof(void *), GFP_KERNEL);
+	arr_port = devm_kcalloc(dev, port_nr, sizeof(void *), GFP_KERNEL);
+	if (!arr_phy || !arr_port)
+		return -ENOMEM;
+
+	sha->sas_phy = arr_phy;
+	sha->sas_port = arr_port;
+	sha->core.shost = shost;
+	sha->lldd_ha = hisi_hba;
+
+	shost->transportt = hisi_sas_stt;
+	shost->max_id = HISI_SAS_MAX_DEVICES;
+	shost->max_lun = ~0;
+	shost->max_channel = 1;
+	shost->max_cmd_len = 16;
+	shost->sg_tablesize = min_t(u16, SG_ALL, HISI_SAS_SGE_PAGE_CNT);
+	shost->can_queue = HISI_SAS_COMMAND_ENTRIES;
+	shost->cmd_per_lun = HISI_SAS_COMMAND_ENTRIES;
+
+	sha->sas_ha_name = DRV_NAME;
+	sha->dev = hisi_hba->dev;
+	sha->lldd_module = THIS_MODULE;
+	sha->sas_addr = &hisi_hba->sas_addr[0];
+	sha->num_phys = hisi_hba->n_phy;
+	sha->core.shost = hisi_hba->shost;
+
+	for (i = 0; i < hisi_hba->n_phy; i++) {
+		sha->sas_phy[i] = &hisi_hba->phy[i].sas_phy;
+		sha->sas_port[i] = &hisi_hba->port[i].sas_port;
+	}
+
+	hisi_sas_init_add(hisi_hba);
+
+	rc = HISI_SAS_DISP->hw_init(hisi_hba);
 	if (rc)
 		goto err_out_ha;
 
-	for (np = of_find_matching_node(node, sas_core_of_match); np;
-		np = of_find_matching_node(np, sas_core_of_match)) {
-		hisi_hba = hisi_sas_platform_dev_alloc(pdev, shost, np);
-		if (!hisi_hba) {
-			rc = -ENOMEM;
-			goto err_out_ha;
-		}
+	rc = HISI_SAS_DISP->interrupt_init(hisi_hba);
+	if (rc)
+		goto err_out_ha;
 
-		memset(&hisi_hba->hba_param, 0xFF, sizeof(struct hba_info_page));
+	rc = HISI_SAS_DISP->interrupt_openall(hisi_hba);
+	if (rc)
+		goto err_out_ha;
 
-		hisi_sas_init_add(hisi_hba);
+	HISI_SAS_DISP->phys_init(hisi_hba);
 
-		rc = HISI_SAS_DISP->hw_init(hisi_hba);
-		if (rc)
-			goto err_out_ha;
-
-		rc = HISI_SAS_DISP->interrupt_init(hisi_hba);
-		if (rc)
-			goto err_out_ha;
-
-		rc = HISI_SAS_DISP->interrupt_openall(hisi_hba);
-		if (rc)
-			goto err_out_ha;
-
-		HISI_SAS_DISP->phys_init(hisi_hba);
-
-#ifdef CONFIG_DEBUG_HISI_SAS
-		rc = hisi_sas_debugfs_init(hisi_hba);
-		if (rc)
-			goto err_out_ha;
+#ifdef CONFIG_DEBUG_FS
+	rc = hisi_sas_debugfs_init(hisi_hba);
+	if (rc)
+		goto err_out_ha;
 #endif
-	}
-
-	hisi_sas_post_ha_init(shost, n_core);
 
 	rc = scsi_add_host(shost, &pdev->dev);
 	if (rc)
@@ -462,28 +493,18 @@ err_out_ha:
 static int hisi_sas_remove(struct platform_device *pdev)
 {
 	struct sas_ha_struct *sha = platform_get_drvdata(pdev);
-	struct hisi_hba *hisi_hba;
-	u32 n_core, i;
+	struct hisi_hba *hisi_hba = (struct hisi_hba *)sha->lldd_ha;
 
-	n_core = ((struct hisi_hba_priv *)sha->lldd_ha)->n_core;
 	sas_unregister_ha(sha);
 	sas_remove_host(sha->core.shost);
 	scsi_remove_host(sha->core.shost);
 
-	for (i = 0; i < n_core; i++) {
-		hisi_hba = ((struct hisi_hba_priv *)sha->lldd_ha)->hisi_hba[i];
-#ifdef CONFIG_DEBUG_HISI_SAS
-		hisi_sas_debugfs_free(hisi_hba);
+#ifdef CONFIG_DEBUG_FS
+	hisi_sas_debugfs_free(hisi_hba);
 #endif
-		hisi_sas_free(hisi_hba);
-	}
+	hisi_sas_free(hisi_hba);
 	return 0;
 }
-
-static const struct of_device_id sas_of_match[] = {
-	{ .compatible = "hisilicon,p660-sas",},
-	{},
-};
 
 static struct platform_driver hisi_sas_driver = {
 	.probe = hisi_sas_probe,
@@ -516,5 +537,6 @@ module_exit(hisi_sas_exit);
 
 MODULE_VERSION(DRV_VERSION);
 MODULE_LICENSE("GPL");
-MODULE_DESCRIPTION("HISILICON P660 SAS/SATA controller driver");
+MODULE_AUTHOR("John Garry <john.garry@huawei.com>");
+MODULE_DESCRIPTION("HISILICON SAS controller driver");
 MODULE_ALIAS("platform:hisi_sas_controller");

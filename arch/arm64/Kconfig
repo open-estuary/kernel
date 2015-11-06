@@ -292,6 +292,12 @@ config ARCH_ZYNQMP
 	help
 	  This enables support for Xilinx ZynqMP Family
 
+config ARCH_HISI
+	bool "Hisilicon SoC Family"
+	select COMMON_CLK_HI6220
+	help
+	  This enables support for Hisilicon ARMv8 Family of SoCs.
+
 endmenu
 
 menu "Bus support"
