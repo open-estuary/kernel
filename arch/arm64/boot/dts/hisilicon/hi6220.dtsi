@@ -218,6 +218,30 @@
 			status = "ok";
 		};
 
+		uart3: uart@f7113000 {
+			compatible = "arm,pl011", "arm,primecell";
+			reg = <0x0 0xf7113000 0x0 0x1000>;
+			interrupts = <0 39 4>;
+			reset-controller-reg = <0x330 0x334 0x338 7>;
+			clocks = <&clock_sys HI6220_UART3_PCLK>;
+			clock-names = "apb_pclk";
+			clk-enable-flag = <0>;
+			fifo-deep-size = <16>;
+			status = "ok";
+		};
+
+		uart4: uart@f7114000 {
+			compatible = "arm,pl011", "arm,primecell";
+			reg = <0x0 0xf7114000 0x0 0x1000>;
+			interrupts = <0 40 4>;
+			reset-controller-reg = <0x330 0x334 0x338 8>;
+			clocks = <&clock_sys HI6220_UART4_PCLK>;
+			clock-names = "apb_pclk";
+			clk-enable-flag = <0>;
+			fifo-deep-size = <16>;
+			status = "disabled";
+		};
+
 		pmx0: pinmux@f7010000 {
 			compatible = "pinctrl-single";
 			reg = <0x0 0xf7010000  0x0 0x27c>;
