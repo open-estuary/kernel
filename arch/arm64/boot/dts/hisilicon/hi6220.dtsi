@@ -215,7 +215,7 @@
 			interrupts = <0 36 4>;
 			clocks = <&clock_ao HI6220_UART0_PCLK>;
 			clock-names = "apb_pclk";
-			status = "ok";
+			status = "disabled";
 		};
 
 		uart3: uart@f7113000 {
@@ -240,6 +240,19 @@
 			clk-enable-flag = <0>;
 			fifo-deep-size = <16>;
 			status = "disabled";
+		};
+
+		dma0: dma@f7370000 {
+			compatible = "hisilicon,k3-dma-1.0";
+			reg = <0x0 0xf7370000 0x0 0x1000>;
+			#dma-cells = <1>;
+			dma-channels = <15>;
+			dma-requests = <32>;
+			interrupts = <0 84 4>;
+			clocks = <&clock_sys HI6220_EDMAC_ACLK>;
+			dma-no-cci;
+			dma-type = "hi6220_dma";
+			status = "ok";
 		};
 
 		pmx0: pinmux@f7010000 {
@@ -796,6 +809,46 @@
                 };
 	};
 
+	dwmmc_0: dwmmc0@f723d000 {
+		compatible = "hisilicon,hi6220-dw-mshc";
+		num-slots = <0x1>;
+		board-mmc-bus-clk = <0x0>;
+		cap-mmc-highspeed;
+		non-removable;
+		reg = <0x0 0xf723d000 0x0 0x1000>;
+		interrupts = <0x0 0x48 0x4>;
+		clocks = <&clock_sys HI6220_MMC0_CIUCLK>, <&clock_sys HI6220_MMC0_CLK>;
+		clock-names = "ciu", "biu";
+		vmmc-supply = <&ldo19>;
+	};
+
+	dwmmc_1: dwmmc1@f723e000 {
+		compatible = "hisilicon,hi6220-dw-mshc";
+		num-slots = <0x1>;
+		board-mmc-bus-clk = <0x0>;
+		card-detect-delay = <200>;
+		hisilicon,peripheral-syscon = <&ao_ctrl>;
+		cap-sd-highspeed;
+		reg = <0x0 0xf723e000 0x0 0x1000>;
+		interrupts = <0x0 0x49 0x4>;
+		clocks = <&clock_sys HI6220_MMC1_CIUCLK>, <&clock_sys HI6220_MMC1_CLK>;
+		clock-names = "ciu", "biu";
+		vqmmc-supply = <&ldo7>;
+		vmmc-supply = <&ldo10>;
+	};
+
+        dwmmc_2: dwmmc2@f723f000 {
+                compatible = "hisilicon,hisi-dw-mshc";
+                num-slots = <0x1>;
+                board-mmc-bus-clk = <0x0>;
+                reg = <0x0 0xf723f000 0x0 0x1000>;
+                interrupts = <0x0 0x4a 0x4>;
+                #address-cells = <0x1>;
+                #size-cells = <0x0>;
+                clocks = <&clock_sys HI6220_MMC2_CIUCLK>, <&clock_sys HI6220_MMC2_CLK>;
+                clock-names = "ciu", "biu";
+        };
+
 	mtcmos {
 		compatible = "hisilicon,hi6220-mtcmos-driver";
 		hisilicon,mtcmos-steady-us = <10>;
@@ -813,5 +866,4 @@
 			hisilicon,ctrl-data = <2 0x1>;
 		};
 	};
-
 };

@@ -10,9 +10,9 @@
 /memreserve/ 0x00000000 0x07400000;
 /memreserve/ 0x0740f000 0x1000;
 
-#include "hi6220.dtsi"
 #include "hikey-pinctrl.dtsi"
 #include "hikey-gpio.dtsi"
+#include "hi6220.dtsi"
 
 / {
 	model = "HiKey Development Board";
@@ -25,6 +25,9 @@
 	aliases {
 		serial0 = &uart0;
 		serial3 = &uart3;
+		mshc0 = &dwmmc_0;
+		mshc1 = &dwmmc_1;
+		mshc2 = &dwmmc_2;
 	};
 
 	chosen {
@@ -67,4 +70,32 @@
 			status = "ok";
 		};
    };
+
+	dwmmc_0: dwmmc0@f723d000 {
+		bus-width = <0x8>;
+		vmmc-supply = <&ldo19>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&emmc_pmx_func &emmc_clk_cfg_func
+			     &emmc_cfg_func &emmc_rst_cfg_func>;
+	};
+
+	dwmmc_1: dwmmc1@f723e000 {
+		bus-width = <0x4>;
+		disable-wp;
+		cd-gpios = <&gpio1 0 1>;
+		pinctrl-names = "default", "idle";
+		pinctrl-0 = <&sd_pmx_func &sd_clk_cfg_func &sd_cfg_func>;
+		pinctrl-1 = <&sd_pmx_idle &sd_clk_cfg_idle &sd_cfg_idle>;
+	};
+
+	dwmmc_2: dwmmc2@f723f000 {
+		bus-width = <0x4>;
+		broken-cd;
+		non-removable;
+		/* WL_EN */
+		pinctrl-names = "default", "idle";
+		pinctrl-0 = <&sdio_pmx_func &sdio_clk_cfg_func &sdio_cfg_func>;
+		pinctrl-1 = <&sdio_pmx_idle &sdio_clk_cfg_idle &sdio_cfg_idle>;
+	};
+
 };
