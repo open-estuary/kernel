@@ -82,10 +82,18 @@ void acpi_pci_remove_bus(struct pci_bus *bus);
 #ifdef	CONFIG_PCI_MMCONFIG
 int pci_mmcfg_setup_map(struct acpi_pci_root_info *ci);
 void pci_mmcfg_teardown_map(struct acpi_pci_root_info *ci);
+struct pci_ops *pci_mcfg_get_ops(struct acpi_pci_root *root);
+void __iomem *
+pci_mcfg_dev_base(struct pci_bus *bus, unsigned int devfn, int offset);
 #else
 static inline int pci_mmcfg_setup_map(struct acpi_pci_root_info *ci)
 { return 0; }
 static inline void pci_mmcfg_teardown_map(struct acpi_pci_root_info *ci) { }
+static inline struct pci_ops *pci_mcfg_get_ops(struct acpi_pci_root *root)
+{ return NULL; }
+static inline void __iomem *
+pci_mcfg_dev_base(struct pci_bus *bus, unsigned int devfn, int offset)
+{ return NULL; }
 #endif
 
 #ifdef	CONFIG_ACPI_PCI_SLOT
