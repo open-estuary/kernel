@@ -190,8 +190,7 @@ static bool acpi_decode_space(struct resource_win *win,
 {
 	u8 iodec = attr->granularity == 0xfff ? ACPI_DECODE_10 : ACPI_DECODE_16;
 	bool wp = addr->info.mem.write_protect;
-	u64 len = attr->address_length;
-	u64 start, end, offset = 0;
+	u64 len = attr->address_length, offset = 0;
 	struct resource *res = &win->res;
 
 	/*
@@ -215,14 +214,13 @@ static bool acpi_decode_space(struct resource_win *win,
 	else if (attr->translation_offset)
 		pr_debug("ACPI: translation_offset(%lld) is invalid for non-bridge device.\n",
 			 attr->translation_offset);
-	start = attr->minimum + offset;
-	end = attr->maximum + offset;
 
 	win->offset = offset;
-	res->start = start;
-	res->end = end;
+	res->start = attr->minimum;
+	res->end = attr->maximum;
 	if (sizeof(resource_size_t) < sizeof(u64) &&
-	    (offset != win->offset || start != res->start || end != res->end)) {
+	    (offset != win->offset || attr->minimum != res->start ||
+	     attr->maximum != res->end)) {
 		pr_warn("acpi resource window ([%#llx-%#llx] ignored, not CPU addressable)\n",
 			attr->minimum, attr->maximum);
 		return false;

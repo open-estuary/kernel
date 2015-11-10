@@ -154,7 +154,7 @@ static int add_io_space(struct device *dev, struct pci_root_info *info,
 	struct resource_entry *iospace;
 	struct resource *resource, *res = entry->res;
 	char *name;
-	unsigned long base, min, max, base_port;
+	unsigned long base_mmio, base_port;
 	unsigned int sparse = 0, space_nr, len;
 
 	len = strlen(info->common.name) + 32;
@@ -172,12 +172,10 @@ static int add_io_space(struct device *dev, struct pci_root_info *info,
 		goto free_resource;
 
 	name = (char *)(iospace + 1);
-	min = res->start - entry->offset;
-	max = res->end - entry->offset;
-	base = __pa(io_space[space_nr].mmio_base);
+	base_mmio = __pa(io_space[space_nr].mmio_base);
 	base_port = IO_SPACE_BASE(space_nr);
 	snprintf(name, len, "%s I/O Ports %08lx-%08lx", info->common.name,
-		 base_port + min, base_port + max);
+		 base_port + res->start, base_port + res->end);
 
 	/*
 	 * The SDM guarantees the legacy 0-64K space is sparse, but if the
@@ -190,19 +188,27 @@ static int add_io_space(struct device *dev, struct pci_root_info *info,
 	resource = iospace->res;
 	resource->name  = name;
 	resource->flags = IORESOURCE_MEM;
-	resource->start = base + (sparse ? IO_SPACE_SPARSE_ENCODING(min) : min);
-	resource->end   = base + (sparse ? IO_SPACE_SPARSE_ENCODING(max) : max);
+	resource->start = base_mmio;
+	resource->end = base_mmio;
+	if (sparse) {
+		resource->start += IO_SPACE_SPARSE_ENCODING(res->start);
+		resource->end += IO_SPACE_SPARSE_ENCODING(res->end);
+	} else {
+		resource->start += res->start;
+		resource->end += res->end;
+	}
 	if (insert_resource(&iomem_resource, resource)) {
 		dev_err(dev,
 			"can't allocate host bridge io space resource  %pR\n",
 			resource);
 		goto free_resource;
 	}
-
-	entry->offset = base_port;
-	res->start = min + base_port;
-	res->end = max + base_port;
 	resource_list_add_tail(iospace, &info->io_resources);
+
+	/* Adjust base of original IO port resource descriptor */
+	entry->offset = base_port;
+	res->start += base_port;
+	res->end += base_port;
 
 	return 0;
 
