@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <linux/acpi.h>
 #include <linux/bootmem.h>
 #include <linux/ctype.h>
 #include <linux/init.h>
@@ -385,10 +386,8 @@ void __init arm64_numa_init(void)
 {
 	int ret = -ENODEV;
 
-#ifdef CONFIG_OF_NUMA
 	if (!numa_off)
-		ret = numa_init(arm64_of_numa_init);
-#endif
+		ret = numa_init(acpi_disabled ? arm64_of_numa_init : arm64_acpi_numa_init);
 
 	if (ret)
 		numa_init(dummy_numa_init);
