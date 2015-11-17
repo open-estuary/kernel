@@ -447,6 +447,9 @@ acpi_map_gic_cpu_interface(struct acpi_madt_generic_interrupt *processor)
 	/* map the logical cpu id to cpu MPIDR */
 	cpu_logical_map(cpu_count) = hwid;
 
+	/* map logical cpu to node */
+	acpi_numa_set_node_info(cpu_count, hwid);
+
 	cpu_count++;
 }
 
