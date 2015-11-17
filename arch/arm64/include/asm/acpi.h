@@ -96,4 +96,12 @@ static inline const char *acpi_get_enable_method(int cpu)
 pgprot_t arch_apei_get_mem_attribute(phys_addr_t addr);
 #endif
 
+#ifdef CONFIG_ACPI_NUMA
+int arm64_acpi_numa_init(void);
+void acpi_numa_set_node_info(unsigned int cpu, u64 hwid);
+#else
+static inline int arm64_acpi_numa_init(void) { return -ENODEV; }
+static inline void acpi_numa_set_node_info(unsigned int cpu, u64 hwid) { }
+#endif /* CONFIG_ACPI_NUMA */
+
 #endif /*_ASM_ACPI_H*/
