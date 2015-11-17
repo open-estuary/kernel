@@ -599,7 +599,7 @@ config HW_PERF_EVENTS
 config HISI_PERFCTR
 	bool "Enable hardware event counter support for HiSilicon SoC"
 	depends on HW_PERF_EVENTS
-	default n
+	default y
 	help
 	 Enable hardware event counter support for Hisilicon SoC LLC,
 	 MN and DDR events.
