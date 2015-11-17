@@ -6,6 +6,8 @@
 
 #ifdef CONFIG_NUMA
 
+#define NR_NODE_MEMBLKS		(MAX_NUMNODES * 2)
+
 /* currently, arm64 implements flat NUMA topology */
 #define parent_node(node)	(node)
 
@@ -43,6 +45,7 @@ struct device_node;
 int __init arm64_of_numa_init(void);
 void __init of_numa_set_node_info(unsigned int cpu, struct device_node *dn);
 #else
+static inline int arm64_of_numa_init(void) { return -ENODEV; }
 static inline void of_numa_set_node_info(unsigned int cpu,
 		struct device_node *dn) { }
 #endif
