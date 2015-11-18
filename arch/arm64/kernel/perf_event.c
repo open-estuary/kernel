@@ -212,11 +212,6 @@ armpmu_event_set_period(struct perf_event *event,
 					ARMV8_HISI_IDX_DDR_COUNTER_MAX) {
 		//pr_info("event_set_period for DDR idx=%d\n", idx);
 	}
-
-	armpmu->write_counter(idx, (u64)(-left) & 0xffffffff);
-	perf_event_update_userpage(event);
-
-	return ret;
 #endif
 	local64_set(&hwc->prev_count, (u64)-left);
 
