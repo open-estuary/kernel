@@ -145,8 +145,11 @@ static struct acpi_iort_node *iort_find_parent_node(struct acpi_iort_node *node)
 static acpi_status
 iort_find_dev_callback(struct acpi_iort_node *node, void *context)
 {
+	struct acpi_buffer path = { ACPI_ALLOCATE_BUFFER, NULL };
 	struct acpi_iort_root_complex *pci_rc;
+	struct acpi_iort_named_component *node_dev;
 	struct device *dev = context;
+	struct acpi_device *adev;
 	struct pci_bus *bus;
 
 	switch (node->type) {
@@ -163,27 +166,43 @@ iort_find_dev_callback(struct acpi_iort_node *node, void *context)
 			return AE_OK;
 
 		break;
+	case ACPI_IORT_NODE_NAMED_COMPONENT:
+		adev = ACPI_COMPANION(dev);
+		if (!adev)
+			break;
+
+		if (acpi_get_name(adev->handle, ACPI_FULL_PATHNAME, &path) != AE_OK)
+			break;
+
+		node_dev = (struct acpi_iort_named_component *)node->node_data;
+		if (!strcmp(node_dev->device_name, (char *)path.pointer)) {
+			kfree(path.pointer);
+			return AE_OK;
+		}
+		kfree(path.pointer);
+		break;
 	}
 
 	return AE_NOT_FOUND;
 }
 
 /**
- * iort_pci_find_its_id() - find the ITS identifier based on specified device.
+ * iort_dev_find_its_id() - find the ITS identifier based on specified device.
  * @dev: device
+ * @node_type: iort node type
  * @idx: index of the ITS identifier list
  * @its_id: ITS identifier
  *
  * Returns: 0 on success, appropriate error value otherwise
  */
 static int
-iort_pci_find_its_id(struct device *dev, unsigned int idx, int *its_id)
+iort_dev_find_its_id(struct device *dev, int node_type,
+			unsigned int idx, int *its_id)
 {
 	struct acpi_iort_its_group *its;
 	struct acpi_iort_node *node;
 
-	node = iort_scan_node(ACPI_IORT_NODE_PCI_ROOT_COMPLEX,
-			      iort_find_dev_callback, dev);
+	node = iort_scan_node(node_type, iort_find_dev_callback, dev);
 	if (!node) {
 		pr_err("can't find node related to %s device\n", dev_name(dev));
 		return -ENXIO;
@@ -208,27 +227,21 @@ iort_pci_find_its_id(struct device *dev, unsigned int idx, int *its_id)
 	return 0;
 }
 
-
 /**
- * iort_find_pci_domain_token() - find registered domain token related to
- * 				  PCI device
+ * iort_find_dev_domain_token() - find registered domain token related to
+ * 				  PCI and platform device
  * @dev: device
  *
  * Returns: domain token on success, NULL otherwise
  */
-struct fwnode_handle *iort_find_pci_domain_token(struct device *dev)
+struct fwnode_handle *iort_find_dev_domain_token(struct device *dev, int node_type)
 {
-	static struct fwnode_handle *domain_handle;
 	int its_id;
 
-	if (iort_pci_find_its_id(dev, 0, &its_id))
+	if (iort_dev_find_its_id(dev, node_type, 0, &its_id))
 		return NULL;
 
-	domain_handle = iort_find_its_domain_token(its_id);
-	if (!domain_handle)
-		return NULL;
-
-	return domain_handle;
+	return iort_find_its_domain_token(its_id);
 }
 
 static int
