@@ -245,10 +245,10 @@ struct fwnode_handle *iort_find_dev_domain_token(struct device *dev, int node_ty
 }
 
 static int
-iort_translate_dev_to_devid(struct acpi_iort_node *node, u32 req_id,
+iort_translate_dev_to_devid(struct acpi_iort_node *node, u32 input_id,
 			    u32 *dev_id)
 {
-	u32 curr_id = req_id;
+	u32 curr_id = input_id;
 
 	if (!node)
 		return -EINVAL;
@@ -270,8 +270,15 @@ iort_translate_dev_to_devid(struct acpi_iort_node *node, u32 req_id,
 			 * Single mapping is not translation rule,
 			 * lets move on for this case
 			 */
-			if (id->flags & ACPI_IORT_ID_SINGLE_MAPPING)
-				continue;
+			if (id->flags & ACPI_IORT_ID_SINGLE_MAPPING) {
+				if (node->type != ACPI_IORT_NODE_NAMED_COMPONENT)
+					continue;
+
+				/* get the output number directly */
+				curr_id = id->output_base;
+				found  = 1;
+				break;
+			}
 
 			if (curr_id < id->input_base ||
 			    (curr_id > id->input_base + id->id_count))
@@ -318,6 +325,28 @@ int iort_find_pci_id(struct pci_dev *pdev, u32 req_id, u32 *dev_id)
 
 	err = iort_translate_dev_to_devid(node, req_id, dev_id);
 	return err;
+}
+
+/**
+ * iort_find_platform_dev_id() - find platform dev id in DSDT
+ * @dev: device
+ * @dev_id: device ID returned
+ *
+ * Returns: 0 on success, appropriate error value otherwise
+ */
+int iort_find_platform_dev_id(struct device *dev, u32 *dev_id)
+{
+	struct acpi_iort_node *node;
+
+	node = iort_scan_node(ACPI_IORT_NODE_NAMED_COMPONENT,
+			      iort_find_dev_callback, dev);
+	if (!node) {
+		pr_err("can't find node related to %s device\n",
+		       dev_name(dev));
+		return -ENXIO;
+	}
+
+	return iort_translate_dev_to_devid(node, 0, dev_id);
 }
 
 static int __init iort_table_detect(void)
