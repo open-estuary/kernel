@@ -27,8 +27,19 @@ struct fwnode_handle;
 
 int iort_register_domain_token(int trans_id, struct fwnode_handle *fw_node);
 struct fwnode_handle *iort_find_its_domain_token(int trans_id);
-struct fwnode_handle *iort_find_pci_domain_token(struct device *dev);
+struct fwnode_handle *iort_find_dev_domain_token(struct device *dev,
+						 int node_type);
 int iort_find_pci_id(struct pci_dev *pdev, u32 req_id, u32 *dev_id);
+
+static inline struct fwnode_handle *iort_find_pci_domain_token(struct device *dev)
+{
+	return iort_find_dev_domain_token(dev, ACPI_IORT_NODE_PCI_ROOT_COMPLEX);
+}
+
+static inline struct fwnode_handle *iort_find_platform_dev_domain_token(struct device *dev)
+{
+	return iort_find_dev_domain_token(dev, ACPI_IORT_NODE_NAMED_COMPONENT);
+}
 #else /* CONFIG_IORT_TABLE */
 static inline int
 iort_find_pci_id(struct pci_dev *pdev, u32 req_id, u32 *dev_id)
