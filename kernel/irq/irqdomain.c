@@ -87,13 +87,18 @@ void irq_domain_free_fwnode(struct fwnode_handle *fwnode)
  */
 const char *irq_domain_get_irqchip_fwnode_name(struct fwnode_handle *fwnode)
 {
-	struct irqchip_fwid *fwid;
 
-	if (!is_fwnode_irqchip(fwnode))
-		return NULL;
+	if (IS_ENABLED(CONFIG_OF) && is_of_node(fwnode))
+		return to_of_node(fwnode)->full_name;
 
-	fwid = container_of(fwnode, struct irqchip_fwid, fwnode);
-	return fwid->name;
+	if (is_fwnode_irqchip(fwnode)) {
+		struct irqchip_fwid *fwid;
+
+		fwid = container_of(fwnode, struct irqchip_fwid, fwnode);
+		return fwid->name;
+	}
+
+	return NULL;
 }
 
 /**
