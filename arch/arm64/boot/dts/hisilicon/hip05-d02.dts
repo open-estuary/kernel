@@ -77,3 +77,19 @@
 		reg = <0x28>;
 	};
 };
+
+&eth2 {
+	status = "okay";
+};
+
+&eth3 {
+	status = "okay";
+};
+
+&eth6 {
+	status = "okay";
+};
+
+&eth7 {
+	status = "okay";
+};
