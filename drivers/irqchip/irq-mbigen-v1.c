@@ -155,16 +155,16 @@ static int mbigen_set_type(struct irq_data *d, unsigned int type)
 	u32 mask;
 	int val;
 
-	if (type != IRQ_TYPE_LEVEL_MASK && type != IRQ_TYPE_EDGE_RISING)
+	if (type != IRQ_TYPE_LEVEL_HIGH && type != IRQ_TYPE_EDGE_RISING)
 		return -EINVAL;
 
 	mask = 1 << (mgn_irq_data->pin_offset % 32);
 
 	val = readl_relaxed(mgn_irq_data->reg_type + mgn_irq_data->base);
 
-	if (type == IRQ_TYPE_LEVEL_MASK)
+	if (type == IRQ_TYPE_LEVEL_HIGH)
 		val |= mask;
-	else if (type == IRQ_TYPE_EDGE_RISING)
+	else
 		val &= ~mask;
 
 	writel_relaxed(val, mgn_irq_data->reg_type + mgn_irq_data->base);
