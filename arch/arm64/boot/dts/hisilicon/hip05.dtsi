@@ -326,4 +326,6 @@
 			status = "disabled";
 		};
 	};
+
+	/include/ "hip05_hns.dtsi"
 };
