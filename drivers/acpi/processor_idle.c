@@ -856,7 +856,7 @@ static int acpi_processor_setup_cstates(struct acpi_processor *pr)
 
 		state = &drv->states[count];
 		snprintf(state->name, CPUIDLE_NAME_LEN, "C%d", i);
-		strncpy(state->desc, cx->desc, CPUIDLE_DESC_LEN);
+		strlcpy(state->desc, cx->desc, CPUIDLE_DESC_LEN);
 		state->exit_latency = cx->latency;
 		state->target_residency = cx->latency * latency_factor;
 		state->enter = acpi_idle_enter;
@@ -1009,7 +1009,8 @@ static int acpi_processor_evaluate_lpi(acpi_handle handle,
 
 		obj = &element->package.elements[9];
 		if (obj->type == ACPI_TYPE_STRING)
-			strncpy(lpix->desc, obj->string.pointer, ACPI_CX_DESC_LEN);
+			strlcpy(lpix->desc, obj->string.pointer,
+				ACPI_CX_DESC_LEN);
 
 		lpix->index = state_count;
 
@@ -1068,9 +1069,9 @@ static void combine_lpi_states(struct acpi_processor_lpi *l_lpi,
 	c_lpi->index = p_lpi->index;
 	c_lpi->flags = p_lpi->flags;
 	c_lpi->arch_flags = p_lpi->arch_flags;
-	strncpy(c_lpi->desc, l_lpi->desc, ACPI_CX_DESC_LEN);
-	strncat(c_lpi->desc, "+", ACPI_CX_DESC_LEN);
-	strncat(c_lpi->desc, p_lpi->desc, ACPI_CX_DESC_LEN);
+	strlcpy(c_lpi->desc, l_lpi->desc, ACPI_CX_DESC_LEN);
+	strlcat(c_lpi->desc, "+", ACPI_CX_DESC_LEN);
+	strlcat(c_lpi->desc, p_lpi->desc, ACPI_CX_DESC_LEN);
 }
 
 static int flatten_lpi_states(struct acpi_processor *pr,
@@ -1190,7 +1191,7 @@ static int acpi_processor_setup_lpi_states(struct acpi_processor *pr)
 
 		state = &drv->states[i];
 		snprintf(state->name, CPUIDLE_NAME_LEN, "LPI-%d", i);
-		strncpy(state->desc, lpi->desc, CPUIDLE_DESC_LEN);
+		strlcpy(state->desc, lpi->desc, CPUIDLE_DESC_LEN);
 		state->exit_latency = lpi->wake_latency;
 		state->target_residency = lpi->min_residency;
 		if (lpi->arch_flags)
