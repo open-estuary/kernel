@@ -34,11 +34,10 @@
 #define IRQ_EVENT_ID_SHIFT		16
 #define IRQ_EVENT_ID_MASK		0xffff
 
-/* register range of each mbigen node */
-#define MBIGEN_NODE_OFFSET		0x1000
-
+#define IRQS_PER_NORMAL_MBIGEN_NODE	64
 /* offset of vector register in mbigen node */
 #define REG_MBIGEN_VEC_OFFSET		0x300
+#define REG_MBIGEN_EXT_VEC_OFFSET		0x320
 
 /**
  * offset of clear register in mbigen node
@@ -46,6 +45,7 @@
  * of interrupt
  */
 #define REG_MBIGEN_CLEAR_OFFSET		0x100
+#define REG_MBIGEN_EXT_CLEAR_OFFSET		0x120
 
 /**
  * offset of interrupt type register
@@ -53,6 +53,7 @@
  * trigger type
  */
 #define REG_MBIGEN_TYPE_OFFSET		0x0
+#define REG_MBIGEN_EXT_TYPE_OFFSET		0x20
 
 /**
  * to avoid messing up with the interrupt from 1610 in ITS driver,
@@ -102,23 +103,38 @@ static int mbigen_event_base[6] = {0, 64, 128, 192, 256, 384};
 
 static inline int get_mbigen_vec_reg(u32 nid, u32 offset)
 {
-	return (nid * 4) + REG_MBIGEN_VEC_OFFSET;
+	if (nid < 4)
+		return (nid * 4) + REG_MBIGEN_VEC_OFFSET;
+	else
+		return (nid - 4) * 4 + REG_MBIGEN_EXT_VEC_OFFSET;
 }
 
 static int get_mbigen_type_reg(u32 nid, u32 offset)
 {
 	int ofst;
 
-	ofst = offset / 32 * 4;
-	return ofst + REG_MBIGEN_TYPE_OFFSET;
+	if (nid < 4) {
+		ofst = offset / 32 * 4;
+		return ofst + REG_MBIGEN_TYPE_OFFSET;
+	} else {
+		offset -= 4 * IRQS_PER_NORMAL_MBIGEN_NODE;
+		ofst = offset / 32 * 4;
+		return ofst + REG_MBIGEN_EXT_TYPE_OFFSET;
+	}
 }
 
 static int get_mbigen_clear_reg(u32 nid, u32 offset)
 {
 	int ofst;
 
-	ofst = offset / 32 * 4;
-	return ofst + REG_MBIGEN_CLEAR_OFFSET;
+	if (nid < 4) {
+		ofst = offset / 32 * 4;
+		return ofst + REG_MBIGEN_CLEAR_OFFSET;
+	} else {
+		offset -= 4 * IRQS_PER_NORMAL_MBIGEN_NODE;
+		ofst = offset / 32 * 4;
+		return ofst + REG_MBIGEN_EXT_CLEAR_OFFSET;
+	}
 }
 
 
@@ -207,16 +223,18 @@ static void mbigen_write_msg(struct msi_desc *desc, struct msi_msg *msg)
 	struct mbigen_irq_data *mgn_irq_data = irq_get_chip_data(desc->irq);
 	struct mbigen_device *mgn_chip;
 	struct irq_data *data;
-	u32 val, nid;
+	u32 newval, oldval, nid;
 
 	data = irq_get_irq_data(desc->irq);
 	mgn_chip = platform_msi_get_host_data(data->domain);
 
 	nid = get_mbigen_nid(data->hwirq - HW_IRQ_OFFSET);
 
-	val = (mgn_chip->dev_id << IRQ_EVENT_ID_SHIFT) | mbigen_event_base[nid];
+	newval = (mgn_chip->dev_id << IRQ_EVENT_ID_SHIFT) | mbigen_event_base[nid];
+	oldval = readl_relaxed(mgn_irq_data->reg_vec + mgn_irq_data->base);
 
-	writel_relaxed(val, mgn_irq_data->reg_vec + mgn_irq_data->base);
+	if (newval != oldval)
+		writel_relaxed(newval, mgn_irq_data->reg_vec + mgn_irq_data->base);
 }
 
 static struct mbigen_irq_data *set_mbigen_irq_data(int hwirq,
