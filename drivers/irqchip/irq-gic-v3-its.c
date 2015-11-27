@@ -912,6 +912,7 @@ retry_baser:
 			break;
 		}
 
+		alloc_pages = (alloc_size / psz);
 		val |= alloc_pages - 1;
 
 		writeq_relaxed(val, its->base + GITS_BASER + i * 8);
