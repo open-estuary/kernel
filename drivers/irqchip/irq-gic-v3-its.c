@@ -38,6 +38,7 @@
 #include <asm/cacheflush.h>
 #include <asm/cputype.h>
 #include <asm/exception.h>
+#include <dt-bindings/interrupt-controller/mbigen-v1.h>
 
 #include "irq-gic-common.h"
 
@@ -1291,7 +1292,7 @@ static int its_irq_gic_domain_alloc(struct irq_domain *domain,
 	return irq_domain_alloc_irqs_parent(domain, virq, 1, &fwspec);
 }
 
-static int get_irq_event_hint(unsigned int irq)
+static int get_irq_event_hint(unsigned int irq, struct its_device *its_dev)
 {
 	struct irq_data *data;
 	int hint;
@@ -1300,8 +1301,8 @@ static int get_irq_event_hint(unsigned int irq)
 	data = irq_get_irq_data(irq);
 
 	/* for pv660 the hwirq number > 2048 */
-	if (data->hwirq > 2048)
-		hint = data->hwirq - 2048;
+	if(its_dev->device_id == MBIGEN_V1_DEVID)
+		hint = data->hwirq;
 	else
 		hint = -1;
 
@@ -1317,7 +1318,7 @@ static int its_irq_domain_alloc(struct irq_domain *domain, unsigned int virq,
 	int i;
 	int hint;
 
-	hint = get_irq_event_hint(virq);
+	hint = get_irq_event_hint(virq, its_dev);
 	for (i = 0; i < nr_irqs; i++) {
 		err = its_alloc_device_irq(its_dev, &hwirq, &hint);
 		if (err)
