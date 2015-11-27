@@ -10,6 +10,6 @@
  * this value is 0x10 for now. When ITS driver bug fixed,
  * this value should be changed to 0xffcc
  */
-#define MBIGEN_V1_DEVID	0x10
+#define MBIGEN_V1_DEVID	0xFFCC
 
 #endif

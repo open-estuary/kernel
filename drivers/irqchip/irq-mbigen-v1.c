@@ -58,12 +58,6 @@
 #define REG_MBIGEN_EXT_TYPE_OFFSET		0x20
 
 /**
- * to avoid messing up with the interrupt from 1610 in ITS driver,
- * all of the hwirq number in pv660 add the offset 2048
- */
-#define HW_IRQ_OFFSET	2048
-
-/**
  * struct mbigen_device - holds the information of mbigen device.
  *
  * @pdev:		pointer to the platform device structure of mbigen chip.
@@ -140,26 +134,13 @@ static int get_mbigen_clear_reg(u32 nid, u32 offset)
 }
 
 
-static void mbigen_ack_irq(struct irq_data *data)
-{
-	struct mbigen_irq_data *mgn_irq_data = irq_data_get_irq_chip_data(data);
-	u32 mask;
-
-	/* only level triggered interrupt need to clear status */
-	if (mgn_irq_data->type == IRQ_TYPE_LEVEL_MASK) {
-		mask = 1 << (mgn_irq_data->pin_offset % 32);
-		writel_relaxed(mask, mgn_irq_data->reg_clear + mgn_irq_data->base);
-	}
-}
-
-
 static void mbigen_eoi_irq(struct irq_data *data)
 {
 	struct mbigen_irq_data *mgn_irq_data = irq_data_get_irq_chip_data(data);
 	u32 mask;
 
 	/* only level triggered interrupt need to clear status */
-	if (mgn_irq_data->type == IRQ_TYPE_LEVEL_MASK) {
+	if (mgn_irq_data->type == IRQ_TYPE_LEVEL_HIGH) {
 		mask = 1 << (mgn_irq_data->pin_offset % 32);
 		writel_relaxed(mask, mgn_irq_data->reg_clear + mgn_irq_data->base);
 	}
@@ -192,7 +173,6 @@ static int mbigen_set_type(struct irq_data *d, unsigned int type)
 
 void mbigen_unmask_irq(struct irq_data *data)
 {
-	mbigen_ack_irq(data);
 	irq_chip_unmask_parent(data);
 }
 
@@ -230,7 +210,7 @@ static void mbigen_write_msg(struct msi_desc *desc, struct msi_msg *msg)
 	data = irq_get_irq_data(desc->irq);
 	mgn_chip = platform_msi_get_host_data(data->domain);
 
-	nid = get_mbigen_nid(data->hwirq - HW_IRQ_OFFSET);
+	nid = get_mbigen_nid(data->hwirq);
 
 	newval = (mgn_chip->dev_id << IRQ_EVENT_ID_SHIFT) | mbigen_event_base[nid];
 	oldval = readl_relaxed(mgn_irq_data->reg_vec + mgn_irq_data->base);
@@ -249,7 +229,7 @@ static struct mbigen_irq_data *set_mbigen_irq_data(int hwirq,
 	if (!datap)
 		return NULL;
 
-	datap->pin_offset = hwirq - HW_IRQ_OFFSET;
+	datap->pin_offset = hwirq;
 
 	/* get the mbigen node number */
 	nid = get_mbigen_nid(datap->pin_offset);
@@ -277,7 +257,7 @@ static int mbigen_domain_translate(struct irq_domain *d,
 		if (fwspec->param_count != 2)
 			return -EINVAL;
 
-		*hwirq = fwspec->param[0] + HW_IRQ_OFFSET;
+		*hwirq = fwspec->param[0];
 		*type = fwspec->param[1] & IRQ_TYPE_SENSE_MASK;
 		return 0;
 	}
