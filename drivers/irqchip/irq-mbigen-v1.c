@@ -76,7 +76,6 @@ struct mbigen_device {
  * struct mbigen_irq_data - private data of each irq
  *
  * @base:		mapped address of mbigen chip
- * @pin_offset:		local pin offset of interrupt.
  * @reg_vec:		addr offset of interrupt vector register.
  * @reg_type:		addr offset of interrupt trigger type register.
  * @reg_clear:		addr offset of interrupt clear register.
@@ -84,7 +83,6 @@ struct mbigen_device {
  */
 struct mbigen_irq_data {
 	void __iomem		*base;
-	unsigned int		pin_offset;
 	unsigned int		reg_vec;
 	unsigned int		reg_type;
 	unsigned int		reg_clear;
@@ -141,7 +139,7 @@ static void mbigen_eoi_irq(struct irq_data *data)
 
 	/* only level triggered interrupt need to clear status */
 	if (mgn_irq_data->type == IRQ_TYPE_LEVEL_HIGH) {
-		mask = 1 << (mgn_irq_data->pin_offset % 32);
+		mask = 1 << (data->hwirq % 32);
 		writel_relaxed(mask, mgn_irq_data->reg_clear + mgn_irq_data->base);
 	}
 
@@ -157,7 +155,7 @@ static int mbigen_set_type(struct irq_data *d, unsigned int type)
 	if (type != IRQ_TYPE_LEVEL_HIGH && type != IRQ_TYPE_EDGE_RISING)
 		return -EINVAL;
 
-	mask = 1 << (mgn_irq_data->pin_offset % 32);
+	mask = 1 << (d->hwirq % 32);
 
 	val = readl_relaxed(mgn_irq_data->reg_type + mgn_irq_data->base);
 
@@ -229,20 +227,17 @@ static struct mbigen_irq_data *set_mbigen_irq_data(int hwirq,
 	if (!datap)
 		return NULL;
 
-	datap->pin_offset = hwirq;
-
 	/* get the mbigen node number */
-	nid = get_mbigen_nid(datap->pin_offset);
+	nid = get_mbigen_nid(hwirq);
 
-	datap->reg_vec = get_mbigen_vec_reg(nid, datap->pin_offset);
-	datap->reg_type = get_mbigen_type_reg(nid, datap->pin_offset);
+	datap->reg_vec = get_mbigen_vec_reg(nid, hwirq);
+	datap->reg_type = get_mbigen_type_reg(nid, hwirq);
 
 	/* no clear register for edge triggered interrupt */
 	if (type == IRQ_TYPE_EDGE_RISING)
 		datap->reg_clear = 0;
 	else
-		datap->reg_clear = get_mbigen_clear_reg(nid,
-					datap->pin_offset);
+		datap->reg_clear = get_mbigen_clear_reg(nid, hwirq);
 
 	datap->type = type;
 	return datap;
