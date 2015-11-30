@@ -12,6 +12,7 @@
  * (at your option) any later version.
  */
 
+#include <linux/acpi.h>
 #include <linux/err.h>
 #include <linux/io.h>
 #include <linux/module.h>
@@ -21,6 +22,7 @@
 #include <linux/of_platform.h>
 #include <linux/platform_data/syscon.h>
 #include <linux/platform_device.h>
+#include <linux/property.h>
 #include <linux/regmap.h>
 #include <linux/mfd/syscon.h>
 #include <linux/slab.h>
@@ -174,6 +176,44 @@ struct regmap *syscon_regmap_lookup_by_phandle(struct device_node *np,
 }
 EXPORT_SYMBOL_GPL(syscon_regmap_lookup_by_phandle);
 
+struct regmap *syscon_regmap_lookup_by_dev_property(struct device *dev,
+					const char *propname)
+{
+	struct fwnode_handle *fwnode;
+	struct regmap *regmap = NULL;
+
+	fwnode = device_get_reference_node(dev, propname, 0);
+
+	if (IS_ENABLED(CONFIG_OF) && dev->of_node) {
+		struct device_node *syscon_np;
+		if (propname)
+			syscon_np = to_of_node(fwnode);
+		else
+			syscon_np = dev->of_node;
+		if (!syscon_np)
+			return ERR_PTR(-ENODEV);
+		regmap = syscon_node_to_regmap(syscon_np);
+		of_node_put(syscon_np);
+	} else if (IS_ENABLED(CONFIG_ACPI)) {
+		struct platform_device *pdev;
+		struct acpi_device *adev;
+		struct syscon *syscon;
+
+		adev = to_acpi_device_node(fwnode);
+		if(!adev)
+			return ERR_PTR(-ENODEV);
+
+		pdev = acpi_dev_find_plat_dev(adev);
+		if (!pdev)
+			return ERR_PTR(-ENODEV);
+
+		syscon = platform_get_drvdata(pdev);
+		regmap = syscon->regmap;
+	}
+	return regmap;
+}
+EXPORT_SYMBOL_GPL(syscon_regmap_lookup_by_dev_property);
+
 static int syscon_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -216,9 +256,16 @@ static const struct platform_device_id syscon_ids[] = {
 	{ }
 };
 
+static const struct acpi_device_id syscon_acpi_match[] = {
+        { "HISI0061", 0 }, /* better to use generic ACPI ID */
+        { }
+};
+MODULE_DEVICE_TABLE(acpi, syscon_acpi_match);
+
 static struct platform_driver syscon_driver = {
 	.driver = {
 		.name = "syscon",
+		.acpi_match_table = ACPI_PTR(syscon_acpi_match),
 	},
 	.probe		= syscon_probe,
 	.id_table	= syscon_ids,
