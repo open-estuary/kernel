@@ -488,6 +488,7 @@ int acpi_device_modalias(struct device *, char *, int);
 void acpi_walk_dep_device_list(acpi_handle handle);
 
 struct platform_device *acpi_create_platform_device(struct acpi_device *);
+struct platform_device *acpi_dev_find_plat_dev(struct acpi_device *adev);
 #define ACPI_PTR(_ptr)	(_ptr)
 
 #else	/* !CONFIG_ACPI */
@@ -945,6 +946,11 @@ static inline int acpi_dev_prop_read(struct acpi_device *adev,
 
 static inline struct fwnode_handle *acpi_get_next_subnode(struct device *dev,
 						struct fwnode_handle *subnode)
+{
+	return NULL;
+}
+
+static inline struct platform_device *acpi_dev_find_plat_dev(struct acpi_device *adev)
 {
 	return NULL;
 }

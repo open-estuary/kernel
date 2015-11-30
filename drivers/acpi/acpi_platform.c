@@ -106,3 +106,28 @@ struct platform_device *acpi_create_platform_device(struct acpi_device *adev)
 	return pdev;
 }
 EXPORT_SYMBOL_GPL(acpi_create_platform_device);
+
+static int acpi_dev_object_match(struct device *dev, void *data)
+{
+	return ACPI_COMPANION(dev) == data;
+}
+
+/*
+ * acpi_find_plat_device - Find the platform_device associated
+ * with an acpi device
+ * @adev: Pointer to the acpi device
+ *
+ * Returns platform_device pointer, or NULL if not found
+ */
+struct platform_device *acpi_dev_find_plat_dev(struct acpi_device *adev)
+{
+	struct device *dev;
+
+	if (!adev)
+		return NULL;
+
+	dev = bus_find_device(&platform_bus_type, NULL, adev,
+				acpi_dev_object_match);
+	return dev ? to_platform_device(dev) : NULL;
+}
+EXPORT_SYMBOL_GPL(acpi_dev_find_plat_dev);
