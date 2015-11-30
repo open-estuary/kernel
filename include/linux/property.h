@@ -70,6 +70,12 @@ int fwnode_property_read_string(struct fwnode_handle *fwnode,
 int fwnode_property_match_string(struct fwnode_handle *fwnode,
 				 const char *propname, const char *string);
 
+struct fwnode_handle *fwnode_get_reference_node(struct fwnode_handle *fwnode,
+						const char *propname, int index);
+
+struct fwnode_handle *device_get_reference_node(struct device *dev,
+						const char *propname, int index);
+
 struct fwnode_handle *device_get_next_child_node(struct device *dev,
 						 struct fwnode_handle *child);
 
