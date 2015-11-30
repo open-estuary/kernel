@@ -568,6 +568,50 @@ struct fwnode_handle *device_get_next_child_node(struct device *dev,
 EXPORT_SYMBOL_GPL(device_get_next_child_node);
 
 /**
+ * fwnode_get_reference_node - Find the firmware node referenced
+ * @fwnode: Firmware node to get the property from.
+ * @propname: Name of the property
+ * @index: Index of the reference
+ *
+ * Returns referenced fwnode handler pointer, or an NULL if not found
+ */
+struct fwnode_handle *fwnode_get_reference_node(struct fwnode_handle *fwnode,
+					 const char *propname, int index)
+{
+	if (is_of_node(fwnode)) {
+		struct device_node *np;
+		np = of_parse_phandle(to_of_node(fwnode), propname, index);
+		if(!np)
+			return NULL;
+		return &np->fwnode;
+	} else if (is_acpi_node(fwnode)) {
+		struct acpi_device *adev;
+		adev = acpi_dev_get_reference_device(to_acpi_device_node(fwnode),
+						     propname, index);
+		if(!adev)
+			return NULL;
+		return acpi_fwnode_handle(adev);
+	}
+	return NULL;
+}
+EXPORT_SYMBOL_GPL(fwnode_get_reference_node);
+
+/**
+ * dev_get_reference_node - Find the firmware node referenced
+ * @dev: Device to get the property from.
+ * @propname: Name of the property
+ * @index: Index of the reference
+ *
+ * Returns referenced fwnode handler pointer, or an NULL if not found
+ */
+struct fwnode_handle *device_get_reference_node(struct device *dev,
+					 const char *propname, int index)
+{
+	return fwnode_get_reference_node(dev_fwnode(dev), propname, index);
+}
+EXPORT_SYMBOL_GPL(device_get_reference_node);
+
+/**
  * fwnode_handle_put - Drop reference to a device node
  * @fwnode: Pointer to the device node to drop the reference to.
  *
