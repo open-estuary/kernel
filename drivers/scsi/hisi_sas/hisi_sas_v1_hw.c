@@ -1822,12 +1822,19 @@ static const struct of_device_id sas_v1_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, sas_v1_of_match);
 
+static const struct acpi_device_id sas_v1_acpi_match[] = {
+	{ "HISI0161", 0 },
+	{ }
+};
+MODULE_DEVICE_TABLE(acpi, sas_v1_acpi_match);
+
 static struct platform_driver hisi_sas_v1_driver = {
 	.probe = hisi_sas_v1_probe,
 	.remove = hisi_sas_v1_remove,
 	.driver = {
 		.name = DRV_NAME,
 		.of_match_table = sas_v1_of_match,
+		.acpi_match_table = ACPI_PTR(sas_v1_acpi_match),
 	},
 };
 
