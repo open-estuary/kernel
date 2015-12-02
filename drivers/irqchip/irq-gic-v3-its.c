@@ -29,7 +29,6 @@
 #include <linux/of_platform.h>
 #include <linux/percpu.h>
 #include <linux/slab.h>
-#include <linux/reboot.h>
 #include <linux/irqchip/arm-gic-v3.h>
 
 #include <asm/cacheflush.h>
@@ -41,7 +40,7 @@
 #define ITS_FLAGS_CMDQ_NEEDS_FLUSHING		(1 << 0)
 
 #define RDIST_FLAGS_PROPBASE_NEEDS_FLUSHING	(1 << 0)
-extern struct atomic_notifier_head panic_notifier_list;
+
 /*
  * Collection structure - just an ID, and a redistributor address to
  * ping. We use one per CPU as a bag of interrupts assigned to this
@@ -99,6 +98,7 @@ struct its_device {
 
 static LIST_HEAD(its_nodes);
 static DEFINE_SPINLOCK(its_lock);
+static struct device_node *gic_root_node;
 static struct rdists *gic_rdists;
 
 #define gic_data_rdist()		(raw_cpu_ptr(gic_rdists->rdist))
@@ -766,10 +766,6 @@ static void its_lpi_free(struct event_lpi_map *map)
 static int __init its_alloc_lpi_tables(void)
 {
 	phys_addr_t paddr;
-#if defined(CONFIG_ARCH_P660)
-	int i;
-	u8 *prop;
-#endif
 
 	gic_rdists->prop_page = alloc_pages(GFP_NOWAIT,
 					   get_order(LPI_PROPBASE_SZ));
@@ -781,21 +777,23 @@ static int __init its_alloc_lpi_tables(void)
 	paddr = page_to_phys(gic_rdists->prop_page);
 	pr_info("GIC: using LPI property table @%pa\n", &paddr);
 
-#if defined(CONFIG_ARCH_P660)
-	/*
-	 * Avoid a hardware bug that if eight consecutive LPIs have
-	 * same prioritys, some LPIs maybe blocked.
-	 */
-	prop = (u8 *)page_address(gic_rdists->prop_page);
-
-	for (i = 0; i < LPI_PROPBASE_SZ; i++)
-		prop[i] = 0xa2 | ((i & 0x7) << 2);
-#else
 	/* Priority 0xa0, Group-1, disabled */
 	memset(page_address(gic_rdists->prop_page),
 	       LPI_PROP_DEFAULT_PRIO | LPI_PROP_GROUP1,
 	       LPI_PROPBASE_SZ);
-#endif
+
+	/*
+	 * If it's "hisilicon,gic-v3", it means it's P660 or Hi1610 which
+	 * has a hardware bug. The bug is that if eight consecutive LPIs
+	 * have same prioritys, some LPIs maybe blocked.
+	 */
+	if (of_device_is_compatible(gic_root_node, "hisilicon,gic-v3")) {
+		int i;
+		u8 *prop = (u8 *)page_address(gic_rdists->prop_page);
+
+		for (i = 0; i < LPI_PROPBASE_SZ; i++)
+			prop[i] = 0xa2 | ((i & 0x7) << 2);
+	}
 
 	/* Make sure the GIC will observe the written configuration */
 	__flush_dcache_area(page_address(gic_rdists->prop_page), LPI_PROPBASE_SZ);
@@ -915,8 +913,10 @@ retry_baser:
 			 * non-cacheable as well.
 			 */
 			shr = tmp & GITS_BASER_SHAREABILITY_MASK;
-			if (!shr)
+			if (!shr) {
 				cache = GITS_BASER_nC;
+				__flush_dcache_area(base, alloc_size);
+			}
 			goto retry_baser;
 		}
 
@@ -1157,6 +1157,8 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 		return NULL;
 	}
 
+	__flush_dcache_area(itt, sz);
+
 	dev->its = its;
 	dev->itt = itt;
 	dev->nr_ites = nr_ites;
@@ -1179,9 +1181,11 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 
 static void its_free_device(struct its_device *its_dev)
 {
-	raw_spin_lock(&its_dev->its->lock);
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&its_dev->its->lock, flags);
 	list_del(&its_dev->entry);
-	raw_spin_unlock(&its_dev->its->lock);
+	raw_spin_unlock_irqrestore(&its_dev->its->lock, flags);
 	kfree(its_dev->itt);
 	kfree(its_dev);
 }
@@ -1192,7 +1196,8 @@ static int its_alloc_device_irq(struct its_device *dev, irq_hw_number_t *hwirq,
 	int idx = *event;
 
 	if (idx < 0) {
-		idx = find_first_zero_bit(dev->event_map.lpi_map, dev->event_map.nr_lpis);
+		idx = find_first_zero_bit(dev->event_map.lpi_map,
+					  dev->event_map.nr_lpis);
 		if (idx == dev->event_map.nr_lpis)
 			return -ENOSPC;
 		*event = idx;
@@ -1454,7 +1459,7 @@ out_free_its:
 	return ERR_PTR(err);
 }
 
-static int __init its_of_probe(struct device_node *node,
+static int its_of_probe(struct device_node *node,
 			struct irq_domain *parent_domain)
 {
 	struct resource res;
@@ -1528,38 +1533,20 @@ int its_cpu_init(void)
 	return 0;
 }
 
-int its_reset(struct notifier_block *nfb, unsigned long val, void *v)
-{
-	struct its_node *its;
-
-	printk("--------- Executing its_reset -----------\n");
-
-	list_for_each_entry(its, &its_nodes, entry)
-		its_force_quiescent(its->base);
-
-	printk("--------- its_shutdown called -----------\n");
-	return NOTIFY_OK;
-}
-EXPORT_SYMBOL(its_reset);
-
-static struct notifier_block its_panic_notifier = {
-        .notifier_call  = its_reset,
-        .next           = NULL,
-        .priority       = 200   /* priority: INT_MAX >= x >= 0 */
-};
-
-
 static struct of_device_id its_device_id[] = {
 	{	.compatible	= "arm,gic-v3-its",	},
 	{},
 };
 
-int __init its_init(struct rdists *rdists, struct irq_domain *parent_domain)
+int its_init(struct device_node *node, struct rdists *rdists,
+	     struct irq_domain *parent_domain)
 {
 	struct device_node *np;
 
-		for_each_matching_node(np, its_device_id)
+	for (np = of_find_matching_node(node, its_device_id); np;
+	     np = of_find_matching_node(np, its_device_id)) {
 			its_of_probe(np, parent_domain);
+	}
 
 	if (list_empty(&its_nodes)) {
 		pr_warn("ITS: No ITS available, not enabling LPIs\n");
@@ -1567,11 +1554,8 @@ int __init its_init(struct rdists *rdists, struct irq_domain *parent_domain)
 	}
 
 	gic_rdists = rdists;
-
+	gic_root_node = node;
 	its_alloc_lpi_tables();
 	its_lpi_init(rdists->id_bits);
-
-	atomic_notifier_chain_register(&panic_notifier_list, &its_panic_notifier);
-
 	return 0;
 }

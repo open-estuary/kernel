@@ -87,9 +87,9 @@
 #define GIC_SID_MASK			0x7
 
 #ifdef CONFIG_MM_OUTTER_SHAREABLE
-#define GIC_SH_DOMAIN                  1UL     /* outer shareable */
+#define GIC_SH_DOMAIN                  2UL     /* outer shareable */
 #else
-#define GIC_SH_DOMAIN                  2UL     /* inner shareable */
+#define GIC_SH_DOMAIN                  1UL     /* inner shareable */
 #endif
 
 #define GIC_V3_DIST_SIZE		0x10000
@@ -398,7 +398,8 @@ static inline void gic_write_eoir(u64 irq)
 
 struct irq_domain;
 int its_cpu_init(void);
-int its_init(struct rdists *rdists, struct irq_domain *domain);
+int its_init(struct device_node *node, struct rdists *rdists,
+	     struct irq_domain *domain);
 
 #endif
 

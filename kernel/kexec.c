@@ -1459,7 +1459,6 @@ out:
 
 #endif /* CONFIG_KEXEC_FILE */
 
-extern int its_reset(struct notifier_block *, unsigned long, void *);
 
 void crash_kexec(struct pt_regs *regs)
 {
@@ -1478,7 +1477,6 @@ void crash_kexec(struct pt_regs *regs)
 			crash_setup_regs(&fixed_regs, regs);
 			crash_save_vmcoreinfo();
 			machine_crash_shutdown(&fixed_regs);
-			its_reset(NULL, 0, NULL);
 			machine_kexec(kexec_crash_image);
 		}
 		mutex_unlock(&kexec_mutex);
