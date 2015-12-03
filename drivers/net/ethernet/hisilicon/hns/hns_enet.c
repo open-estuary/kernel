@@ -989,14 +989,15 @@ int hns_nic_init_phy(struct net_device *ndev, struct hnae_handle *h)
 	struct hns_nic_priv *priv = netdev_priv(ndev);
 	struct phy_device *phy_dev = NULL;
 
-	if (!h->phy_node)
+	if (!h->phy_fwnode)
 		return 0;
 
 	if (h->phy_if != PHY_INTERFACE_MODE_XGMII)
-		phy_dev = of_phy_connect(ndev, h->phy_node,
+		phy_dev = of_phy_connect(ndev, to_of_node(h->phy_fwnode),
 					 hns_nic_adjust_link, 0, h->phy_if);
 	else
-		phy_dev = of_phy_attach(ndev, h->phy_node, 0, h->phy_if);
+		phy_dev = of_phy_attach(ndev, to_of_node(h->phy_fwnode),
+					0, h->phy_if);
 
 	if (unlikely(!phy_dev) || IS_ERR(phy_dev))
 		return !phy_dev ? -ENODEV : PTR_ERR(phy_dev);

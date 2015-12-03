@@ -27,6 +27,7 @@
  * "cb" means control block
  */
 
+#include <linux/acpi.h>
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/module.h>
@@ -510,7 +511,7 @@ struct hnae_ae_dev {
 struct hnae_handle {
 	struct device *owner_dev; /* the device which make use of this handle */
 	struct hnae_ae_dev *dev;  /* the device who provides this handle */
-	struct device_node *phy_node;
+	struct fwnode_handle *phy_fwnode;
 	phy_interface_t phy_if;
 	u32 if_support;
 	int q_num;
