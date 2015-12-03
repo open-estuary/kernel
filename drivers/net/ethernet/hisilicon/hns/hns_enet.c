@@ -7,6 +7,8 @@
  * (at your option) any later version.
  */
 
+#include <linux/acpi.h>
+#include <linux/acpi_mdio.h>
 #include <linux/clk.h>
 #include <linux/cpumask.h>
 #include <linux/etherdevice.h>
@@ -128,6 +130,13 @@ static void fill_v2_desc(struct hnae_ring *ring, void *priv,
 
 	ring_ptr_move_fw(ring, next_to_use);
 }
+
+static const struct acpi_device_id hns_enet_acpi_match[] = {
+	{ "HISI00C1", 0 },
+	{ "HISI00C2", 0 },
+	{ },
+};
+MODULE_DEVICE_TABLE(acpi, hns_enet_acpi_match);
 
 static void fill_desc(struct hnae_ring *ring, void *priv,
 		      int size, dma_addr_t dma, int frag_end,
@@ -992,12 +1001,26 @@ int hns_nic_init_phy(struct net_device *ndev, struct hnae_handle *h)
 	if (!h->phy_fwnode)
 		return 0;
 
-	if (h->phy_if != PHY_INTERFACE_MODE_XGMII)
-		phy_dev = of_phy_connect(ndev, to_of_node(h->phy_fwnode),
-					 hns_nic_adjust_link, 0, h->phy_if);
-	else
-		phy_dev = of_phy_attach(ndev, to_of_node(h->phy_fwnode),
-					0, h->phy_if);
+	if (h->phy_fwnode->type == FWNODE_OF) {
+		if (h->phy_if != PHY_INTERFACE_MODE_XGMII)
+			phy_dev = of_phy_connect(ndev,
+						 to_of_node(h->phy_fwnode),
+						 hns_nic_adjust_link,
+						 0, h->phy_if);
+		else
+			phy_dev = of_phy_attach(ndev, to_of_node(h->phy_fwnode),
+						0, h->phy_if);
+	} else if (h->phy_fwnode->type == FWNODE_ACPI) {
+		if (h->phy_if != PHY_INTERFACE_MODE_XGMII)
+			phy_dev = acpi_phy_connect(ndev, h->phy_fwnode,
+						   hns_nic_adjust_link,
+						   0, h->phy_if);
+		else
+			phy_dev = acpi_phy_attach(ndev, h->phy_fwnode,
+						  0, h->phy_if);
+	} else {
+		return -ENXIO;
+	}
 
 	if (unlikely(!phy_dev) || IS_ERR(phy_dev))
 		return !phy_dev ? -ENODEV : PTR_ERR(phy_dev);
@@ -1059,13 +1082,8 @@ void hns_nic_update_stats(struct net_device *netdev)
 static void hns_init_mac_addr(struct net_device *ndev)
 {
 	struct hns_nic_priv *priv = netdev_priv(ndev);
-	struct device_node *node = priv->dev->of_node;
-	const void *mac_addr_temp;
 
-	mac_addr_temp = of_get_mac_address(node);
-	if (mac_addr_temp && is_valid_ether_addr(mac_addr_temp)) {
-		memcpy(ndev->dev_addr, mac_addr_temp, ndev->addr_len);
-	} else {
+	if (!device_get_mac_address(&ndev->dev, ndev->dev_addr, ETH_ALEN)) {
 		eth_hw_addr_random(ndev);
 		dev_warn(priv->dev, "No valid mac, use random mac %pM",
 			 ndev->dev_addr);
@@ -1864,6 +1882,8 @@ static int hns_nic_dev_probe(struct platform_device *pdev)
 	struct net_device *ndev;
 	struct hns_nic_priv *priv;
 	struct device_node *node = dev->of_node;
+	struct fwnode_handle *fwnode = dev->fwnode;
+	struct acpi_device *adev;
 	int ret;
 
 	ndev = alloc_etherdev_mq(sizeof(struct hns_nic_priv), NIC_MAX_Q_PER_VF);
@@ -1876,16 +1896,27 @@ static int hns_nic_dev_probe(struct platform_device *pdev)
 	priv->dev = dev;
 	priv->netdev = ndev;
 
-	if (of_device_is_compatible(node, "hisilicon,hns-nic-v1"))
-		priv->enet_ver = AE_VERSION_1;
-	else
-		priv->enet_ver = AE_VERSION_2;
+	if (pdev->dev.of_node) {
+		if (of_device_is_compatible(node, "hisilicon,hns-nic-v2"))
+			priv->enet_ver = AE_VERSION_2;
+		else
+			priv->enet_ver = AE_VERSION_1;
+	} else if (ACPI_COMPANION(&pdev->dev)) {
+		adev = to_acpi_device_node(fwnode);
+		if (!acpi_match_device_ids(adev, &hns_enet_acpi_match[1]))
+			priv->enet_ver = AE_VERSION_2;
+		else
+			priv->enet_ver = AE_VERSION_1;
+	} else {
+		dev_err(dev, "cannot read cfg data from OF or acpi\n");
+		return -ENXIO;
+	}
 
-	ret = of_property_read_string(node, "ae-name", &priv->ae_name);
+	ret = device_property_read_string(dev, "ae-name", &priv->ae_name);
 	if (ret)
 		goto out_read_string_fail;
 
-	ret = of_property_read_u32(node, "port-id", &priv->port_id);
+	ret = device_property_read_u32(dev, "port-id", &priv->port_id);
 	if (ret)
 		goto out_read_string_fail;
 
@@ -1993,6 +2024,7 @@ static struct platform_driver hns_nic_dev_driver = {
 	.driver = {
 		.name = "hns-nic",
 		.of_match_table = hns_enet_of_match,
+		.acpi_match_table = ACPI_PTR(hns_enet_acpi_match),
 	},
 	.probe = hns_nic_dev_probe,
 	.remove = hns_nic_dev_remove,
