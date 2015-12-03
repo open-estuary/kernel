@@ -143,6 +143,12 @@ config ACPI_AC
 	  To compile this driver as a module, choose M here:
 	  the module will be called ac.
 
+config ACPI_MDIO
+        def_tristate PHYLIB
+        depends on PHYLIB
+        help
+          OpenFirmware MDIO bus (Ethernet PHY) accessors
+
 config ACPI_BATTERY
 	tristate "Battery"
 	depends on X86
