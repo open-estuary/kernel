@@ -7,6 +7,7 @@
  * (at your option) any later version.
  */
 
+#include <linux/acpi.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -662,14 +663,17 @@ free_mac_drv:
 }
 
 /**
- *mac_free_dev  - get mac information from device node
+ * mac_free_dev  - get mac information from device node
  *@mac_cb: mac device
  *@np:device node
  *@mac_mode_idx:mac mode index
  */
-static void hns_mac_get_info(struct hns_mac_cb *mac_cb,
-			     struct device_node *np, u32 mac_mode_idx)
+static void hns_mac_get_info(struct hns_mac_cb *mac_cb, u32 mac_mode_idx)
 {
+	struct device *dev = mac_cb->dev;
+	struct fwnode_handle *fwnode = dev->fwnode;
+	struct device_node   *np = dev->of_node;
+
 	mac_cb->link = false;
 	mac_cb->half_duplex = false;
 	mac_cb->speed = mac_phy_to_speed[mac_cb->phy_if];
@@ -687,10 +691,32 @@ static void hns_mac_get_info(struct hns_mac_cb *mac_cb,
 	mac_cb->tx_pause_frm_time = MAC_DEFAULT_PAUSE_TIME;
 
 	/* Get the rest of the PHY information */
-	mac_cb->phy_node = of_parse_phandle(np, "phy-handle", mac_cb->mac_id);
-	if (mac_cb->phy_node)
-		dev_dbg(mac_cb->dev, "mac%d phy_node: %s\n",
-			mac_cb->mac_id, mac_cb->phy_node->name);
+	if (np) {
+		struct device_node *phy_np = of_parse_phandle(np, "phy-handle",
+							      mac_cb->mac_id);
+
+		mac_cb->phy_fwnode = &phy_np->fwnode;
+	} else if (ACPI_COMPANION(dev)) {
+		struct acpi_reference_args args;
+		int rc;
+		char name[15];
+
+		snprintf(name, 15, "%s%d", "phy-handle", mac_cb->mac_id);
+		name[14] = '\0';
+
+		memset(&args, 0, sizeof(args));
+		rc = acpi_node_get_property_reference(
+			fwnode, name, 0, &args);
+
+		if (!rc)
+			mac_cb->phy_fwnode = acpi_fwnode_handle(args.adev);
+	} else {
+		dev_err(mac_cb->dev, "mac%d cannot find phy node\n",
+			mac_cb->mac_id);
+	}
+
+	if (mac_cb->phy_fwnode)
+		dev_dbg(mac_cb->dev, "mac%d gets a phy node\n", mac_cb->mac_id);
 }
 
 /**
@@ -769,7 +795,7 @@ int hns_mac_get_cfg(struct dsaf_device *dsaf_dev, int mac_idx)
 	}
 	mac_mode_idx = (u32)ret;
 
-	hns_mac_get_info(mac_cb, mac_cb->dev->of_node, mac_mode_idx);
+	hns_mac_get_info(mac_cb, mac_mode_idx);
 
 	mac_cb->vaddr = hns_mac_get_vaddr(dsaf_dev, mac_cb, mac_mode_idx);
 
