@@ -813,6 +813,8 @@ struct acpi_reference_args {
 #ifdef CONFIG_ACPI
 int acpi_dev_get_property(struct acpi_device *adev, const char *name,
 			  acpi_object_type type, const union acpi_object **obj);
+struct acpi_device *acpi_dev_get_reference_device(struct acpi_device *adev,
+						  const char *name, size_t index);
 int acpi_node_get_property_reference(struct fwnode_handle *fwnode,
 				     const char *name, size_t index,
 				     struct acpi_reference_args *args);
@@ -889,6 +891,11 @@ static inline int acpi_dev_get_property(struct acpi_device *adev,
 					const union acpi_object **obj)
 {
 	return -ENXIO;
+}
+static inline struct acpi_device *acpi_dev_get_reference_device(struct acpi_device *adev,
+						  const char *name, size_t index)
+{
+	return NULL;
 }
 
 static inline int acpi_node_get_property_reference(struct fwnode_handle *fwnode,

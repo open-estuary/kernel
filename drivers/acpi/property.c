@@ -398,6 +398,29 @@ int acpi_dev_get_property(struct acpi_device *adev, const char *name,
 }
 EXPORT_SYMBOL_GPL(acpi_dev_get_property);
 
+/**
+ * acpi_dev_get_reference_device  - return the acpi_device referenced
+ * @adev: ACPI device to get the property from.
+ * @name: Name of the property.
+ * @index: Index of the reference to return
+ *
+ * Returns referenced ACPI device pointer, or NULL if not found
+ */
+struct acpi_device *acpi_dev_get_reference_device(struct acpi_device *adev,
+					          const char *name, size_t index)
+{
+        struct acpi_reference_args args;
+        int ret;
+
+        ret = acpi_node_get_property_reference(acpi_fwnode_handle(adev), name, index, &args);
+
+        if (ret)
+                return NULL;
+
+        return args.adev;
+}
+EXPORT_SYMBOL_GPL(acpi_dev_get_reference_device);
+
 static struct acpi_device_data *acpi_device_data_of_node(struct fwnode_handle *fwnode)
 {
 	if (fwnode->type == FWNODE_ACPI) {
