@@ -125,18 +125,19 @@ soc0: soc@000000000 {
 		dma-coherent;
 	};
 
-	eth0: ethernet@0{
+	eth0: ethernet@7{
 		compatible = "hisilicon,hns-nic-v1";
 		ae-name = "dsaf0";
-		port-id = <0>;
-		local-mac-address = [00 00 00 01 00 58];
+		port-id = <7>;
+		local-mac-address = [00 00 00 01 00 5f];
 		status = "disabled";
 		dma-coherent;
 	};
-	eth1: ethernet@1{
+	eth1: ethernet@6{
 		compatible = "hisilicon,hns-nic-v1";
 		ae-name = "dsaf0";
-		port-id = <1>;
+		port-id = <6>;
+		local-mac-address = [00 00 00 01 00 5e];
 		status = "disabled";
 		dma-coherent;
 	};
@@ -172,20 +173,21 @@ soc0: soc@000000000 {
 		status = "disabled";
 		dma-coherent;
 	};
-	eth6: ethernet@6{
+	eth6: ethernet@0{
 		compatible = "hisilicon,hns-nic-v1";
 		ae-name = "dsaf0";
-		port-id = <6>;
-		local-mac-address = [00 00 00 01 00 5e];
+		port-id = <0>;
+		local-mac-address = [00 00 00 01 00 58];
 		status = "disabled";
 		dma-coherent;
 	};
-	eth7: ethernet@7{
+	eth7: ethernet@1{
 		compatible = "hisilicon,hns-nic-v1";
 		ae-name = "dsaf0";
-		port-id = <7>;
-		local-mac-address = [00 00 00 01 00 5f];
+		port-id = <1>;
+		local-mac-address = [00 00 00 01 00 59];
 		status = "disabled";
 		dma-coherent;
 	};
+
 };
