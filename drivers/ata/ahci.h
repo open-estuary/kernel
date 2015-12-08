@@ -352,6 +352,12 @@ struct ahci_host_priv {
 	 * be overridden anytime before the host is activated.
 	 */
 	void			(*start_engine)(struct ata_port *ap);
+	/*
+	 * In Hip05 soc, the ata port phy need be restarted in sata_link_hardreset,
+	 * or link will fail.
+	 */
+	void			(*restart_port_phy)(struct ata_port *ap);
+
 };
 
 extern int ahci_ignore_sss;
