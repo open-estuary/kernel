@@ -298,6 +298,12 @@
 		#size-cells = <2>;
 		ranges;
 
+		refclk175mhz: refclk175mhz {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <175000000>;
+		};
+
 		refclk200mhz: refclk200mhz {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
@@ -338,6 +344,39 @@
 			clock-names = "apb_pclk";
 			reg-shift = <2>;
 			reg-io-width = <4>;
+			status = "disabled";
+		};
+
+		m3_i2c0: i2c@a00e0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,designware-i2c";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa00e0000 0x0 0x10000>;
+			interrupts = <8 4>;
+			clocks = <&refclk175mhz>;
+			status = "disabled";
+		};
+
+		m3_i2c1: i2c@a00f0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,designware-i2c";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa00f0000 0x0 0x10000>;
+			interrupts = <9 4>;
+			clocks = <&refclk175mhz>;
+			status = "disabled";
+		};
+
+		m3_i2c2: i2c@a0100000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,designware-i2c";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa0100000 0x0 0x10000>;
+			interrupts = <10 4>;
+			clocks = <&refclk175mhz>;
 			status = "disabled";
 		};
 
