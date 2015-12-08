@@ -341,6 +341,16 @@
 			status = "disabled";
 		};
 
+		ahci0: sata@b1002800 {
+			compatible = "hisilicon,hip05-ahci";
+			interrupt-parent = <&mbigen_pcie>;
+			reg = <0x0 0xb1002800 0x0 0x10000>,
+			      <0x0 0xb1000000 0x0 0x10000>;
+			interrupts = <382 4>;
+			dma-coherent;
+			status = "disabled";
+		};
+
 		sas0: sas@c1000000 {
 			compatible = "hisilicon,hip05-sas-v1";
 			sas-addr = [50 01 88 20 16 00 00 0a];
