@@ -3803,6 +3803,9 @@ int sata_link_hardreset(struct ata_link *link, const unsigned long *timing,
 	if ((rc = sata_scr_write_flush(link, SCR_CONTROL, scontrol)))
 		goto out;
 
+	if (link->ap->ops->port_restart)
+		link->ap->ops->port_restart(link->ap);
+
 	/* Couldn't find anything in SATA I/II specs, but AHCI-1.1
 	 * 10.4.2 says at least 1 ms.
 	 */
