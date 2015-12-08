@@ -36,6 +36,14 @@
 	status = "ok";
 };
 
+&usb0 {
+	status = "okay";
+};
+
+&usb1 {
+	status = "okay";
+};
+
 &sas0 {
 	status = "okay";
 };
