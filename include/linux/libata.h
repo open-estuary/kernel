@@ -941,6 +941,11 @@ struct ata_port_operations {
 	 */
 	int  (*port_suspend)(struct ata_port *ap, pm_message_t mesg);
 	int  (*port_resume)(struct ata_port *ap);
+	/*
+	 * In Hip05 soc, ata port need extra step do port restart in hardreset,
+	 * or link will fail.
+	 */
+	int  (*port_restart)(struct ata_port *ap);
 	int  (*port_start)(struct ata_port *ap);
 	void (*port_stop)(struct ata_port *ap);
 	void (*host_stop)(struct ata_host *host);
