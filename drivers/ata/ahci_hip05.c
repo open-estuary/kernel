@@ -17,6 +17,7 @@
 #include <linux/platform_device.h>
 #include <linux/libata.h>
 #include <linux/ahci_platform.h>
+#include <linux/acpi.h>
 #include "ahci.h"
 
 #define DRV_NAME "ahci_hip05"
@@ -118,7 +119,7 @@ static int hisi_ahci_probe(struct platform_device *pdev)
 	if (!hisipriv->sas_base)
 		return -ENOMEM;
 
-	if (of_property_read_u32(dev->of_node, "port_mask", &port_mask))
+	if (device_property_read_u32(dev, "port_mask", &port_mask))
 		port_mask = 0;
 
 	hisipriv->ahci_pdev = pdev;
@@ -148,12 +149,19 @@ static const struct of_device_id ahci_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, ahci_of_match);
 
+static const struct acpi_device_id ahci_acpi_match[] = {
+	{ "HISI0001", 0},
+	{},
+};
+MODULE_DEVICE_TABLE(acpi, ahci_acpi_match);
+
 static struct platform_driver ahci_driver = {
 	.probe = hisi_ahci_probe,
 	.remove = ata_platform_remove_one,
 	.driver = {
 		.name = DRV_NAME,
 		.of_match_table = ahci_of_match,
+		.acpi_match_table = ACPI_PTR(ahci_acpi_match),
 		.pm = &ahci_hip05_pm_ops,
 	},
 };
