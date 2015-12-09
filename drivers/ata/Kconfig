@@ -107,6 +107,15 @@ config AHCI_BRCMSTB
 
 	  If unsure, say N.
 
+config AHCI_HIP05
+	tristate "Hisilicon hip05 AHCI SATA support"
+	depends on ARCH_HISI
+	help
+	  This option enables support for Platform AHCI Serial ATA
+	  controllers in Hisilicon hip05 SoC.
+
+	  If unsure, say N.
+
 config AHCI_DA850
 	tristate "DaVinci DA850 AHCI SATA support"
 	depends on ARCH_DAVINCI_DA850
