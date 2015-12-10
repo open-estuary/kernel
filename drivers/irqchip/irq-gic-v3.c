@@ -1115,6 +1115,7 @@ gic_acpi_init(struct acpi_subtable_header *header, const unsigned long end)
 	struct acpi_madt_generic_distributor *dist;
 	struct fwnode_handle *domain_handle;
 	void __iomem *dist_base;
+	u64 stride = 0;
 	int i, err;
 
 	/* Get distributor base address */
@@ -1148,7 +1149,15 @@ gic_acpi_init(struct acpi_subtable_header *header, const unsigned long end)
 		goto out_redist_unmap;
 	}
 
-	err = gic_init_bases(dist_base, redist_regs, nr_redist_regions, 0,
+	/*
+	 * workround for D02, as it reserved as 0 on other platform,
+	 * should not hurt anyone else.
+	 */
+	if (dist->reserved2[0] == 'D' && dist->reserved2[1] == '0'
+	    && dist->reserved2[2] == '2')
+		stride = 0x30000;
+
+	err = gic_init_bases(dist_base, redist_regs, nr_redist_regions, stride,
 			     domain_handle);
 	if (err)
 		goto out_fwhandle_free;
