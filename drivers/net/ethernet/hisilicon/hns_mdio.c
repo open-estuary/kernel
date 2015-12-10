@@ -7,6 +7,8 @@
  * (at your option) any later version.
  */
 
+#include <linux/acpi.h>
+#include <linux/acpi_mdio.h>
 #include <linux/errno.h>
 #include <linux/etherdevice.h>
 #include <linux/init.h>
@@ -399,19 +401,12 @@ static int hns_mdio_reset(struct mii_bus *bus)
 /**
  * hns_mdio_bus_name - get mdio bus name
  * @name: mdio bus name
- * @np: mdio device node pointer
+ * @addr: mdio physical address
  */
-static void hns_mdio_bus_name(char *name, struct device_node *np)
+static void hns_mdio_bus_name(char *name, phys_addr_t addr)
 {
-	const u32 *addr;
-	u64 taddr = OF_BAD_ADDR;
-
-	addr = of_get_address(np, 0, NULL, NULL);
-	if (addr)
-		taddr = of_translate_address(np, addr);
-
-	snprintf(name, MII_BUS_ID_SIZE, "%s@%llx", np->name,
-		 (unsigned long long)taddr);
+	snprintf(name, MII_BUS_ID_SIZE,
+		 "hns-mdio@%llx", (unsigned long long)addr);
 }
 
 /**
@@ -423,6 +418,7 @@ static void hns_mdio_bus_name(char *name, struct device_node *np)
 static int hns_mdio_probe(struct platform_device *pdev)
 {
 	struct device_node *np;
+	struct fwnode_handle *fwnode;
 	struct hns_mdio_device *mdio_dev;
 	struct mii_bus *new_bus;
 	struct resource *res;
@@ -433,6 +429,8 @@ static int hns_mdio_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 	np = pdev->dev.of_node;
+	fwnode = pdev->dev.fwnode;
+
 	mdio_dev = devm_kzalloc(&pdev->dev, sizeof(*mdio_dev), GFP_KERNEL);
 	if (!mdio_dev)
 		return -ENOMEM;
@@ -448,7 +446,6 @@ static int hns_mdio_probe(struct platform_device *pdev)
 	new_bus->write = hns_mdio_write;
 	new_bus->reset = hns_mdio_reset;
 	new_bus->priv = mdio_dev;
-	hns_mdio_bus_name(new_bus->id, np);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	mdio_dev->vbase = devm_ioremap_resource(&pdev->dev, res);
@@ -457,6 +454,7 @@ static int hns_mdio_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	hns_mdio_bus_name(new_bus->id, res->start);
 	mdio_dev->subctrl_vbase =
 		syscon_regmap_lookup_by_dev_property(&pdev->dev, "subctrl-vbase");
 	if (IS_ERR(mdio_dev->subctrl_vbase)) {
@@ -471,7 +469,11 @@ static int hns_mdio_probe(struct platform_device *pdev)
 	new_bus->parent = &pdev->dev;
 	platform_set_drvdata(pdev, new_bus);
 
-	ret = of_mdiobus_register(new_bus, np);
+	if (pdev->dev.of_node)
+		ret = of_mdiobus_register(new_bus, np);
+	else
+		ret = acpi_mdiobus_register(new_bus, fwnode);
+
 	if (ret) {
 		dev_err(&pdev->dev, "Cannot register as MDIO bus!\n");
 		platform_set_drvdata(pdev, NULL);
@@ -504,12 +506,19 @@ static const struct of_device_id hns_mdio_match[] = {
 	{}
 };
 
+static const struct acpi_device_id hns_mdio_acpi_match[] = {
+	{ "HISI0141", 0 },
+	{ },
+};
+MODULE_DEVICE_TABLE(acpi, hns_mdio_acpi_match);
+
 static struct platform_driver hns_mdio_driver = {
 	.probe = hns_mdio_probe,
 	.remove = hns_mdio_remove,
 	.driver = {
 		   .name = MDIO_DRV_NAME,
 		   .of_match_table = hns_mdio_match,
+		   .acpi_match_table = ACPI_PTR(hns_mdio_acpi_match),
 		   },
 };
 
