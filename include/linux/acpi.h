@@ -954,4 +954,15 @@ static inline struct fwnode_handle *acpi_get_next_subnode(struct device *dev,
 #define acpi_probe_device_table(t)	({ int __r = 0; __r;})
 #endif
 
+#ifdef CONFIG_ACPI
+int acpi_match_device_ids(struct acpi_device *device,
+			  const struct acpi_device_id *ids);
+#else
+static inline int acpi_match_device_ids(struct acpi_device *device,
+					const struct acpi_device_id *ids)
+{
+	return -ENOENT;
+}
+#endif
+
 #endif	/*_LINUX_ACPI_H*/
