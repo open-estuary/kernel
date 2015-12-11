@@ -467,7 +467,9 @@ void hns_rcb_get_cfg(struct rcb_common_cb *rcb_common)
 	u32 i;
 	u32 ring_num = rcb_common->ring_num;
 	int base_irq_idx = hns_rcb_get_base_irq_idx(rcb_common);
-	struct device_node *np = rcb_common->dsaf_dev->dev->of_node;
+	struct platform_device *pdev =
+		container_of(rcb_common->dsaf_dev->dev,
+			     struct platform_device, dev);
 
 	for (i = 0; i < ring_num; i++) {
 		ring_pair_cb = &rcb_common->ring_pair_cb[i];
@@ -477,10 +479,8 @@ void hns_rcb_get_cfg(struct rcb_common_cb *rcb_common)
 		ring_pair_cb->q.io_base =
 			RCB_COMM_BASE_TO_RING_BASE(rcb_common->io_base, i);
 		ring_pair_cb->port_id_in_dsa = hns_rcb_get_port(rcb_common, i);
-		ring_pair_cb->virq[HNS_RCB_IRQ_IDX_TX]
-			= irq_of_parse_and_map(np, base_irq_idx + i * 2);
-		ring_pair_cb->virq[HNS_RCB_IRQ_IDX_RX]
-			= irq_of_parse_and_map(np, base_irq_idx + i * 2 + 1);
+		ring_pair_cb->virq[HNS_RCB_IRQ_IDX_TX] = platform_get_irq(pdev, base_irq_idx + i * 2);
+		ring_pair_cb->virq[HNS_RCB_IRQ_IDX_RX] = platform_get_irq(pdev, base_irq_idx + i * 2 + 1);
 		ring_pair_cb->q.phy_base =
 			RCB_COMM_BASE_TO_RING_BASE(rcb_common->phy_base, i);
 		hns_rcb_ring_pair_get_cfg(ring_pair_cb);
