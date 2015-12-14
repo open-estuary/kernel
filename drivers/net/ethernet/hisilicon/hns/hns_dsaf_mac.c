@@ -695,7 +695,7 @@ static void hns_mac_get_info(struct hns_mac_cb *mac_cb, u32 mac_mode_idx)
 		struct device_node *phy_np = of_parse_phandle(np, "phy-handle",
 							      mac_cb->mac_id);
 
-		mac_cb->phy_fwnode = &phy_np->fwnode;
+		mac_cb->phy_fwnode = phy_np ? &phy_np->fwnode : NULL;
 	} else if (ACPI_COMPANION(dev)) {
 		struct acpi_reference_args args;
 		int rc;
