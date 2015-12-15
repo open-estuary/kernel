@@ -12,6 +12,7 @@
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
+#include <linux/mfd/syscon.h>
 #include <linux/netdevice.h>
 #include <linux/platform_device.h>
 #include <linux/of.h>
@@ -110,18 +111,15 @@ int hns_dsaf_get_cfg(struct dsaf_device *dsaf_dev)
 	else
 		dsaf_dev->dsaf_tc_mode = HRD_DSAF_4TC_MODE;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res)
-		return -ENOMEM;
-
-	dsaf_dev->sc_base = devm_ioremap_resource(&pdev->dev, res);
+	dsaf_dev->sc_base = syscon_regmap_lookup_by_dev_property(&pdev->dev,
+						"hisilicon,dsaf-syscon");
 	if (!dsaf_dev->sc_base) {
 		dev_err(dsaf_dev->dev,
-			"%s of_iomap 0 fail!\n", dsaf_dev->ae_dev.name);
+			"%s get dsaf subctrl fail!\n", dsaf_dev->ae_dev.name);
 		return -ENOMEM;
 	}
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
 		return -ENOMEM;
 
@@ -132,7 +130,7 @@ int hns_dsaf_get_cfg(struct dsaf_device *dsaf_dev)
 		return -ENOMEM;
 	}
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
 	if (!res)
 		return -ENOMEM;
 
@@ -143,7 +141,7 @@ int hns_dsaf_get_cfg(struct dsaf_device *dsaf_dev)
 		return -ENOMEM;
 	}
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 3);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
 	if (!res)
 		return -ENOMEM;
 
@@ -154,7 +152,7 @@ int hns_dsaf_get_cfg(struct dsaf_device *dsaf_dev)
 		return -ENOMEM;
 	}
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 4);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 3);
 	if (res) {
 		dsaf_dev->cpld_base = devm_ioremap_resource(&pdev->dev, res);
 		if (!dsaf_dev->cpld_base)
@@ -204,9 +202,6 @@ static void hns_dsaf_free_cfg(struct dsaf_device *dsaf_dev)
 
 	if (dsaf_dev->sds_base)
 		iounmap(dsaf_dev->sds_base);
-
-	if (dsaf_dev->sc_base)
-		iounmap(dsaf_dev->sc_base);
 
 	if (dsaf_dev->cpld_base)
 		iounmap(dsaf_dev->cpld_base);
