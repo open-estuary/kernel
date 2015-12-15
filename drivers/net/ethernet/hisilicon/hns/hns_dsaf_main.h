@@ -270,7 +270,7 @@ struct dsaf_device {
 	struct device *dev;
 	struct hnae_ae_dev ae_dev;
 
-	u8 __iomem *sc_base;
+	struct regmap *sc_base;
 	u8 __iomem *sds_base;
 	u8 __iomem *ppe_base;
 	u8 __iomem *io_base;

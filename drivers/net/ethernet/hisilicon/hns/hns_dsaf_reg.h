@@ -10,6 +10,8 @@
 #ifndef _DSAF_REG_H_
 #define _DSAF_REG_H_
 
+#include <linux/regmap.h>
+
 #define HNS_DEBUG_RING_IRQ_IDX 55
 #define HNS_SERVICE_RING_IRQ_IDX 59
 #define HNS_DEBUG_RING_IRQ_OFFSET 2
@@ -961,6 +963,13 @@
 #define XGMAC_PAUSE_CTL_RSP_MODE_B	2
 #define XGMAC_PAUSE_CTL_TX_XOFF_B	3
 
+static inline void dsaf_write_sub(struct regmap *base, u32 reg, u32 value)
+{
+	struct regmap *regmap = base;
+
+	regmap_write(regmap, reg, value);
+}
+
 static inline void dsaf_write_reg(void __iomem *base, u32 reg, u32 value)
 {
 	u8 __iomem *reg_addr = ACCESS_ONCE(base);
@@ -970,6 +979,16 @@ static inline void dsaf_write_reg(void __iomem *base, u32 reg, u32 value)
 
 #define dsaf_write_dev(a, reg, value) \
 	dsaf_write_reg((a)->io_base, (reg), (value))
+
+static inline u32 dsaf_read_sub(struct regmap *base, u32 reg)
+{
+	struct regmap *regmap = base;
+	unsigned int val;
+
+	regmap_read(regmap, reg, &val);
+
+	return val;
+}
 
 static inline u32 dsaf_read_reg(u8 __iomem *base, u32 reg)
 {
