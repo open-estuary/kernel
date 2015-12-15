@@ -278,7 +278,7 @@ struct dsaf_device {
 
 	int virq[DSAF_IRQ_NUM];
 
-	u8 __iomem *sc_base;
+	struct regmap *sc_base;
 	u8 __iomem *sds_base;
 	u8 __iomem *ppe_base;
 	u8 __iomem *io_base;
