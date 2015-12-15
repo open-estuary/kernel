@@ -315,14 +315,19 @@
 			reg = < 0x0 0x80000000 0x0 0x10000>;
 		};
 
-		sas_ctrl0: sas_ctrl@c0000000 {
-			compatible = "hisilicon,sas-ctrl", "syscon";
+		dsaf_subctl: dsaf_subctl@c0000000 {
+			compatible = "hisilicon,dsaf-ctrl", "syscon";
 			reg = <0x0 0xc0000000 0x0 0x10000>;
 		};
 
-		sas_ctrl1: sas_ctrl@b0000000 {
-			compatible = "hisilicon,sas-ctrl", "syscon";
+		pcie_subctl: pcie_subctl@b0000000 {
+			compatible = "hisilicon,pcie-ctrl", "syscon";
 			reg = <0x0 0xb0000000 0x0 0x10000>;
+		};
+
+		m3_subctl: m3_subctl@a0000000 {
+			compatible = "hisilicon,m3-ctrl", "syscon";
+			reg = <0x0 0xa0000000 0x0 0x10000>;
 		};
 
 		uart0: uart@80300000 {
@@ -412,7 +417,7 @@
 			compatible = "hisilicon,hip05-sas-v1";
 			sas-addr = [50 01 88 20 16 00 00 0a];
 			reg = <0x0 0xc1000000 0x0 0x10000>;
-			hisilicon,sas-syscon = <&sas_ctrl0>;
+			hisilicon,sas-syscon = <&dsaf_subctl>;
 			ctrl-reset-reg = <0xa60>;
 			ctrl-reset-sts-reg = <0x5a30>;
 			ctrl-clock-ena-reg = <0x338>;
@@ -445,7 +450,7 @@
 			compatible = "hisilicon,hip05-sas-v1";
 			sas-addr = [50 01 88 20 16 00 00 00];
 			reg = <0x0 0xb1000000 0x0 0x10000>;
-			hisilicon,sas-syscon = <&sas_ctrl1>;
+			hisilicon,sas-syscon = <&pcie_subctl>;
 			ctrl-reset-reg = <0xa18>;
 			ctrl-reset-sts-reg = <0x5a0c>;
 			ctrl-clock-ena-reg = <0x318>;
