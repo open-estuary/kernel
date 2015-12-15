@@ -95,9 +95,9 @@ void hns_dsaf_rst(struct dsaf_device *dsaf_dev, u32 val)
 		nt_reg_addr = DSAF_SUB_SC_NT_RESET_DREQ_REG;
 	}
 
-	dsaf_write_reg(dsaf_dev->sc_base, xbar_reg_addr,
+	dsaf_write_sub(dsaf_dev->sc_base, xbar_reg_addr,
 		       RESET_REQ_OR_DREQ);
-	dsaf_write_reg(dsaf_dev->sc_base, nt_reg_addr,
+	dsaf_write_sub(dsaf_dev->sc_base, nt_reg_addr,
 		       RESET_REQ_OR_DREQ);
 }
 
@@ -117,7 +117,7 @@ void hns_dsaf_xge_srst_by_port(struct dsaf_device *dsaf_dev, u32 port, u32 val)
 	else
 		reg_addr = DSAF_SUB_SC_XGE_RESET_DREQ_REG;
 
-	dsaf_write_reg(dsaf_dev->sc_base, reg_addr, reg_val);
+	dsaf_write_sub(dsaf_dev->sc_base, reg_addr, reg_val);
 }
 
 void hns_dsaf_xge_core_srst_by_port(struct dsaf_device *dsaf_dev,
@@ -136,7 +136,7 @@ void hns_dsaf_xge_core_srst_by_port(struct dsaf_device *dsaf_dev,
 	else
 		reg_addr = DSAF_SUB_SC_XGE_RESET_DREQ_REG;
 
-	dsaf_write_reg(dsaf_dev->sc_base, reg_addr, reg_val);
+	dsaf_write_sub(dsaf_dev->sc_base, reg_addr, reg_val);
 }
 
 void hns_dsaf_ge_srst_by_port(struct dsaf_device *dsaf_dev, u32 port, u32 val)
@@ -156,19 +156,19 @@ void hns_dsaf_ge_srst_by_port(struct dsaf_device *dsaf_dev, u32 port, u32 val)
 			reg_val_2  = 0x2082082 << port;
 
 		if (val == 0) {
-			dsaf_write_reg(dsaf_dev->sc_base,
+			dsaf_write_sub(dsaf_dev->sc_base,
 				       DSAF_SUB_SC_GE_RESET_REQ1_REG,
 				       reg_val_1);
 
-			dsaf_write_reg(dsaf_dev->sc_base,
+			dsaf_write_sub(dsaf_dev->sc_base,
 				       DSAF_SUB_SC_GE_RESET_REQ0_REG,
 				       reg_val_2);
 		} else {
-			dsaf_write_reg(dsaf_dev->sc_base,
+			dsaf_write_sub(dsaf_dev->sc_base,
 				       DSAF_SUB_SC_GE_RESET_DREQ0_REG,
 				       reg_val_2);
 
-			dsaf_write_reg(dsaf_dev->sc_base,
+			dsaf_write_sub(dsaf_dev->sc_base,
 				       DSAF_SUB_SC_GE_RESET_DREQ1_REG,
 				       reg_val_1);
 		}
@@ -177,19 +177,19 @@ void hns_dsaf_ge_srst_by_port(struct dsaf_device *dsaf_dev, u32 port, u32 val)
 		reg_val_2 = 0x100 << (port - 6);
 
 		if (val == 0) {
-			dsaf_write_reg(dsaf_dev->sc_base,
+			dsaf_write_sub(dsaf_dev->sc_base,
 				       DSAF_SUB_SC_GE_RESET_REQ1_REG,
 				       reg_val_1);
 
-			dsaf_write_reg(dsaf_dev->sc_base,
+			dsaf_write_sub(dsaf_dev->sc_base,
 				       DSAF_SUB_SC_PPE_RESET_REQ_REG,
 				       reg_val_2);
 		} else {
-			dsaf_write_reg(dsaf_dev->sc_base,
+			dsaf_write_sub(dsaf_dev->sc_base,
 				       DSAF_SUB_SC_GE_RESET_DREQ1_REG,
 				       reg_val_1);
 
-			dsaf_write_reg(dsaf_dev->sc_base,
+			dsaf_write_sub(dsaf_dev->sc_base,
 				       DSAF_SUB_SC_PPE_RESET_DREQ_REG,
 				       reg_val_2);
 		}
@@ -208,7 +208,7 @@ void hns_ppe_srst_by_port(struct dsaf_device *dsaf_dev, u32 port, u32 val)
 	else
 		reg_addr = DSAF_SUB_SC_PPE_RESET_DREQ_REG;
 
-	dsaf_write_reg(dsaf_dev->sc_base, reg_addr, reg_val);
+	dsaf_write_sub(dsaf_dev->sc_base, reg_addr, reg_val);
 }
 
 void hns_ppe_com_srst(struct ppe_common_cb *ppe_common, u32 val)
@@ -234,7 +234,7 @@ void hns_ppe_com_srst(struct ppe_common_cb *ppe_common, u32 val)
 			reg_addr = DSAF_SUB_SC_PPE_RESET_DREQ_REG;
 	}
 
-	dsaf_write_reg(dsaf_dev->sc_base, reg_addr, reg_val);
+	dsaf_write_sub(dsaf_dev->sc_base, reg_addr, reg_val);
 }
 
 /**
@@ -246,12 +246,12 @@ phy_interface_t hns_mac_get_phy_if(struct hns_mac_cb *mac_cb)
 {
 	u32 hilink3_mode;
 	u32 hilink4_mode;
-	void __iomem *sys_ctl_vaddr = mac_cb->sys_ctl_vaddr;
+	struct regmap *sys_ctl_vaddr = mac_cb->sys_ctl_vaddr;
 	int dev_id = mac_cb->mac_id;
 	phy_interface_t phy_if = PHY_INTERFACE_MODE_NA;
 
-	hilink3_mode = dsaf_read_reg(sys_ctl_vaddr, HNS_MAC_HILINK3_REG);
-	hilink4_mode = dsaf_read_reg(sys_ctl_vaddr, HNS_MAC_HILINK4_REG);
+	hilink3_mode = dsaf_read_sub(sys_ctl_vaddr, HNS_MAC_HILINK3_REG);
+	hilink4_mode = dsaf_read_sub(sys_ctl_vaddr, HNS_MAC_HILINK4_REG);
 	if (dev_id >= 0 && dev_id <= 3) {
 		if (hilink4_mode == 0)
 			phy_if = PHY_INTERFACE_MODE_SGMII;
