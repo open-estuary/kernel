@@ -29,13 +29,13 @@ soc0: soc@000000000 {
 		mode = "6port-16rss";
 		interrupt-parent = <&mbigen_dsa>;
 
-		reg = <0x0 0xC0000000 0x0 0x420000
-		       0x0 0xC2000000 0x0 0x300000
+		reg = <0x0 0xC2000000 0x0 0x300000
 		       0x0 0xc5000000 0x0 0x890000
 		       0x0 0xc7000000 0x0 0x60000
 		       >;
 
 		phy-handle = <0 0 0 0 &soc0_phy0 &soc0_phy1 0 0>;
+		hisilicon,dsaf-syscon = <&dsaf_subctl>;
 		interrupts = <
 			/* [14] ge fifo err 8 / xge 6**/
 			149 0x4 150 0x4 151 0x4 152 0x4
