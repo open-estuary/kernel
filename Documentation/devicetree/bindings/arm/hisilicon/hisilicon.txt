@@ -208,6 +208,13 @@ Example:
 		reg = <0x0 0x80000000 0x0 0x10000>;
 	};
 -----------------------------------------------------------------------
+Hisilicon djtag r/w controller
+
+ Required Properties:
+- compatible     : Should include "hisilicon,hip05-djtag"
+- syscon         : implement r/w interfaces via which sysctrl node.
+
+-----------------------------------------------------------------------
 Hisilicon CPU controller
 
 Required properties:
