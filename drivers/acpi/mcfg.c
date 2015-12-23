@@ -10,8 +10,6 @@
 #include <linux/acpi.h>
 #include <linux/ecam.h>
 
-#include <asm/pci_x86.h> /* Temp hack before refactoring arch-specific calls */
-
 #define	PREFIX	"MCFG: "
 
 int __init acpi_parse_mcfg(struct acpi_table_header *header)
