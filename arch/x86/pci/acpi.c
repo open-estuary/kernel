@@ -5,6 +5,7 @@
 #include <linux/dmi.h>
 #include <linux/slab.h>
 #include <linux/pci-acpi.h>
+#include <linux/ecam.h>
 #include <asm/numa.h>
 #include <asm/pci_x86.h>
 

@@ -10,6 +10,7 @@
 #include <linux/acpi.h>
 #include <linux/bitmap.h>
 #include <linux/rcupdate.h>
+#include <linux/ecam.h>
 #include <asm/e820.h>
 #include <asm/pci_x86.h>
 
