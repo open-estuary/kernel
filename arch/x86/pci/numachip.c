@@ -13,6 +13,7 @@
  *
  */
 
+#include <linux/ecam.h>
 #include <linux/pci.h>
 #include <asm/pci_x86.h>
 
