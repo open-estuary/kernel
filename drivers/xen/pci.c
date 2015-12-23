@@ -28,9 +28,6 @@
 #include <asm/xen/hypervisor.h>
 #include <asm/xen/hypercall.h>
 #include "../pci/pci.h"
-#ifdef CONFIG_PCI_MMCONFIG
-#include <asm/pci_x86.h>
-#endif
 
 static bool __read_mostly pci_seg_supported = true;
 
@@ -220,9 +217,6 @@ static int __init xen_mcfg_late(void)
 	int rc;
 
 	if (!xen_initial_domain())
-		return 0;
-
-	if ((pci_probe & PCI_PROBE_MMCONF) == 0)
 		return 0;
 
 	if (list_empty(&pci_mmcfg_list))
