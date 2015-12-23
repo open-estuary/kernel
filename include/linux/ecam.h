@@ -17,6 +17,7 @@ struct pci_mmcfg_region {
 	u8 start_bus;
 	u8 end_bus;
 	char name[PCI_MMCFG_RESOURCE_NAME_LEN];
+	bool hot_added;
 };
 
 struct pci_mmcfg_region *pci_mmconfig_lookup(int segment, int bus);
