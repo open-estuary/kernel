@@ -166,6 +166,8 @@ int acpi_table_parse_madt(enum acpi_madt_type id,
 			  acpi_tbl_entry_handler handler,
 			  unsigned int max_entries);
 int acpi_parse_mcfg (struct acpi_table_header *header);
+int acpi_mcfg_check_entry(struct acpi_table_mcfg *mcfg,
+			  struct acpi_mcfg_allocation *cfg);
 void acpi_table_print_madt_entry (struct acpi_subtable_header *madt);
 
 /* the following numa functions are architecture-dependent */
