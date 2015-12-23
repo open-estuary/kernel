@@ -29,6 +29,12 @@ void list_add_sorted(struct pci_mmcfg_region *new);
 void free_all_mmcfg(void);
 int pci_mmconfig_delete(u16 seg, u8 start, u8 end);
 
+/* Arch specific calls */
+int pci_mmcfg_arch_init(void);
+void pci_mmcfg_arch_free(void);
+int pci_mmcfg_arch_map(struct pci_mmcfg_region *cfg);
+void pci_mmcfg_arch_unmap(struct pci_mmcfg_region *cfg);
+
 extern struct list_head pci_mmcfg_list;
 
 #define PCI_MMCFG_BUS_OFFSET(bus)      ((bus) << 20)
