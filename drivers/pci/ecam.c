@@ -131,6 +131,7 @@ struct pci_mmcfg_region *pci_mmconfig_alloc(int segment, int start,
 	new->segment = segment;
 	new->start_bus = start;
 	new->end_bus = end;
+	new->hot_added = false;
 
 	res = &new->res;
 	res->start = addr + PCI_MMCFG_BUS_OFFSET(start);
@@ -221,6 +222,7 @@ int pci_mmconfig_inject(struct pci_mmcfg_region *cfg)
 		err = -ENOMEM;
 		goto out;
 	} else {
+		cfg->hot_added = true;
 		list_add_sorted(cfg);
 		pr_info("MMCONFIG at %pR (base %#lx)\n",
 			&cfg->res, (unsigned long)cfg->address);
