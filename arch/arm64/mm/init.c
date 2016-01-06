@@ -34,8 +34,6 @@
 #include <linux/dma-contiguous.h>
 #include <linux/efi.h>
 #include <linux/swiotlb.h>
-#include <linux/kexec.h>
-#include <linux/crash_dump.h>
 
 #include <asm/fixmap.h>
 #include <asm/memory.h>
@@ -68,81 +66,6 @@ static int __init early_initrd(char *p)
 early_param("initrd", early_initrd);
 #endif
 
-#ifdef CONFIG_KEXEC
-/*
- * reserve_crashkernel() - reserves memory for crash kernel
- *
- * This function reserves memory area given in "crashkernel=" kernel command
- * line parameter. The memory reserved is used by a dump capture kernel when
- * primary kernel is crashing.
- */
-static void __init reserve_crashkernel(phys_addr_t limit)
-{
-	unsigned long long crash_size = 0, crash_base = 0;
-	int ret;
-
-	ret = parse_crashkernel(boot_command_line, limit,
-				&crash_size, &crash_base);
-	if (ret)
-		return;
-
-	if (crash_base == 0) {
-		crash_base = memblock_alloc(crash_size, 1 << 20);
-		if (crash_base == 0) {
-			pr_warn("crashkernel allocation failed (size:%llx)\n",
-				crash_size);
-			return;
-		}
-	} else {
-		/* User specifies base address explicitly. Sanity check */
-		if (!memblock_is_region_memory(crash_base, crash_size) ||
-			memblock_is_region_reserved(crash_base, crash_size)) {
-			pr_warn("crashkernel= has wrong address or size\n");
-			return;
-		}
-
-		if (memblock_reserve(crash_base, crash_size)) {
-			pr_warn("crashkernel reservation failed - out of memory\n");
-			return;
-		}
-	}
-
-	pr_info("Reserving %lldMB of memory at %lldMB for crashkernel\n",
-		crash_size >> 20, crash_base >> 20);
-
-	crashk_res.start = crash_base;
-	crashk_res.end = crash_base + crash_size - 1;
-}
-#endif /* CONFIG_KEXEC */
-
-#ifdef CONFIG_CRASH_DUMP
-/*
- * reserve_elfcorehdr() - reserves memory for elf core header
- *
- * This function reserves memory area given in "elfcorehdr=" kernel command
- * line parameter. The memory reserved is used by a dump capture kernel to
- * identify the memory used by primary kernel.
- */
-static void __init reserve_elfcorehdr(void)
-{
-	if (!elfcorehdr_size)
-		return;
-
-	if (memblock_is_region_reserved(elfcorehdr_addr, elfcorehdr_size)) {
-		pr_warn("elfcorehdr reservation failed - memory is in use (0x%llx)\n",
-			elfcorehdr_addr);
-		return;
-	}
-
-	if (memblock_reserve(elfcorehdr_addr, elfcorehdr_size)) {
-		pr_warn("elfcorehdr reservation failed - out of memory\n");
-		return;
-	}
-
-	pr_info("Reserving %lldKB of memory at %lldMB for elfcorehdr\n",
-		elfcorehdr_size >> 10, elfcorehdr_addr >> 20);
-}
-#endif /* CONFIG_CRASH_DUMP */
 /*
  * Return the maximum physical address for ZONE_DMA (DMA_BIT_MASK(32)). It
  * currently assumes that for memory starting above 4G, 32-bit devices will
@@ -163,10 +86,10 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 	memset(zone_size, 0, sizeof(zone_size));
 
 	/* 4GB maximum for 32-bit only capable devices */
-	if (IS_ENABLED(CONFIG_ZONE_DMA)) {
-		max_dma = PFN_DOWN(arm64_dma_phys_limit);
-		zone_size[ZONE_DMA] = max_dma - min;
-	}
+#ifdef CONFIG_ZONE_DMA
+	max_dma = PFN_DOWN(arm64_dma_phys_limit);
+	zone_size[ZONE_DMA] = max_dma - min;
+#endif
 	zone_size[ZONE_NORMAL] = max - max_dma;
 
 	memcpy(zhole_size, zone_size, sizeof(zhole_size));
@@ -178,11 +101,12 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 		if (start >= max)
 			continue;
 
-		if (IS_ENABLED(CONFIG_ZONE_DMA) && start < max_dma) {
+#ifdef CONFIG_ZONE_DMA
+		if (start < max_dma) {
 			unsigned long dma_end = min(end, max_dma);
 			zhole_size[ZONE_DMA] -= dma_end - start;
 		}
-
+#endif
 		if (end > max_dma) {
 			unsigned long normal_end = min(end, max);
 			unsigned long normal_start = max(start, max_dma);
@@ -245,13 +169,6 @@ void __init arm64_memblock_init(void)
 #ifdef CONFIG_BLK_DEV_INITRD
 	if (initrd_start)
 		memblock_reserve(__virt_to_phys(initrd_start), initrd_end - initrd_start);
-#endif
-
-#ifdef CONFIG_KEXEC
-	reserve_crashkernel(memory_limit);
-#endif
-#ifdef CONFIG_CRASH_DUMP
-	reserve_elfcorehdr();
 #endif
 
 	early_init_fdt_scan_reserved_mem();
@@ -382,6 +299,9 @@ void __init mem_init(void)
 #define MLK_ROUNDUP(b, t) b, t, DIV_ROUND_UP(((t) - (b)), SZ_1K)
 
 	pr_notice("Virtual kernel memory layout:\n"
+#ifdef CONFIG_KASAN
+		  "    kasan   : 0x%16lx - 0x%16lx   (%6ld GB)\n"
+#endif
 		  "    vmalloc : 0x%16lx - 0x%16lx   (%6ld GB)\n"
 #ifdef CONFIG_SPARSEMEM_VMEMMAP
 		  "    vmemmap : 0x%16lx - 0x%16lx   (%6ld GB maximum)\n"
@@ -394,6 +314,9 @@ void __init mem_init(void)
 		  "      .init : 0x%p" " - 0x%p" "   (%6ld KB)\n"
 		  "      .text : 0x%p" " - 0x%p" "   (%6ld KB)\n"
 		  "      .data : 0x%p" " - 0x%p" "   (%6ld KB)\n",
+#ifdef CONFIG_KASAN
+		  MLG(KASAN_SHADOW_START, KASAN_SHADOW_END),
+#endif
 		  MLG(VMALLOC_START, VMALLOC_END),
 #ifdef CONFIG_SPARSEMEM_VMEMMAP
 		  MLG((unsigned long)vmemmap,
@@ -442,9 +365,9 @@ void free_initmem(void)
 
 #ifdef CONFIG_BLK_DEV_INITRD
 
-static int keep_initrd;
+static int keep_initrd __initdata;
 
-void free_initrd_mem(unsigned long start, unsigned long end)
+void __init free_initrd_mem(unsigned long start, unsigned long end)
 {
 	if (!keep_initrd)
 		free_reserved_area((void *)start, (void *)end, 0, "initrd");

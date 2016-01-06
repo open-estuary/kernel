@@ -25,93 +25,23 @@
 #include <asm/hwcap.h>
 #include <asm/pgtable-hwdef.h>
 #include <asm/pgtable.h>
-#include <asm/proc-macros.S>
-#include <asm/virt.h>
+
+#include "proc-macros.S"
 
 #ifdef CONFIG_ARM64_64K_PAGES
 #define TCR_TG_FLAGS	TCR_TG0_64K | TCR_TG1_64K
-#else
+#elif defined(CONFIG_ARM64_16K_PAGES)
+#define TCR_TG_FLAGS	TCR_TG0_16K | TCR_TG1_16K
+#else /* CONFIG_ARM64_4K_PAGES */
 #define TCR_TG_FLAGS	TCR_TG0_4K | TCR_TG1_4K
 #endif
 
-#ifdef CONFIG_SMP
 #define TCR_SMP_FLAGS	TCR_SHARED
-#else
-#define TCR_SMP_FLAGS	0
-#endif
 
 /* PTWs cacheable, inner/outer WBWA */
 #define TCR_CACHE_FLAGS	TCR_IRGN_WBWA | TCR_ORGN_WBWA
 
 #define MAIR(attr, mt)	((attr) << ((mt) * 8))
-
-/*
- *	cpu_cache_off()
- *
- *	Turn the CPU D-cache off.
- */
-ENTRY(cpu_cache_off)
-	mrs	x0, sctlr_el1
-	bic	x0, x0, #1 << 2			// clear SCTLR.C
-	msr	sctlr_el1, x0
-	isb
-	ret
-ENDPROC(cpu_cache_off)
-
-/*
- * cpu_reset(el2_switch, loc) - Helper for cpu_soft_restart.
- *
- * @cpu_reset: Physical address of the cpu_reset routine.
- * @el2_switch: Flag to indicate a swich to EL2 is needed.
- * @addr: Location to jump to for soft reset.
- *
- * Put the CPU into the same state as it would be if it had been reset, and
- * branch to what would be the reset vector. It must be executed with the
- * flat identity mapping.
- */
-
-	.align	5
-
-ENTRY(cpu_reset)
-	mrs	x2, sctlr_el1
-	bic	x2, x2, #1
-	msr	sctlr_el1, x2			// disable the MMU
-	isb
-
-	cbz	x0, 1f				// el2_switch?
-	mov	x0, x1
-	mov	x1, xzr
-	mov	x2, xzr
-	mov	x3, xzr
-	hvc	#HVC_CALL_FUNC			// no return
-
-1:	ret	x1
-ENDPROC(cpu_reset)
-
-/*
- * cpu_soft_restart(cpu_reset, el2_switch, addr) - Perform a cpu soft reset.
- *
- * @cpu_reset: Physical address of the cpu_reset routine.
- * @el2_switch: Flag to indicate a swich to EL2 is needed, passed to cpu_reset.
- * @addr: Location to jump to for soft reset, passed to cpu_reset.
- *
- */
-
-ENTRY(cpu_soft_restart)
-	mov	x19, x0				// cpu_reset
-	mov	x20, x1				// el2_switch
-	mov	x21, x2				// addr
-
-	/* Turn D-cache off */
-	bl	cpu_cache_off
-
-	/* Push out all dirty data, and ensure cache is empty */
-	bl	flush_cache_all
-
-	mov	x0, x20
-	mov	x1, x21
-	ret	x19
-ENDPROC(cpu_soft_restart)
 
 /*
  *	cpu_do_idle()
@@ -202,7 +132,7 @@ ENDPROC(cpu_do_resume)
  *	- pgd_phys - physical address of new TTB
  */
 ENTRY(cpu_do_switch_mm)
-	mmid	w1, x1				// get mm->context.id
+	mmid	x1, x1				// get mm->context.id
 	bfi	x0, x1, #48, #16		// set the ASID
 	msr	ttbr0_el1, x0			// set TTBR0
 	isb
@@ -218,13 +148,13 @@ ENDPROC(cpu_do_switch_mm)
  *	value of the SCTLR_EL1 register.
  */
 ENTRY(__cpu_setup)
-	ic	iallu				// I+BTB cache invalidate
-	tlbi	vmalle1is			// invalidate I + D TLBs
-	dsb	ish
+	tlbi	vmalle1				// Invalidate local TLB
+	dsb	nsh
 
 	mov	x0, #3 << 20
 	msr	cpacr_el1, x0			// Enable FP/ASIMD
-	msr	mdscr_el1, xzr			// Reset mdscr_el1
+	mov	x0, #1 << 12			// Reset mdscr_el1 and disable
+	msr	mdscr_el1, x0			// access to the DCC from EL0
 	/*
 	 * Memory region attributes for LPAE:
 	 *
@@ -235,12 +165,14 @@ ENTRY(__cpu_setup)
 	 *   DEVICE_GRE		010	00001100
 	 *   NORMAL_NC		011	01000100
 	 *   NORMAL		100	11111111
+	 *   NORMAL_WT		101	10111011
 	 */
 	ldr	x5, =MAIR(0x00, MT_DEVICE_nGnRnE) | \
 		     MAIR(0x04, MT_DEVICE_nGnRE) | \
 		     MAIR(0x0c, MT_DEVICE_GRE) | \
 		     MAIR(0x44, MT_NORMAL_NC) | \
-		     MAIR(0xff, MT_NORMAL)
+		     MAIR(0xff, MT_NORMAL) | \
+		     MAIR(0xbb, MT_NORMAL_WT)
 	msr	mair_el1, x5
 	/*
 	 * Prepare SCTLR
@@ -264,6 +196,19 @@ ENTRY(__cpu_setup)
 	 */
 	mrs	x9, ID_AA64MMFR0_EL1
 	bfi	x10, x9, #32, #3
+#ifdef CONFIG_ARM64_HW_AFDBM
+	/*
+	 * Hardware update of the Access and Dirty bits.
+	 */
+	mrs	x9, ID_AA64MMFR1_EL1
+	and	x9, x9, #0xf
+	cbz	x9, 2f
+	cmp	x9, #2
+	b.lt	1f
+	orr	x10, x10, #TCR_HD		// hardware Dirty flag update
+1:	orr	x10, x10, #TCR_HA		// hardware Access flag update
+2:
+#endif	/* CONFIG_ARM64_HW_AFDBM */
 	msr	tcr_el1, x10
 	ret					// return to head.S
 ENDPROC(__cpu_setup)

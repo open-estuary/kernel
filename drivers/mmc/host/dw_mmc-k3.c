@@ -21,10 +21,12 @@
 #include "dw_mmc.h"
 #include "dw_mmc-pltfm.h"
 
+/*
+ * hi6220 sd only support io voltage 1.8v and 3v
+ * Also need config AO_SCTRL_SEL18 accordingly
+ */
 #define AO_SCTRL_SEL18		BIT(10)
 #define AO_SCTRL_CTRL3		0x40C
-
-#define SDMMC_CMD_DISABLE_BOOT	BIT(26)
 
 struct k3_priv {
 	struct regmap	*reg;
@@ -105,6 +107,7 @@ static int dw_mci_hi6220_switch_voltage(struct mmc_host *mmc, struct mmc_ios *io
 				 ret, min_uv, max_uv);
 		return ret;
 	}
+
 	return 0;
 }
 
@@ -122,16 +125,10 @@ static void dw_mci_hi6220_set_ios(struct dw_mci *host, struct mmc_ios *ios)
 	host->bus_hz = clk_get_rate(host->biu_clk);
 }
 
-static void dw_mci_hi6220_prepare_command(struct dw_mci *host, u32 *cmdr)
-{
-       *cmdr |= SDMMC_CMD_USE_HOLD_REG;
-}
-
 static const struct dw_mci_drv_data hi6220_data = {
 	.switch_voltage		= dw_mci_hi6220_switch_voltage,
 	.set_ios		= dw_mci_hi6220_set_ios,
 	.parse_dt		= dw_mci_hi6220_parse_dt,
-	.prepare_command        = dw_mci_hi6220_prepare_command,
 };
 
 static const struct of_device_id dw_mci_k3_match[] = {
@@ -196,4 +193,4 @@ module_platform_driver(dw_mci_k3_pltfm_driver);
 
 MODULE_DESCRIPTION("K3 Specific DW-MSHC Driver Extension");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:dwmmc-k3");
+MODULE_ALIAS("platform:dwmmc_k3");
