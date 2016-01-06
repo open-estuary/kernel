@@ -15,10 +15,6 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  *  General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License along
- *  with this program; if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
- *
  * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
@@ -123,7 +119,7 @@ bool acpi_dev_resource_memory(struct acpi_resource *ares, struct resource *res)
 EXPORT_SYMBOL_GPL(acpi_dev_resource_memory);
 
 static void acpi_dev_ioresource_flags(struct resource *res, u64 len,
-				      u8 io_decode)
+				      u8 io_decode, u8 translation_type)
 {
 	res->flags = IORESOURCE_IO;
 
@@ -135,6 +131,8 @@ static void acpi_dev_ioresource_flags(struct resource *res, u64 len,
 
 	if (io_decode == ACPI_DECODE_16)
 		res->flags |= IORESOURCE_IO_16BIT_ADDR;
+	if (translation_type == ACPI_SPARSE_TRANSLATION)
+		res->flags |= IORESOURCE_IO_SPARSE;
 }
 
 static void acpi_dev_get_ioresource(struct resource *res, u64 start, u64 len,
@@ -142,7 +140,7 @@ static void acpi_dev_get_ioresource(struct resource *res, u64 start, u64 len,
 {
 	res->start = start;
 	res->end = start + len - 1;
-	acpi_dev_ioresource_flags(res, len, io_decode);
+	acpi_dev_ioresource_flags(res, len, io_decode, 0);
 }
 
 /**
@@ -235,7 +233,8 @@ static bool acpi_decode_space(struct resource_win *win,
 		acpi_dev_memresource_flags(res, len, wp);
 		break;
 	case ACPI_IO_RANGE:
-		acpi_dev_ioresource_flags(res, len, iodec);
+		acpi_dev_ioresource_flags(res, len, iodec,
+					  addr->info.io.translation_type);
 		break;
 	case ACPI_BUS_NUMBER_RANGE:
 		res->flags = IORESOURCE_BUS;
@@ -344,7 +343,7 @@ static void acpi_dev_irqresource_disabled(struct resource *res, u32 gsi)
 	res->flags = IORESOURCE_IRQ | IORESOURCE_DISABLED | IORESOURCE_UNSET;
 }
 
-static void acpi_dev_get_irqresource(struct resource *res, u32 gsi,
+static void acpi_dev_get_irqresource(struct acpi_device *adev, struct resource *res, u32 gsi,
 				     u8 triggering, u8 polarity, u8 shareable,
 				     bool legacy)
 {
@@ -378,13 +377,53 @@ static void acpi_dev_get_irqresource(struct resource *res, u32 gsi,
 	}
 
 	res->flags = acpi_dev_irq_flags(triggering, polarity, shareable);
-	irq = acpi_register_gsi(NULL, gsi, triggering, polarity);
+	irq = acpi_register_gsi(&adev->dev, gsi, triggering, polarity);
 	if (irq >= 0) {
 		res->start = irq;
 		res->end = irq;
 	} else {
 		acpi_dev_irqresource_disabled(res, gsi);
 	}
+}
+
+static bool _acpi_dev_resource_interrupt(struct acpi_device *adev,
+					 struct acpi_resource *ares, int index,
+					 struct resource *res)
+{
+	struct acpi_resource_irq *irq;
+	struct acpi_resource_extended_irq *ext_irq;
+
+	switch (ares->type) {
+	case ACPI_RESOURCE_TYPE_IRQ:
+		/*
+		 * Per spec, only one interrupt per descriptor is allowed in
+		 * _CRS, but some firmware violates this, so parse them all.
+		 */
+		irq = &ares->data.irq;
+		if (index >= irq->interrupt_count) {
+			acpi_dev_irqresource_disabled(res, 0);
+			return false;
+		}
+		acpi_dev_get_irqresource(adev, res, irq->interrupts[index],
+					 irq->triggering, irq->polarity,
+					 irq->sharable, true);
+		break;
+	case ACPI_RESOURCE_TYPE_EXTENDED_IRQ:
+		ext_irq = &ares->data.extended_irq;
+		if (index >= ext_irq->interrupt_count) {
+			acpi_dev_irqresource_disabled(res, 0);
+			return false;
+		}
+		acpi_dev_get_irqresource(adev, res, ext_irq->interrupts[index],
+					 ext_irq->triggering, ext_irq->polarity,
+					 ext_irq->sharable, false);
+		break;
+	default:
+		res->flags = 0;
+		return false;
+	}
+
+	return true;
 }
 
 /**
@@ -409,40 +448,7 @@ static void acpi_dev_get_irqresource(struct resource *res, u32 gsi,
 bool acpi_dev_resource_interrupt(struct acpi_resource *ares, int index,
 				 struct resource *res)
 {
-	struct acpi_resource_irq *irq;
-	struct acpi_resource_extended_irq *ext_irq;
-
-	switch (ares->type) {
-	case ACPI_RESOURCE_TYPE_IRQ:
-		/*
-		 * Per spec, only one interrupt per descriptor is allowed in
-		 * _CRS, but some firmware violates this, so parse them all.
-		 */
-		irq = &ares->data.irq;
-		if (index >= irq->interrupt_count) {
-			acpi_dev_irqresource_disabled(res, 0);
-			return false;
-		}
-		acpi_dev_get_irqresource(res, irq->interrupts[index],
-					 irq->triggering, irq->polarity,
-					 irq->sharable, true);
-		break;
-	case ACPI_RESOURCE_TYPE_EXTENDED_IRQ:
-		ext_irq = &ares->data.extended_irq;
-		if (index >= ext_irq->interrupt_count) {
-			acpi_dev_irqresource_disabled(res, 0);
-			return false;
-		}
-		acpi_dev_get_irqresource(res, ext_irq->interrupts[index],
-					 ext_irq->triggering, ext_irq->polarity,
-					 ext_irq->sharable, false);
-		break;
-	default:
-		res->flags = 0;
-		return false;
-	}
-
-	return true;
+	return _acpi_dev_resource_interrupt(NULL, ares, index, res);
 }
 EXPORT_SYMBOL_GPL(acpi_dev_resource_interrupt);
 
@@ -462,6 +468,7 @@ struct res_proc_context {
 	void *preproc_data;
 	int count;
 	int error;
+	struct acpi_device *adev;
 };
 
 static acpi_status acpi_dev_new_resource_entry(struct resource_win *win,
@@ -509,7 +516,7 @@ static acpi_status acpi_dev_process_resource(struct acpi_resource *ares,
 	    || acpi_dev_resource_ext_address_space(ares, &win))
 		return acpi_dev_new_resource_entry(&win, c);
 
-	for (i = 0; acpi_dev_resource_interrupt(ares, i, res); i++) {
+	for (i = 0; _acpi_dev_resource_interrupt(c->adev, ares, i, res); i++) {
 		acpi_status status;
 
 		status = acpi_dev_new_resource_entry(&win, c);
@@ -562,6 +569,7 @@ int acpi_dev_get_resources(struct acpi_device *adev, struct list_head *list,
 	c.preproc_data = preproc_data;
 	c.count = 0;
 	c.error = 0;
+	c.adev = adev;
 	status = acpi_walk_resources(adev->handle, METHOD_NAME__CRS,
 				     acpi_dev_process_resource, &c);
 	if (ACPI_FAILURE(status)) {

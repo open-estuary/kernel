@@ -15,13 +15,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <linux/acpi.h>
 #include <linux/bitmap.h>
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>
+#include <linux/iort.h>
 #include <linux/log2.h>
 #include <linux/mm.h>
-#include <linux/mbi.h>
+#include <linux/msi.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
@@ -29,19 +31,22 @@
 #include <linux/of_platform.h>
 #include <linux/percpu.h>
 #include <linux/slab.h>
-#include <linux/reboot.h>
+
+#include <linux/irqchip.h>
 #include <linux/irqchip/arm-gic-v3.h>
 
 #include <asm/cacheflush.h>
 #include <asm/cputype.h>
 #include <asm/exception.h>
+#include <dt-bindings/interrupt-controller/mbigen-v1.h>
 
-#include "irqchip.h"
+#include "irq-gic-common.h"
 
-#define ITS_FLAGS_CMDQ_NEEDS_FLUSHING		(1 << 0)
+#define ITS_FLAGS_CMDQ_NEEDS_FLUSHING		(1ULL << 0)
+#define ITS_FLAGS_WORKAROUND_CAVIUM_22375	(1ULL << 1)
 
 #define RDIST_FLAGS_PROPBASE_NEEDS_FLUSHING	(1 << 0)
-extern struct atomic_notifier_head panic_notifier_list;
+
 /*
  * Collection structure - just an ID, and a redistributor address to
  * ping. We use one per CPU as a bag of interrupts assigned to this
@@ -54,15 +59,12 @@ struct its_collection {
 
 /*
  * The ITS structure - contains most of the infrastructure, with the
- * msi_controller, the command queue, the collections, and the list of
- * devices writing to it.
+ * top-level MSI domain, the command queue, the collections, and the
+ * list of devices writing to it.
  */
 struct its_node {
 	raw_spinlock_t		lock;
 	struct list_head	entry;
-	struct device_node	*node;
-	struct irq_domain	*domain;
-	struct irq_domain	*mbidom;
 	void __iomem		*base;
 	unsigned long		phys_base;
 	struct its_cmd_block	*cmd_base;
@@ -71,7 +73,6 @@ struct its_node {
 	struct its_collection	*collections;
 	struct list_head	its_device_list;
 	u64			flags;
-	u32			dev_id_bits;
 	u32			ite_size;
 };
 
@@ -621,16 +622,18 @@ static int its_set_affinity(struct irq_data *d, const struct cpumask *mask_val,
 	return IRQ_SET_MASK_OK_DONE;
 }
 
-static void its_irq_compose_mbi_msg(struct irq_data *d, struct mbi_msg *msg)
+static void its_irq_compose_msi_msg(struct irq_data *d, struct msi_msg *msg)
 {
 	struct its_device *its_dev = irq_data_get_irq_chip_data(d);
+	struct its_node *its;
 	u64 addr;
 
-	addr = its_dev->its->phys_base + GITS_TRANSLATER;
+	its = its_dev->its;
+	addr = its->phys_base + GITS_TRANSLATER;
 
 	msg->address_lo		= addr & ((1UL << 32) - 1);
 	msg->address_hi		= addr >> 32;
-	msg->data		= (its_dev->device_id << 16) | its_get_event_id(d);
+	msg->data		= its_get_event_id(d);
 }
 
 static struct irq_chip its_irq_chip = {
@@ -639,7 +642,7 @@ static struct irq_chip its_irq_chip = {
 	.irq_unmask		= its_unmask_irq,
 	.irq_eoi		= its_eoi_irq,
 	.irq_set_affinity	= its_set_affinity,
-	.irq_compose_msg	= its_irq_compose_mbi_msg,
+	.irq_compose_msi_msg	= its_irq_compose_msi_msg,
 };
 
 /*
@@ -669,7 +672,7 @@ static int its_chunk_to_lpi(int chunk)
 	return (chunk << IRQS_PER_CHUNK_SHIFT) + 8192;
 }
 
-static int its_lpi_init(u32 id_bits)
+static int __init its_lpi_init(u32 id_bits)
 {
 	lpi_chunks = its_lpi_to_chunk(1UL << id_bits);
 
@@ -721,6 +724,9 @@ static unsigned long *its_lpi_alloc_chunks(int nr_irqs, int *base, int *nr_ids)
 out:
 	spin_unlock(&lpi_lock);
 
+	if (!bitmap)
+		*base = *nr_ids = 0;
+
 	return bitmap;
 }
 
@@ -766,10 +772,6 @@ static void its_lpi_free(struct event_lpi_map *map)
 static int __init its_alloc_lpi_tables(void)
 {
 	phys_addr_t paddr;
-#if defined(CONFIG_ARCH_P660)
-	int i;
-	u8 *prop;
-#endif
 
 	gic_rdists->prop_page = alloc_pages(GFP_NOWAIT,
 					   get_order(LPI_PROPBASE_SZ));
@@ -781,21 +783,10 @@ static int __init its_alloc_lpi_tables(void)
 	paddr = page_to_phys(gic_rdists->prop_page);
 	pr_info("GIC: using LPI property table @%pa\n", &paddr);
 
-#if defined(CONFIG_ARCH_P660)
-	/*
-	 * Avoid a hardware bug that if eight consecutive LPIs have
-	 * same prioritys, some LPIs maybe blocked.
-	 */
-	prop = (u8 *)page_address(gic_rdists->prop_page);
-
-	for (i = 0; i < LPI_PROPBASE_SZ; i++)
-		prop[i] = 0xa2 | ((i & 0x7) << 2);
-#else
 	/* Priority 0xa0, Group-1, disabled */
 	memset(page_address(gic_rdists->prop_page),
 	       LPI_PROP_DEFAULT_PRIO | LPI_PROP_GROUP1,
 	       LPI_PROPBASE_SZ);
-#endif
 
 	/* Make sure the GIC will observe the written configuration */
 	__flush_dcache_area(page_address(gic_rdists->prop_page), LPI_PROPBASE_SZ);
@@ -830,8 +821,23 @@ static int its_alloc_tables(struct its_node *its)
 	int err;
 	int i;
 	int psz = SZ_64K;
-	u64 shr = GITS_BASER_Shareable;
-	u64 cache = GITS_BASER_WaWb;
+	u64 shr = GITS_BASER_InnerShareable;
+	u64 cache;
+	u64 typer;
+	u32 ids;
+
+	if (its->flags & ITS_FLAGS_WORKAROUND_CAVIUM_22375) {
+		/*
+		 * erratum 22375: only alloc 8MB table size
+		 * erratum 24313: ignore memory access type
+		 */
+		cache	= 0;
+		ids	= 0x14;			/* 20 bits, 8MB */
+	} else {
+		cache	= GITS_BASER_WaWb;
+		typer	= readq_relaxed(its->base + GITS_TYPER);
+		ids	= GITS_TYPER_DEVBITS(typer);
+	}
 
 	for (i = 0; i < GITS_BASER_NR_REGS; i++) {
 		u64 val = readq_relaxed(its->base + GITS_BASER + i * 8);
@@ -839,6 +845,7 @@ static int its_alloc_tables(struct its_node *its)
 		u64 entry_size = GITS_BASER_ENTRY_SIZE(val);
 		int order = get_order(psz);
 		int alloc_size;
+		int alloc_pages;
 		u64 tmp;
 		void *base;
 
@@ -854,9 +861,6 @@ static int its_alloc_tables(struct its_node *its)
 		 * For other tables, only allocate a single page.
 		 */
 		if (type == GITS_BASER_TYPE_DEVICE) {
-			u64 typer = readq_relaxed(its->base + GITS_TYPER);
-			u32 ids = GITS_TYPER_DEVBITS(typer);
-
 			/*
 			 * 'order' was initialized earlier to the default page
 			 * granule of the the ITS.  We can't have an allocation
@@ -867,12 +871,20 @@ static int its_alloc_tables(struct its_node *its)
 				    order);
 			if (order >= MAX_ORDER) {
 				order = MAX_ORDER - 1;
-				pr_warn("%s: Device Table too large, reduce its page order to %u\n",
-					its->node->full_name, order);
+				pr_warn("ITS@0x%lx: Device Table too large, reduce its page order to %u\n",
+					its->phys_base, order);
 			}
 		}
 
 		alloc_size = (1 << order) * PAGE_SIZE;
+		alloc_pages = (alloc_size / psz);
+		if (alloc_pages > GITS_BASER_PAGES_MAX) {
+			alloc_pages = GITS_BASER_PAGES_MAX;
+			order = get_order(GITS_BASER_PAGES_MAX * psz);
+			pr_warn("ITS@0x%lx: Device Table too large, reduce its page order to %u (%u pages)\n",
+				its->phys_base, order, alloc_pages);
+		}
+
 		base = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO, order);
 		if (!base) {
 			err = -ENOMEM;
@@ -901,7 +913,8 @@ retry_baser:
 			break;
 		}
 
-		val |= (alloc_size / psz) - 1;
+		alloc_pages = (alloc_size / psz);
+		val |= alloc_pages - 1;
 
 		writeq_relaxed(val, its->base + GITS_BASER + i * 8);
 		tmp = readq_relaxed(its->base + GITS_BASER + i * 8);
@@ -915,8 +928,10 @@ retry_baser:
 			 * non-cacheable as well.
 			 */
 			shr = tmp & GITS_BASER_SHAREABILITY_MASK;
-			if (!shr)
+			if (!shr) {
 				cache = GITS_BASER_nC;
+				__flush_dcache_area(base, alloc_size);
+			}
 			goto retry_baser;
 		}
 
@@ -937,8 +952,8 @@ retry_baser:
 		}
 
 		if (val != tmp) {
-			pr_err("ITS: %s: GITS_BASER%d doesn't stick: %lx %lx\n",
-			       its->node->full_name, i,
+			pr_err("ITS@0x%lx: GITS_BASER%d doesn't stick: %lx %lx\n",
+			       its->phys_base, i,
 			       (unsigned long) val, (unsigned long) tmp);
 			err = -ENXIO;
 			goto out_free;
@@ -1012,7 +1027,7 @@ static void its_cpu_init_lpis(void)
 
 	/* set PROPBASE */
 	val = (page_to_phys(gic_rdists->prop_page) |
-	       GICR_PROPBASER_Shareable |
+	       GICR_PROPBASER_InnerShareable |
 	       GICR_PROPBASER_WaWb |
 	       ((LPI_NRBITS - 1) & GICR_PROPBASER_IDBITS_MASK));
 
@@ -1037,7 +1052,7 @@ static void its_cpu_init_lpis(void)
 
 	/* set PENDBASE */
 	val = (page_to_phys(pend_page) |
-	       GICR_PENDBASER_Shareable |
+	       GICR_PENDBASER_InnerShareable |
 	       GICR_PENDBASER_WaWb);
 
 	writeq_relaxed(val, rbase + GICR_PENDBASER);
@@ -1141,7 +1156,7 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 	 * of two entries. No, the architecture doesn't let you
 	 * express an ITT with a single entry.
 	 */
-	nr_ites = max_t(unsigned, 2UL, roundup_pow_of_two(nvecs));
+	nr_ites = max(2UL, roundup_pow_of_two(nvecs));
 	sz = nr_ites * its->ite_size;
 	sz = max(sz, ITS_ITT_ALIGN) + ITS_ITT_ALIGN - 1;
 	itt = kzalloc(sz, GFP_KERNEL);
@@ -1156,6 +1171,8 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 		kfree(col_map);
 		return NULL;
 	}
+
+	__flush_dcache_area(itt, sz);
 
 	dev->its = its;
 	dev->itt = itt;
@@ -1179,23 +1196,26 @@ static struct its_device *its_create_device(struct its_node *its, u32 dev_id,
 
 static void its_free_device(struct its_device *its_dev)
 {
-	raw_spin_lock(&its_dev->its->lock);
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&its_dev->its->lock, flags);
 	list_del(&its_dev->entry);
-	raw_spin_unlock(&its_dev->its->lock);
+	raw_spin_unlock_irqrestore(&its_dev->its->lock, flags);
 	kfree(its_dev->itt);
 	kfree(its_dev);
 }
 
 static int its_alloc_device_irq(struct its_device *dev, irq_hw_number_t *hwirq,
-				int *event)
+				int *hint)
 {
-	int idx = *event;
+	int idx = *hint;
 
 	if (idx < 0) {
-		idx = find_first_zero_bit(dev->event_map.lpi_map, dev->event_map.nr_lpis);
+		idx = find_first_zero_bit(dev->event_map.lpi_map,
+					  dev->event_map.nr_lpis);
 		if (idx == dev->event_map.nr_lpis)
 			return -ENOSPC;
-		*event = idx;
+		*hint = idx;
 	}
 
 	*hwirq = dev->event_map.lpi_base + idx;
@@ -1204,51 +1224,105 @@ static int its_alloc_device_irq(struct its_device *dev, irq_hw_number_t *hwirq,
 	return 0;
 }
 
+static int its_msi_prepare(struct irq_domain *domain, struct device *dev,
+			   int nvec, msi_alloc_info_t *info)
+{
+	struct its_node *its;
+	struct its_device *its_dev;
+	struct msi_domain_info *msi_info;
+	u32 dev_id;
+
+	/*
+	 * We ignore "dev" entierely, and rely on the dev_id that has
+	 * been passed via the scratchpad. This limits this domain's
+	 * usefulness to upper layers that definitely know that they
+	 * are built on top of the ITS.
+	 */
+	dev_id = info->scratchpad[0].ul;
+
+	msi_info = msi_get_domain_info(domain);
+	its = msi_info->data;
+
+	its_dev = its_find_device(its, dev_id);
+	if (its_dev) {
+		/*
+		 * We already have seen this ID, probably through
+		 * another alias (PCI bridge of some sort). No need to
+		 * create the device.
+		 */
+		pr_debug("Reusing ITT for devID %x\n", dev_id);
+		goto out;
+	}
+
+	its_dev = its_create_device(its, dev_id, nvec);
+	if (!its_dev)
+		return -ENOMEM;
+
+	pr_debug("ITT %d entries, %d bits\n", nvec, ilog2(nvec));
+out:
+	info->scratchpad[0].ptr = its_dev;
+	return 0;
+}
+
+static struct msi_domain_ops its_msi_domain_ops = {
+	.msi_prepare	= its_msi_prepare,
+};
+
 static int its_irq_gic_domain_alloc(struct irq_domain *domain,
 				    unsigned int virq,
 				    irq_hw_number_t hwirq)
 {
-	struct of_phandle_args args;
+	struct irq_fwspec fwspec;
 
-	args.np = domain->parent->of_node;
-	args.args_count = 3;
-	args.args[0] = GIC_IRQ_TYPE_LPI;
-	args.args[1] = hwirq;
-	args.args[2] = IRQ_TYPE_EDGE_RISING;
+	if (irq_domain_get_of_node(domain->parent)) {
+		fwspec.fwnode = domain->parent->fwnode;
+		fwspec.param_count = 3;
+		fwspec.param[0] = GIC_IRQ_TYPE_LPI;
+		fwspec.param[1] = hwirq;
+		fwspec.param[2] = IRQ_TYPE_EDGE_RISING;
+	} else if (is_fwnode_irqchip(domain->parent->fwnode)) {
+		fwspec.fwnode = domain->parent->fwnode;
+		fwspec.param_count = 2;
+		fwspec.param[0] = hwirq;
+		fwspec.param[1] = IRQ_TYPE_EDGE_RISING;
+	} else {
+		return -EINVAL;
+	}
 
-	return irq_domain_alloc_irqs_parent(domain, virq, 1, &args);
+	return irq_domain_alloc_irqs_parent(domain, virq, 1, &fwspec);
 }
 
+static int get_irq_event_hint(unsigned int irq, struct its_device *its_dev)
+{
+	struct irq_data *data;
+	int hint;
+
+
+	data = irq_get_irq_data(irq);
+
+	/* for pv660 the hwirq number > 2048 */
+	if(its_dev->device_id == MBIGEN_V1_DEVID)
+		hint = data->hwirq;
+	else
+		hint = -1;
+
+	return hint;
+}
 static int its_irq_domain_alloc(struct irq_domain *domain, unsigned int virq,
 				unsigned int nr_irqs, void *args)
 {
-	struct mbi_desc *desc = args;
-	struct device *dev = desc->mbi.dev;
-	struct its_node *its = domain->host_data;
-	struct its_device *its_dev;
-	u32 dev_id = desc->mbi.msg_id;
-	int event = desc->offset;
+	msi_alloc_info_t *info = args;
+	struct its_device *its_dev = info->scratchpad[0].ptr;
+	irq_hw_number_t hwirq;
 	int err;
 	int i;
+	int hint;
 
-	its_dev = its_find_device(its, dev_id);
-	if (!its_dev) {
-		its_dev = its_create_device(its, dev_id, desc->mbi.lines);
-		if (!its_dev)
-			return -ENOMEM;
-	}
-
+	hint = get_irq_event_hint(virq, its_dev);
 	for (i = 0; i < nr_irqs; i++) {
-		irq_hw_number_t hwirq;
-
-		err = its_alloc_device_irq(its_dev, &hwirq, &event);
+		err = its_alloc_device_irq(its_dev, &hwirq, &hint);
 		if (err)
 			return err;
-
-		if (desc->offset < 0)
-			desc->offset = event;
-
-		event++;
 
 		err = its_irq_gic_domain_alloc(domain, virq + i, hwirq);
 		if (err)
@@ -1256,8 +1330,9 @@ static int its_irq_domain_alloc(struct irq_domain *domain, unsigned int virq,
 
 		irq_domain_set_hwirq_and_chip(domain, virq + i,
 					      hwirq, &its_irq_chip, its_dev);
-		dev_dbg(dev, "ID:%d pID:%d vID:%d\n",
-			(int)(hwirq - its_dev->event_map.lpi_base), (int)hwirq, virq + i);
+		pr_debug("ID:%d pID:%d vID:%d\n",
+			 (int)(hwirq - its_dev->event_map.lpi_base),
+			 (int) hwirq, virq + i);
 	}
 
 	return 0;
@@ -1353,30 +1428,78 @@ static int its_force_quiescent(void __iomem *base)
 	}
 }
 
-static struct its_node *its_probe(void __iomem *its_base,
-			unsigned long its_phys_base,
-			struct device_node *node,
-			struct irq_domain *parent,
-			bool is_msi_controller)
+static void __maybe_unused its_enable_quirk_cavium_22375(void *data)
+{
+	struct its_node *its = data;
+
+	its->flags |= ITS_FLAGS_WORKAROUND_CAVIUM_22375;
+}
+
+static const struct gic_quirk its_quirks[] = {
+#ifdef CONFIG_CAVIUM_ERRATUM_22375
+	{
+		.desc	= "ITS: Cavium errata 22375, 24313",
+		.iidr	= 0xa100034c,	/* ThunderX pass 1.x */
+		.mask	= 0xffff0fff,
+		.init	= its_enable_quirk_cavium_22375,
+	},
+#endif
+	{
+	}
+};
+
+static void its_enable_quirks(struct its_node *its)
+{
+	u32 iidr = readl_relaxed(its->base + GITS_IIDR);
+
+	gic_enable_quirks(iidr, its_quirks, its);
+}
+
+static int __init its_probe_one(phys_addr_t phys_base, unsigned long size,
+				struct irq_domain *parent,
+				bool is_msi_controller,
+				struct fwnode_handle *handler)
 {
 	struct its_node *its;
-	u64 baser, typer, tmp;
+	void __iomem *its_base;
+	struct irq_domain *inner_domain;
+	u32 val;
+	u64 baser, tmp;
 	int err;
 
+	its_base = ioremap(phys_base, size);
+	if (!its_base) {
+		pr_warn("Unable to map ITS registers\n");
+		return -ENOMEM;
+	}
+
+	val = readl_relaxed(its_base + GITS_PIDR2) & GIC_PIDR2_ARCH_MASK;
+	if (val != 0x30 && val != 0x40) {
+		pr_warn("No ITS detected, giving up\n");
+		err = -ENODEV;
+		goto out_unmap;
+	}
+
+	err = its_force_quiescent(its_base);
+	if (err) {
+		pr_warn("Failed to quiesce, giving up\n");
+		goto out_unmap;
+	}
+
+	pr_info("ITS@0x%lx\n", (long)phys_base);
+
 	its = kzalloc(sizeof(*its), GFP_KERNEL);
-	if (!its)
-		return ERR_PTR(-ENOMEM);
+	if (!its) {
+		err = -ENOMEM;
+		goto out_unmap;
+	}
 
 	raw_spin_lock_init(&its->lock);
 	INIT_LIST_HEAD(&its->entry);
 	INIT_LIST_HEAD(&its->its_device_list);
 	its->base = its_base;
-	its->phys_base = its_phys_base;
-	its->node = node;
-
-	typer = readq_relaxed(its_base + GITS_TYPER);
-	its->ite_size = ((typer >> 4) & 0xf) + 1;
-	its->dev_id_bits = ((typer >> 13) & 0x1f) + 1;
+	its->phys_base = phys_base;
+	its->ite_size = ((readl_relaxed(its_base + GITS_TYPER) >> 4) & 0xf) + 1;
 
 	its->cmd_base = kzalloc(ITS_CMD_QUEUE_SZ, GFP_KERNEL);
 	if (!its->cmd_base) {
@@ -1384,6 +1507,8 @@ static struct its_node *its_probe(void __iomem *its_base,
 		goto out_free_its;
 	}
 	its->cmd_write = its->cmd_base;
+
+	its_enable_quirks(its);
 
 	err = its_alloc_tables(its);
 	if (err)
@@ -1395,7 +1520,7 @@ static struct its_node *its_probe(void __iomem *its_base,
 
 	baser = (virt_to_phys(its->cmd_base)	|
 		 GITS_CBASER_WaWb		|
-		 GITS_CBASER_Shareable	|
+		 GITS_CBASER_InnerShareable	|
 		 (ITS_CMD_QUEUE_SZ / SZ_4K - 1)	|
 		 GITS_CBASER_VALID);
 
@@ -1422,91 +1547,63 @@ static struct its_node *its_probe(void __iomem *its_base,
 	writel_relaxed(GITS_CTLR_ENABLE, its->base + GITS_CTLR);
 
 	if (is_msi_controller) {
-		its->domain = irq_domain_add_tree(NULL, &its_domain_ops, its);
-		if (!its->domain) {
+		struct msi_domain_info *info;
+
+		info = kzalloc(sizeof(*info), GFP_KERNEL);
+		if (!info) {
 			err = -ENOMEM;
 			goto out_free_tables;
 		}
 
-		its->domain->parent = parent;
-
-		its->mbidom = mbi_create_irq_domain(node, its->domain, its);
-		if (!its->mbidom) {
+		inner_domain = irq_domain_create_tree(handler, &its_domain_ops,
+						      its);
+		if (!inner_domain) {
 			err = -ENOMEM;
-			goto out_free_domains;
+			kfree(info);
+			goto out_free_tables;
 		}
+
+		inner_domain->parent = parent;
+		inner_domain->bus_token = DOMAIN_BUS_NEXUS;
+		info->ops = &its_msi_domain_ops;
+		info->data = its;
+		inner_domain->host_data = info;
 	}
 
 	spin_lock(&its_lock);
 	list_add(&its->entry, &its_nodes);
 	spin_unlock(&its_lock);
 
-	return its;
+	return 0;
 
-out_free_domains:
-	irq_domain_remove(its->domain);
 out_free_tables:
 	its_free_tables(its);
 out_free_cmd:
 	kfree(its->cmd_base);
 out_free_its:
 	kfree(its);
-	return ERR_PTR(err);
+out_unmap:
+	iounmap(its_base);
+	pr_err("ITS@0x%lx: failed probing (%d)\n", (long)phys_base, err);
+	return err;
 }
 
-static int __init its_of_probe(struct device_node *node,
-			struct irq_domain *parent_domain)
+static int __init
+its_of_probe(struct device_node *node, struct irq_domain *parent)
 {
 	struct resource res;
-	struct its_node *its;
-	void __iomem *its_base;
-	u32 val;
-	int err;
-	bool is_msi_controller;
+	bool is_msi_controller = false;
 
-	err = of_address_to_resource(node, 0, &res);
-	if (err) {
+	if (of_address_to_resource(node, 0, &res)) {
 		pr_warn("%s: no regs?\n", node->full_name);
 		return -ENXIO;
 	}
 
-	its_base = ioremap(res.start, resource_size(&res));
-	if (!its_base) {
-		pr_warn("%s: unable to map registers\n", node->full_name);
-		return -ENOMEM;
-	}
-
-	val = readl_relaxed(its_base + GITS_PIDR2) & GIC_PIDR2_ARCH_MASK;
-	if (val != 0x30 && val != 0x40) {
-		pr_warn("%s: no ITS detected, giving up\n", node->full_name);
-		err = -ENODEV;
-		goto out_unmap;
-	}
-
-	err = its_force_quiescent(its_base);
-	if (err) {
-		pr_warn("%s: failed to quiesce, giving up\n",
-			node->full_name);
-		goto out_unmap;
-	}
-
-	pr_info("ITS: %s\n", node->full_name);
-
 	if (of_property_read_bool(node, "msi-controller"))
 		is_msi_controller = true;
 
-	its = its_probe(its_base, res.start, node, parent_domain, is_msi_controller);
-	if (IS_ERR(its)) {
-		err = PTR_ERR(its);
-		goto out_unmap;
-	}
-
-	return err;
-
-out_unmap:
-	iounmap(its_base);
-	pr_err("ITS: failed probing %s (%d)\n", node->full_name, err);
-	return err;
+	return its_probe_one(res.start, resource_size(&res), parent,
+			    is_msi_controller, &node->fwnode);
 }
 
 static bool gic_rdists_supports_plpis(void)
@@ -1528,38 +1625,70 @@ int its_cpu_init(void)
 	return 0;
 }
 
-int its_reset(struct notifier_block *nfb, unsigned long val, void *v)
+#ifdef CONFIG_ACPI
+
+#define ACPI_GICV3_ITS_MEM_SIZE (2 * SZ_64K)
+
+static struct irq_domain *its_parent __initdata;
+
+static int __init
+gic_acpi_parse_madt_its(struct acpi_subtable_header *header,
+			const unsigned long end)
 {
-	struct its_node *its;
+	struct acpi_madt_generic_translator *its_entry;
+	struct fwnode_handle *domain_handle;
+	int err;
 
-	printk("--------- Executing its_reset -----------\n");
+	its_entry = (struct acpi_madt_generic_translator *)header;
+	domain_handle = irq_domain_alloc_fwnode((void *)its_entry->base_address);
+	if (!domain_handle) {
+		pr_err("Unable to allocate GICv2m domain token\n");
+		return -ENOMEM;
+	}
 
-	list_for_each_entry(its, &its_nodes, entry)
-		its_force_quiescent(its->base);
-
-	printk("--------- its_shutdown called -----------\n");
-	return NOTIFY_OK;
+	/* ITS works as msi controller in ACPI case */
+	err = its_probe_one(its_entry->base_address, ACPI_GICV3_ITS_MEM_SIZE,
+			    its_parent, true, domain_handle);
+	if (err) {
+		irq_domain_free_fwnode(domain_handle);
+		return err;
+	}
+	iort_register_domain_token(its_entry->translation_id, domain_handle);
+	return 0;
 }
-EXPORT_SYMBOL(its_reset);
 
-static struct notifier_block its_panic_notifier = {
-        .notifier_call  = its_reset,
-        .next           = NULL,
-        .priority       = 200   /* priority: INT_MAX >= x >= 0 */
-};
+void __init its_acpi_probe(struct irq_domain *parent_domain)
+{
+	int count;
 
+	its_parent = parent_domain;
+	count = acpi_table_parse_madt(ACPI_MADT_TYPE_GENERIC_TRANSLATOR,
+				      gic_acpi_parse_madt_its, 0);
+	if (count <= 0)
+		pr_info("No valid GIC ITS entries exist\n");
+}
+#else
+static inline void __init its_acpi_probe(struct irq_domain *parent_domain) { }
+#endif
 
 static struct of_device_id its_device_id[] = {
 	{	.compatible	= "arm,gic-v3-its",	},
 	{},
 };
 
-int __init its_init(struct rdists *rdists, struct irq_domain *parent_domain)
+int __init its_init(struct fwnode_handle *handle, struct rdists *rdists,
+		    struct irq_domain *parent_domain)
 {
-	struct device_node *np;
+	struct device_node *np, *of_node;
 
-		for_each_matching_node(np, its_device_id)
+	of_node = to_of_node(handle);
+	if (of_node) {
+		for (np = of_find_matching_node(of_node, its_device_id); np;
+		     np = of_find_matching_node(np, its_device_id)) {
 			its_of_probe(np, parent_domain);
+		}
+	} else
+		its_acpi_probe(parent_domain);
 
 	if (list_empty(&its_nodes)) {
 		pr_warn("ITS: No ITS available, not enabling LPIs\n");
@@ -1567,11 +1696,8 @@ int __init its_init(struct rdists *rdists, struct irq_domain *parent_domain)
 	}
 
 	gic_rdists = rdists;
-
 	its_alloc_lpi_tables();
 	its_lpi_init(rdists->id_bits);
-
-	atomic_notifier_chain_register(&panic_notifier_list, &its_panic_notifier);
 
 	return 0;
 }

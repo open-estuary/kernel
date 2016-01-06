@@ -1,5 +1,5 @@
 /**
- * dts file for Hisilicon PhosphorV660 D02 Board
+ * dts file for Hisilicon D02 Development Board
  *
  * Copyright (C) 2014,2015 Hisilicon Ltd.
  *
@@ -11,62 +11,65 @@
 
 /dts-v1/;
 
-/include/ "hip05.dtsi"
-/include/ "hisi_p660_pcie_d02.dtsi"
+#include "hip05.dtsi"
 
 / {
-	model = "Hisilicon PhosphorV660 D02 Development Board";
-	compatible = "hisilicon,hip05-d02", "hisilicon,hisi-pv660";
+	model = "Hisilicon Hip05 D02 Development Board";
+	compatible = "hisilicon,hip05-d02";
 
 	memory@00000000 {
 		device_type = "memory";
 		reg = <0x0 0x00000000 0x0 0x80000000>;
 	};
 
+	aliases {
+		serial0 = &uart0;
+	};
+
 	chosen {
+		stdout-path = "serial0:115200n8";
 		bootargs = "earlycon=uart8250,mmio32,0x80300000 console=ttyS0,115200 initrd=0x7000000,350M";
-	};
-
-	gpio_keys {
-		compatible = "gpio-keys";
-		#address-cells = <1>;
-		#size-cells = <0>;
-
-		pwrbutton {
-			label = "Power Button";
-			gpios = <&porta 8 1>;
-			linux,input-type = <0x16>;
-			linux,code = <116>;
-			debounce-interval = <0>;
-		};
-	};
-
-	gpio_leds {
-		compatible = "gpio-leds";
-		led@1 {
-			label = "Heartbeat";
-			gpios = <&porta 12 1>;
-			linux,default-trigger = "heartbeat";
-			default-state = "on";
-		};
 	};
 };
 
 &uart0 {
+	status = "ok";
+};
+
+&usb0 {
 	status = "okay";
 };
 
-&ahci0 {
+&usb1 {
 	status = "okay";
 };
 
-&m3_i2c0 {
-	clock-frequency = <400000>;
+&sas0 {
+	status = "okay";
+};
+
+&sas1 {
+	status = "okay";
+};
+
+&eth0 {
+	status = "okay";
+};
+
+&eth1 {
+	status = "okay";
+};
+
+&eth2 {
+	status = "okay";
+};
+
+&eth3 {
 	status = "okay";
 };
 
 &m3_i2c1 {
-	clock-frequency = <400000>;
+	clock-frequency = <100000>;
 	status = "okay";
 
 	rtc: ds3231@68 {
@@ -89,35 +92,4 @@
 		compatible = "national,lm96080";
 		reg = <0x28>;
 	};
-};
-
-&m3_i2c2 {
-	clock-frequency = <400000>;
-	status = "okay";
-};
-
-&pc_i2c0 {
-	clock-frequency = <400000>;
-	status = "okay";
-};
-
-&pc_i2c1 {
-	clock-frequency = <400000>;
-	status = "okay";
-};
-
-&eth0 {
-	status = "okay";
-};
-
-&eth1 {
-	status = "okay";
-};
-
-&eth4 {
-	status = "okay";
-};
-
-&eth5 {
-	status = "okay";
 };

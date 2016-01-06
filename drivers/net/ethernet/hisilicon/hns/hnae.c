@@ -7,10 +7,10 @@
  * (at your option) any later version.
  */
 
-#include <linux/interrupt.h>
 #include <linux/dma-mapping.h>
-#include <linux/slab.h>
+#include <linux/interrupt.h>
 #include <linux/skbuff.h>
+#include <linux/slab.h>
 
 #include "hnae.h"
 
@@ -18,8 +18,8 @@
 
 static struct class *hnae_class;
 
-static inline void hnae_list_add(spinlock_t *lock, struct list_head *node,
-				 struct list_head *head)
+static void
+hnae_list_add(spinlock_t *lock, struct list_head *node, struct list_head *head)
 {
 	unsigned long flags;
 
@@ -28,7 +28,7 @@ static inline void hnae_list_add(spinlock_t *lock, struct list_head *node,
 	spin_unlock_irqrestore(lock, flags);
 }
 
-static inline void hnae_list_del(spinlock_t *lock, struct list_head *node)
+static void hnae_list_del(spinlock_t *lock, struct list_head *node)
 {
 	unsigned long flags;
 
@@ -107,11 +107,11 @@ static struct hnae_ae_dev *find_ae(const char *ae_id)
 {
 	struct device *dev;
 
-	BUG_ON(!ae_id);
+	WARN_ON(!ae_id);
 
 	dev = class_find_device(hnae_class, NULL, ae_id, __ae_match);
 
-	return cls_to_ae_dev(dev);
+	return dev ? cls_to_ae_dev(dev) : NULL;
 }
 
 static void hnae_free_buffers(struct hnae_ring *ring)
@@ -142,7 +142,7 @@ out_buffer_fail:
 }
 
 /* free desc along with its attached buffer */
-static inline void hnae_free_desc(struct hnae_ring *ring)
+static void hnae_free_desc(struct hnae_ring *ring)
 {
 	hnae_free_buffers(ring);
 	dma_unmap_single(ring_to_dev(ring), ring->desc_dma_addr,
@@ -154,7 +154,7 @@ static inline void hnae_free_desc(struct hnae_ring *ring)
 }
 
 /* alloc desc, without buffer attached */
-static inline int hnae_alloc_desc(struct hnae_ring *ring)
+static int hnae_alloc_desc(struct hnae_ring *ring)
 {
 	int size = ring->desc_num * sizeof(ring->desc[0]);
 
@@ -175,7 +175,7 @@ static inline int hnae_alloc_desc(struct hnae_ring *ring)
 }
 
 /* fini ring, also free the buffer for the ring */
-static inline void hnae_fini_ring(struct hnae_ring *ring)
+static void hnae_fini_ring(struct hnae_ring *ring)
 {
 	hnae_free_desc(ring);
 	kfree(ring->desc_cb);
@@ -185,8 +185,8 @@ static inline void hnae_fini_ring(struct hnae_ring *ring)
 }
 
 /* init ring, and with buffer for rx ring */
-static inline int hnae_init_ring(struct hnae_queue *q, struct hnae_ring *ring,
-				 int flags)
+static int
+hnae_init_ring(struct hnae_queue *q, struct hnae_ring *ring, int flags)
 {
 	int ret;
 
@@ -229,8 +229,8 @@ out:
 	return ret;
 }
 
-static inline int hnae_init_queue(struct hnae_handle *h, struct hnae_queue *q,
-				  struct hnae_ae_dev *dev)
+static int hnae_init_queue(struct hnae_handle *h, struct hnae_queue *q,
+			   struct hnae_ae_dev *dev)
 {
 	int ret;
 
@@ -256,7 +256,7 @@ out:
 	return ret;
 }
 
-static inline void hnae_fini_queue(struct hnae_queue *q)
+static void hnae_fini_queue(struct hnae_queue *q)
 {
 	if (q->dev->ops->fini_queue)
 		q->dev->ops->fini_queue(q);
@@ -291,6 +291,9 @@ int hnae_reinit_handle(struct hnae_handle *handle)
 	for (i = 0; i < handle->q_num; i++) /* free ring*/
 		hnae_fini_queue(handle->qs[i]);
 
+	if (handle->dev->ops->reset)
+		handle->dev->ops->reset(handle);
+
 	for (i = 0; i < handle->q_num; i++) {/* reinit ring*/
 		ret = hnae_init_queue(handle, handle->qs[i], handle->dev);
 		if (ret)
@@ -313,7 +316,7 @@ EXPORT_SYMBOL(hnae_reinit_handle);
  * return handle ptr or ERR_PTR
  */
 struct hnae_handle *hnae_get_handle(struct device *owner_dev,
-				    const char *ae_id, const char *ae_opts,
+				    const char *ae_id, u32 port_id,
 				    struct hnae_buf_ops *bops)
 {
 	struct hnae_ae_dev *dev;
@@ -325,14 +328,14 @@ struct hnae_handle *hnae_get_handle(struct device *owner_dev,
 	if (!dev)
 		return ERR_PTR(-ENODEV);
 
-	handle = dev->ops->get_handle(dev, ae_opts);
+	handle = dev->ops->get_handle(dev, port_id);
 	if (IS_ERR(handle))
 		return handle;
 
 	handle->dev = dev;
 	handle->owner_dev = owner_dev;
 	handle->bops = bops ? bops : &hnae_bops;
-	handle->ae_opts = ae_opts;
+	handle->eport_id = port_id;
 
 	for (i = 0; i < handle->q_num; i++) {
 		ret = hnae_init_queue(handle, handle->qs[i], dev);
@@ -362,6 +365,9 @@ void hnae_put_handle(struct hnae_handle *h)
 	for (i = 0; i < h->q_num; i++)
 		hnae_fini_queue(h->qs[i]);
 
+	if (h->dev->ops->reset)
+		h->dev->ops->reset(h);
+
 	hnae_list_del(&dev->lock, &h->node);
 
 	if (dev->ops->put_handle)
@@ -371,7 +377,7 @@ void hnae_put_handle(struct hnae_handle *h)
 }
 EXPORT_SYMBOL(hnae_put_handle);
 
-static void __hnae_release(struct device *dev)
+static void hnae_release(struct device *dev)
 {
 }
 
@@ -399,8 +405,8 @@ int hnae_ae_register(struct hnae_ae_dev *hdev, struct module *owner)
 	hdev->id = (int)atomic_inc_return(&id);
 	hdev->cls_dev.parent = hdev->dev;
 	hdev->cls_dev.class = hnae_class;
-	hdev->cls_dev.release = __hnae_release;
-	dev_set_name(&hdev->cls_dev, "hnae%d", hdev->id);
+	hdev->cls_dev.release = hnae_release;
+	(void)dev_set_name(&hdev->cls_dev, "hnae%d", hdev->id);
 	ret = device_register(&hdev->cls_dev);
 	if (ret)
 		return ret;
@@ -430,60 +436,10 @@ void hnae_ae_unregister(struct hnae_ae_dev *hdev)
 }
 EXPORT_SYMBOL(hnae_ae_unregister);
 
-static ssize_t handles_show(struct device *dev,
-			    struct device_attribute *attr, char *buf)
-{
-	ssize_t s = 0;
-	struct hnae_ae_dev *hdev = cls_to_ae_dev(dev);
-	struct hnae_handle *h;
-	int i = 0, j;
-
-	list_for_each_entry_rcu(h, &hdev->handle_list, node) {
-		s += sprintf(buf + s, "handle %d (opts=%s from %s):\n",
-			    i++, h->ae_opts, dev_name(h->owner_dev));
-		for (j = 0; j < h->q_num; j++) {
-			s += sprintf(buf + s, "\tqueue[%d] on 0x%lx\n",
-				     j, (unsigned long)h->qs[i]->io_base);
-#define HANDEL_TX_MSG "\t\ttx_ring on 0x%lx:%u,%u,%u,%u,%u,%llu,%llu\n"
-			s += sprintf(buf + s,
-				     HANDEL_TX_MSG,
-				     (unsigned long)h->qs[i]->tx_ring.io_base,
-				     h->qs[i]->tx_ring.buf_size,
-				     h->qs[i]->tx_ring.desc_num,
-				     h->qs[i]->tx_ring.max_desc_num_per_pkt,
-				     h->qs[i]->tx_ring.max_raw_data_sz_per_desc,
-				     h->qs[i]->tx_ring.max_pkt_size,
-				 h->qs[i]->tx_ring.stats.sw_err_cnt,
-				 h->qs[i]->tx_ring.stats.io_err_cnt);
-			s += sprintf(buf + s,
-				"\t\trx_ring on 0x%lx:%u,%u,%llu,%llu,%llu\n",
-				(unsigned long)h->qs[i]->rx_ring.io_base,
-				h->qs[i]->rx_ring.buf_size,
-				h->qs[i]->rx_ring.desc_num,
-				h->qs[i]->rx_ring.stats.sw_err_cnt,
-				h->qs[i]->rx_ring.stats.io_err_cnt,
-				h->qs[i]->rx_ring.stats.seg_pkt_cnt);
-		}
-	}
-
-	return s;
-}
-
-static DEVICE_ATTR_RO(handles);
-static struct attribute *hnae_class_attrs[] = {
-	&dev_attr_handles.attr,
-	NULL,
-};
-ATTRIBUTE_GROUPS(hnae_class);
-
 static int __init hnae_init(void)
 {
 	hnae_class = class_create(THIS_MODULE, "hnae");
-	if (IS_ERR(hnae_class))
-		return PTR_ERR(hnae_class);
-
-	hnae_class->dev_groups = hnae_class_groups;
-	return 0;
+	return PTR_ERR_OR_ZERO(hnae_class);
 }
 
 static void __exit hnae_exit(void)
@@ -495,7 +451,7 @@ subsys_initcall(hnae_init);
 module_exit(hnae_exit);
 
 MODULE_AUTHOR("Hisilicon, Inc.");
-MODULE_LICENSE("GPL v2");
+MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Hisilicon Network Acceleration Engine Framework");
 
 /* vi: set tw=78 noet: */

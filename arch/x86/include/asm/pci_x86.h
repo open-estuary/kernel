@@ -93,8 +93,6 @@ extern raw_spinlock_t pci_config_lock;
 extern int (*pcibios_enable_irq)(struct pci_dev *dev);
 extern void (*pcibios_disable_irq)(struct pci_dev *dev);
 
-extern bool mp_should_keep_irq(struct device *dev);
-
 struct pci_raw_ops {
 	int (*read)(unsigned int domain, unsigned int bus, unsigned int devfn,
 						int reg, int len, u32 *val);
@@ -124,33 +122,13 @@ extern int pci_legacy_init(void);
 extern void pcibios_fixup_irqs(void);
 
 /* pci-mmconfig.c */
-
-/* "PCI MMCONFIG %04x [bus %02x-%02x]" */
-#define PCI_MMCFG_RESOURCE_NAME_LEN (22 + 4 + 2 + 2)
-
-struct pci_mmcfg_region {
-	struct list_head list;
-	struct resource res;
-	u64 address;
-	char __iomem *virt;
-	u16 segment;
-	u8 start_bus;
-	u8 end_bus;
-	char name[PCI_MMCFG_RESOURCE_NAME_LEN];
-};
-
-extern int __init pci_mmcfg_arch_init(void);
-extern void __init pci_mmcfg_arch_free(void);
-extern int pci_mmcfg_arch_map(struct pci_mmcfg_region *cfg);
-extern void pci_mmcfg_arch_unmap(struct pci_mmcfg_region *cfg);
 extern int pci_mmconfig_insert(struct device *dev, u16 seg, u8 start, u8 end,
 			       phys_addr_t addr);
-extern int pci_mmconfig_delete(u16 seg, u8 start, u8 end);
-extern struct pci_mmcfg_region *pci_mmconfig_lookup(int segment, int bus);
 
-extern struct list_head pci_mmcfg_list;
-
-#define PCI_MMCFG_BUS_OFFSET(bus)      ((bus) << 20)
+int pci_mmcfg_read(unsigned int seg, unsigned int bus, unsigned int devfn,
+		   int reg, int len, u32 *value);
+int pci_mmcfg_write(unsigned int seg, unsigned int bus, unsigned int devfn,
+		    int reg, int len, u32 value);
 
 /*
  * AMD Fam10h CPUs are buggy, and cannot access MMIO config space

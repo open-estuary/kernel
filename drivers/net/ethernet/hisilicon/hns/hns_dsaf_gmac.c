@@ -51,7 +51,7 @@ static const struct mac_stats_string g_gmac_stats_string[] = {
 	{"gmac_tx_pkts_64octets", MAC_STATS_FIELD_OFF(tx_64bytes)},
 	{"gmac_tx_pkts_65to127", MAC_STATS_FIELD_OFF(tx_65to127)},
 	{"gmac_tx_pkts_128to255", MAC_STATS_FIELD_OFF(tx_128to255)},
-	{"gmac_tx_pkts_255to511", MAC_STATS_FIELD_OFF(tx_256to511)},
+	{"gmac_tx_pkts_256to511", MAC_STATS_FIELD_OFF(tx_256to511)},
 	{"gmac_tx_pkts_512to1023", MAC_STATS_FIELD_OFF(tx_512to1023)},
 	{"gmac_tx_pkts_1024to1518", MAC_STATS_FIELD_OFF(tx_1024to1518)},
 	{"gmac_tx_pkts_1519tomax", MAC_STATS_FIELD_OFF(tx_1519tomax)},
@@ -67,10 +67,10 @@ static void hns_gmac_enable(void *mac_drv, enum mac_commom_mode mode)
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
 
 	/*enable GE rX/tX */
-	if ((MAC_COMM_MODE_TX == mode) || (MAC_COMM_MODE_RX_AND_TX == mode))
+	if ((mode == MAC_COMM_MODE_TX) || (mode == MAC_COMM_MODE_RX_AND_TX))
 		dsaf_set_dev_bit(drv, GMAC_PORT_EN_REG, GMAC_PORT_TX_EN_B, 1);
 
-	if ((MAC_COMM_MODE_RX == mode) || (MAC_COMM_MODE_RX_AND_TX == mode))
+	if ((mode == MAC_COMM_MODE_RX) || (mode == MAC_COMM_MODE_RX_AND_TX))
 		dsaf_set_dev_bit(drv, GMAC_PORT_EN_REG, GMAC_PORT_RX_EN_B, 1);
 }
 
@@ -79,10 +79,10 @@ static void hns_gmac_disable(void *mac_drv, enum mac_commom_mode mode)
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
 
 	/*disable GE rX/tX */
-	if ((MAC_COMM_MODE_TX == mode) || (MAC_COMM_MODE_RX_AND_TX == mode))
+	if ((mode == MAC_COMM_MODE_TX) || (mode == MAC_COMM_MODE_RX_AND_TX))
 		dsaf_set_dev_bit(drv, GMAC_PORT_EN_REG, GMAC_PORT_TX_EN_B, 0);
 
-	if ((MAC_COMM_MODE_RX == mode) || (MAC_COMM_MODE_RX_AND_TX == mode))
+	if ((mode == MAC_COMM_MODE_RX) || (mode == MAC_COMM_MODE_RX_AND_TX))
 		dsaf_set_dev_bit(drv, GMAC_PORT_EN_REG, GMAC_PORT_RX_EN_B, 0);
 }
 
@@ -274,8 +274,8 @@ static int hns_gmac_adjust_link(void *mac_drv, enum mac_speed speed,
 		break;
 	default:
 		dev_err(drv->dev,
-			"hns_gmac_adjust_link fail, speed 0x%x dsaf%d mac%d\n",
-			speed, drv->dsaf_id, drv->mac_id);
+			"hns_gmac_adjust_link fail, speed%d mac%d\n",
+			speed, drv->mac_id);
 		return -EINVAL;
 	}
 
@@ -445,7 +445,7 @@ static void hns_gmac_get_id(void *mac_drv, u8 *mac_id)
 {
 	struct mac_driver *drv = (struct mac_driver *)mac_drv;
 
-	*mac_id = drv->mac_id + drv->dsaf_id * DSAF_PORT_NUM;
+	*mac_id = drv->mac_id;
 }
 
 static void hns_gmac_get_info(void *mac_drv, struct mac_info *mac_info)
@@ -676,7 +676,6 @@ void *hns_gmac_config(struct hns_mac_cb *mac_cb, struct mac_params *mac_param)
 	mac_drv->config_max_frame_length = hns_gmac_config_max_frame_length;
 	mac_drv->mac_pausefrm_cfg = hns_gmac_pause_frm_cfg;
 
-	mac_drv->dsaf_id = mac_param->dsaf_id;
 	mac_drv->mac_id = mac_param->mac_id;
 	mac_drv->mac_mode = mac_param->mac_mode;
 	mac_drv->io_base = mac_param->vaddr;
