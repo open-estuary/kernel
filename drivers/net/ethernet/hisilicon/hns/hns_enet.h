@@ -10,11 +10,12 @@
 #ifndef __HNS_ENET_H
 #define __HNS_ENET_H
 
-#include <linux/timer.h>
-#include <linux/workqueue.h>
+#include <linux/netdevice.h>
 #include <linux/of_net.h>
 #include <linux/of_mdio.h>
-#include <linux/netdevice.h>
+#include <linux/timer.h>
+#include <linux/workqueue.h>
+
 #include "hnae.h"
 
 enum hns_nic_state {
@@ -36,11 +37,13 @@ struct hns_nic_ring_data {
 	int queue_index;
 	int (*poll_one)(struct hns_nic_ring_data *, int, void *);
 	void (*ex_process)(struct hns_nic_ring_data *, struct sk_buff *);
+	void (*fini_process)(struct hns_nic_ring_data *);
 };
 
 struct hns_nic_priv {
 	const char *ae_name;
-	const char *ae_opts;
+	u32 enet_ver;
+	u32 port_id;
 	int phy_mode;
 	int phy_led_val;
 	struct phy_device *phy;

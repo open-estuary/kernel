@@ -7,6 +7,7 @@
  * (at your option) any later version.
  */
 
+#include <asm-generic/io-64-nonatomic-hi-lo.h>
 #include <linux/of_mdio.h>
 #include "hns_dsaf_main.h"
 #include "hns_dsaf_mac.h"
@@ -50,9 +51,9 @@ static const struct mac_stats_string g_xgmac_stats_string[] = {
 	{"xgmac_rx_bad_pkt_from_dsaf", MAC_STATS_FIELD_OFF(rx_bad_from_sw)},
 	{"xgmac_tx_bad_pkt_64tomax", MAC_STATS_FIELD_OFF(tx_bad_pkts)},
 
-	{"xgmac_rx_not_well_pkt", MAC_STATS_FIELD_OFF(rx_fragment_err)},
-	{"xgmac_rx_good_well_pkt", MAC_STATS_FIELD_OFF(rx_undersize)},
-	{"xgmac_rx_total_pkt", MAC_STATS_FIELD_OFF(rx_under_min)},
+	{"xgmac_rx_bad_pkts_minto64", MAC_STATS_FIELD_OFF(rx_fragment_err)},
+	{"xgmac_rx_good_pkts_minto64", MAC_STATS_FIELD_OFF(rx_undersize)},
+	{"xgmac_rx_total_pkts_minto64", MAC_STATS_FIELD_OFF(rx_under_min)},
 	{"xgmac_rx_pkt_64", MAC_STATS_FIELD_OFF(rx_64bytes)},
 	{"xgmac_rx_pkt_65to127", MAC_STATS_FIELD_OFF(rx_65to127)},
 	{"xgmac_rx_pkt_128to255", MAC_STATS_FIELD_OFF(rx_128to255)},
@@ -79,7 +80,7 @@ static const struct mac_stats_string g_xgmac_stats_string[] = {
 	{"xgmac_rx_pfc_per_6pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc6)},
 	{"xgmac_rx_pfc_per_7pause_frame", MAC_STATS_FIELD_OFF(rx_pfc_tc7)},
 	{"xgmac_rx_mac_control", MAC_STATS_FIELD_OFF(rx_unknown_ctrl)},
-	{"xgmac_rx_good_pkt_todsaf", MAC_STATS_FIELD_OFF(tx_good_to_sw)},
+	{"xgmac_tx_good_pkt_todsaf", MAC_STATS_FIELD_OFF(tx_good_to_sw)},
 	{"xgmac_tx_bad_pkt_todsaf", MAC_STATS_FIELD_OFF(tx_bad_to_sw)},
 	{"xgmac_rx_1731_pkt", MAC_STATS_FIELD_OFF(rx_1731_pkts)},
 	{"xgmac_rx_symbol_err_pkt", MAC_STATS_FIELD_OFF(rx_symbol_err)},
@@ -122,11 +123,11 @@ static void hns_xgmac_enable(void *mac_drv, enum mac_commom_mode mode)
 	mdelay(10);
 
 	/*enable XGE rX/tX */
-	if (MAC_COMM_MODE_TX == mode) {
+	if (mode == MAC_COMM_MODE_TX) {
 		hns_xgmac_tx_enable(drv, 1);
-	} else if (MAC_COMM_MODE_RX == mode) {
+	} else if (mode == MAC_COMM_MODE_RX) {
 		hns_xgmac_rx_enable(drv, 1);
-	} else if (MAC_COMM_MODE_RX_AND_TX == mode) {
+	} else if (mode == MAC_COMM_MODE_RX_AND_TX) {
 		hns_xgmac_tx_enable(drv, 1);
 		hns_xgmac_rx_enable(drv, 1);
 	} else {
@@ -146,17 +147,17 @@ static void hns_xgmac_disable(void *mac_drv, enum mac_commom_mode mode)
 		= (struct dsaf_device *)dev_get_drvdata(drv->dev);
 	u32 port = drv->mac_id;
 
-	if (MAC_COMM_MODE_TX == mode) {
+	if (mode == MAC_COMM_MODE_TX) {
 		hns_xgmac_tx_enable(drv, 0);
-	} else if (MAC_COMM_MODE_RX == mode) {
+	} else if (mode == MAC_COMM_MODE_RX) {
 		hns_xgmac_rx_enable(drv, 0);
-	} else if (MAC_COMM_MODE_RX_AND_TX == mode) {
+	} else if (mode == MAC_COMM_MODE_RX_AND_TX) {
 		hns_xgmac_tx_enable(drv, 0);
 		hns_xgmac_rx_enable(drv, 0);
 	}
 
-	hns_dsaf_xge_core_srst_by_port(dsaf_dev, port, 0);
 	mdelay(10);
+	hns_dsaf_xge_core_srst_by_port(dsaf_dev, port, 0);
 }
 
 /**
@@ -177,7 +178,7 @@ static void hns_xgmac_pma_fec_enable(struct mac_driver *drv, u32 tx_value,
 }
 
 /* clr exc irq for xge*/
-static inline void hns_xgmac_exc_irq_en(struct mac_driver *drv, u32 en)
+static void hns_xgmac_exc_irq_en(struct mac_driver *drv, u32 en)
 {
 	u32 clr_vlue = 0xfffffffful;
 	u32 msk_vlue = en ? 0xfffffffful : 0; /*1 is en, 0 is dis*/
@@ -238,6 +239,17 @@ static void hns_xgmac_pausefrm_cfg(void *mac_drv, u32 rx_en, u32 tx_en)
 	dsaf_set_bit(origin, XGMAC_PAUSE_CTL_TX_B, !!tx_en);
 	dsaf_set_bit(origin, XGMAC_PAUSE_CTL_RX_B, !!rx_en);
 	dsaf_write_dev(drv, XGMAC_MAC_PAUSE_CTRL_REG, origin);
+}
+
+static void hns_xgmac_set_pausefrm_mac_addr(void *mac_drv, char *mac_addr)
+{
+	struct mac_driver *drv = (struct mac_driver *)mac_drv;
+
+	u32 high_val = mac_addr[1] | (mac_addr[0] << 8);
+	u32 low_val = mac_addr[5] | (mac_addr[4] << 8)
+		| (mac_addr[3] << 16) | (mac_addr[2] << 24);
+	dsaf_write_dev(drv, XGMAC_MAC_PAUSE_LOCAL_MAC_L_REG, low_val);
+	dsaf_write_dev(drv, XGMAC_MAC_PAUSE_LOCAL_MAC_H_REG, high_val);
 }
 
 /**
@@ -414,7 +426,6 @@ static void hns_xgmac_free(void *mac_drv)
 	u32 mac_id = drv->mac_id;
 
 	hns_dsaf_xge_srst_by_port(dsaf_dev, mac_id, 0);
-
 }
 
 /**
@@ -792,14 +803,13 @@ void *hns_xgmac_config(struct hns_mac_cb *mac_cb, struct mac_params *mac_param)
 	mac_drv->mac_enable = hns_xgmac_enable;
 	mac_drv->mac_disable = hns_xgmac_disable;
 
-	mac_drv->dsaf_id = mac_param->dsaf_id;
 	mac_drv->mac_id = mac_param->mac_id;
 	mac_drv->mac_mode = mac_param->mac_mode;
 	mac_drv->io_base = mac_param->vaddr;
 	mac_drv->dev = mac_param->dev;
 	mac_drv->mac_cb = mac_cb;
 
-	mac_drv->set_mac_addr = NULL;
+	mac_drv->set_mac_addr = hns_xgmac_set_pausefrm_mac_addr;
 	mac_drv->set_an_mode = NULL;
 	mac_drv->config_loopback = NULL;
 	mac_drv->config_pad_and_crc = hns_xgmac_config_pad_and_crc;

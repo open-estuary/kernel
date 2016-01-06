@@ -26,7 +26,7 @@ static void __iomem *hns_ppe_common_get_ioaddr(
 
 	int idx = ppe_common->comm_index;
 
-	if (HNS_DSAF_COMM_SERVICE_NW_IDX == idx)
+	if (idx == HNS_DSAF_COMM_SERVICE_NW_IDX)
 		base_addr = ppe_common->dsaf_dev->ppe_base
 			+ PPE_COMMON_REG_OFFSET;
 	else
@@ -48,7 +48,7 @@ int hns_ppe_common_get_cfg(struct dsaf_device *dsaf_dev, int comm_index)
 	struct ppe_common_cb *ppe_common;
 	int ppe_num;
 
-	if (HNS_DSAF_COMM_SERVICE_NW_IDX == comm_index)
+	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX)
 		ppe_num = HNS_PPE_SERVICE_NW_ENGINE_NUM;
 	else
 		ppe_num = HNS_PPE_DEBUG_NW_ENGINE_NUM;
@@ -61,7 +61,7 @@ int hns_ppe_common_get_cfg(struct dsaf_device *dsaf_dev, int comm_index)
 	ppe_common->ppe_num = ppe_num;
 	ppe_common->dsaf_dev = dsaf_dev;
 	ppe_common->comm_index = comm_index;
-	if (HNS_DSAF_COMM_SERVICE_NW_IDX == comm_index)
+	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX)
 		ppe_common->ppe_mode = PPE_COMMON_MODE_SERVICE;
 	else
 		ppe_common->ppe_mode = PPE_COMMON_MODE_DEBUG;
@@ -85,7 +85,7 @@ static void __iomem *hns_ppe_get_iobase(struct ppe_common_cb *ppe_common,
 	void __iomem *base_addr;
 	int common_idx = ppe_common->comm_index;
 
-	if (PPE_COMMON_MODE_SERVICE == ppe_common->ppe_mode) {
+	if (ppe_common->ppe_mode == PPE_COMMON_MODE_SERVICE) {
 		base_addr = ppe_common->dsaf_dev->ppe_base +
 			ppe_idx * PPE_REG_OFFSET;
 
@@ -101,7 +101,7 @@ static int hns_ppe_get_port(struct ppe_common_cb *ppe_common, int idx)
 {
 	int port;
 
-	if (PPE_COMMON_MODE_SERVICE == ppe_common->ppe_mode)
+	if (ppe_common->ppe_mode == PPE_COMMON_MODE_SERVICE)
 		port = idx;
 	else
 		port = HNS_PPE_SERVICE_NW_ENGINE_NUM
@@ -197,7 +197,7 @@ static int hns_ppe_common_init_hw(struct ppe_common_cb *ppe_common)
 	hns_ppe_com_srst(ppe_common, 1);
 	mdelay(100);
 
-	if (PPE_COMMON_MODE_SERVICE == ppe_common->ppe_mode) {
+	if (ppe_common->ppe_mode == PPE_COMMON_MODE_SERVICE) {
 		switch (dsaf_mode) {
 		case DSAF_MODE_ENABLE_FIX:
 		case DSAF_MODE_DISABLE_FIX:
@@ -246,7 +246,7 @@ static int hns_ppe_common_init_hw(struct ppe_common_cb *ppe_common)
 }
 
 /*clr ppe exception irq*/
-static inline void hns_ppe_exc_irq_en(struct hns_ppe_cb *ppe_cb, int en)
+static void hns_ppe_exc_irq_en(struct hns_ppe_cb *ppe_cb, int en)
 {
 	u32 clr_vlue = 0xfffffffful;
 	u32 msk_vlue = en ? 0xfffffffful : 0; /*1 is en, 0 is dis*/
@@ -281,7 +281,7 @@ static void hns_ppe_init_hw(struct hns_ppe_cb *ppe_cb)
 	/* clr and msk except irq*/
 	hns_ppe_exc_irq_en(ppe_cb, 0);
 
-	if (PPE_COMMON_MODE_DEBUG == ppe_common_cb->ppe_mode)
+	if (ppe_common_cb->ppe_mode == PPE_COMMON_MODE_DEBUG)
 		hns_ppe_set_port_mode(ppe_cb, PPE_MODE_GE);
 	else
 		hns_ppe_set_port_mode(ppe_cb, PPE_MODE_XGE);
@@ -330,25 +330,25 @@ void hns_ppe_uninit(struct dsaf_device *dsaf_dev)
  * @dsaf_dev: dasf device
  * retuen void
  */
-void hns_ppe_reset(struct dsaf_device *dsaf_dev)
+void hns_ppe_reset_common(struct dsaf_device *dsaf_dev, u8 ppe_common_index)
 {
-	u32 i, j;
+	u32 i;
 	int ret;
+	struct ppe_common_cb *ppe_common;
 
-	for (i = 0; i < HNS_PPE_COM_NUM; i++) {
-		ret = hns_ppe_common_init_hw(dsaf_dev->ppe_common[i]);
-		if (ret)
-			return;
+	ppe_common = dsaf_dev->ppe_common[ppe_common_index];
+	ret = hns_ppe_common_init_hw(ppe_common);
+	if (ret)
+		return;
 
-		ret = hns_rcb_common_init_hw(dsaf_dev->rcb_common[i]);
-		if (ret)
-			return;
+	ret = hns_rcb_common_init_hw(dsaf_dev->rcb_common[ppe_common_index]);
+	if (ret)
+		return;
 
-		for (j = 0; j < dsaf_dev->ppe_common[i]->ppe_num; j++)
-			hns_ppe_init_hw(&dsaf_dev->ppe_common[i]->ppe_cb[j]);
+	for (i = 0; i < ppe_common->ppe_num; i++)
+		hns_ppe_init_hw(&ppe_common->ppe_cb[i]);
 
-		hns_rcb_common_init_commit_hw(dsaf_dev->rcb_common[i]);
-	}
+	hns_rcb_common_init_commit_hw(dsaf_dev->rcb_common[ppe_common_index]);
 }
 
 void hns_ppe_update_stats(struct hns_ppe_cb *ppe_cb)
@@ -475,7 +475,8 @@ int hns_ppe_init(struct dsaf_device *dsaf_dev)
 		hns_rcb_get_cfg(dsaf_dev->rcb_common[i]);
 	}
 
-	hns_ppe_reset(dsaf_dev);
+	for (i = 0; i < HNS_PPE_COM_NUM; i++)
+		hns_ppe_reset_common(dsaf_dev, i);
 
 	return 0;
 
@@ -580,4 +581,3 @@ void hns_ppe_get_regs(struct hns_ppe_cb *ppe_cb, void *data)
 	for (i = 572; i < 576; i++)
 		regs[i] = 0xeeeeeeee;
 }
-

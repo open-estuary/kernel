@@ -43,7 +43,7 @@ struct hns_mac_cb;
 #define DSAF_DUMP_REGS_NUM 504
 #define DSAF_STATIC_NUM 28
 
-#define DSAF_STATS_READ(p, offset) (*((u64 *)((u64)(p) + (offset))))
+#define DSAF_STATS_READ(p, offset) (*((u64 *)((u8 *)(p) + (offset))))
 
 enum hal_dsaf_mode {
 	HRD_DSAF_NO_DSAF_MODE	= 0x0,
@@ -66,23 +66,12 @@ struct dsaf_tbl_tcam_data {
 	u32 tbl_tcam_data_low;
 };
 
+#define DSAF_PORT_MSK_NUM \
+	((DSAF_TOTAL_QUEUE_NUM + DSAF_SERVICE_NW_NUM - 1) / 32 + 1)
 struct dsaf_tbl_tcam_mcast_cfg {
-	u32 tbl_mcast_old_en;
-	u32 tbl_mcast_item_vld;
-	u32 tbl_mcast_vm128_120;
-	u32 tbl_mcast_vm119_110;
-	u32 tbl_mcast_vm109_100;
-	u32 tbl_mcast_vm99_90;
-	u32 tbl_mcast_vm89_80;
-	u32 tbl_mcast_vm79_70;
-	u32 tbl_mcast_vm69_60;
-	u32 tbl_mcast_vm59_50;
-	u32 tbl_mcast_vm49_40;
-	u32 tbl_mcast_vm39_30;
-	u32 tbl_mcast_vm29_20;
-	u32 tbl_mcast_vm19_10;
-	u32 tbl_mcast_vm9_0;
-	u32 tbl_mcast_xge5_0;
+	u8 tbl_mcast_old_en;
+	u8 tbl_mcast_item_vld;
+	u32 tbl_mcast_port_msk[DSAF_PORT_MSK_NUM];
 };
 
 struct dsaf_tbl_tcam_ucast_cfg {
@@ -166,7 +155,7 @@ struct dsaf_drv_mac_multi_dest_entry {
 	u16 in_vlan_id;
 	/* this mac addr output port,*/
 	/*	bit0-bit5 means Port0-Port5(1bit is vld)**/
-	u32 port_mask[DSAF_DEST_PORT_NUM/DSAF_WORD_BIT_CNT];
+	u32 port_mask[DSAF_DEST_PORT_NUM / DSAF_WORD_BIT_CNT];
 
 	/* the vld input port num, dsaf-mode fix 0,*/
 	/*	non-dasf is the entry whitch port vld*/
@@ -191,9 +180,8 @@ struct dsaf_hw_stats {
 	u64 tx_pkts;
 };
 
-struct hnae_port_cb {
-	spinlock_t lock;	/* must be locked the device */
-	u8 index;
+struct hnae_vf_cb {
+	u8 port_index;
 	struct hns_mac_cb *mac_cb;
 	struct dsaf_device *dsaf_dev;
 	struct hnae_handle  ae_handle; /* must be the last number */
@@ -302,7 +290,7 @@ struct dsaf_device {
 	enum dsaf_mode dsaf_mode;	 /* dsaf mode  */
 	enum hal_dsaf_mode dsaf_en;
 	enum hal_dsaf_tc_mode dsaf_tc_mode;
-	u8 dsaf_id;
+	u32 dsaf_ver;
 
 	struct ppe_common_cb *ppe_common[DSAF_COMM_DEV_NUM];
 	struct rcb_common_cb *rcb_common[DSAF_COMM_DEV_NUM];
@@ -314,7 +302,7 @@ struct dsaf_device {
 
 static inline void *hns_dsaf_dev_priv(const struct dsaf_device *dsaf_dev)
 {
-	return (void *)((u64)dsaf_dev + sizeof(*dsaf_dev));
+	return (void *)((u8 *)dsaf_dev + sizeof(*dsaf_dev));
 }
 
 struct dsaf_drv_tbl_tcam_key {
@@ -386,10 +374,10 @@ static inline int hns_dsaf_get_comm_idx_by_port(int port)
 		return (port - DSAF_COMM_CHN + 1);
 }
 
-static inline struct hnae_port_cb *hns_ae_get_port_cb(
+static inline struct hnae_vf_cb *hns_ae_get_vf_cb(
 	struct hnae_handle *handle)
 {
-	return container_of(handle, struct hnae_port_cb, ae_handle);
+	return container_of(handle, struct hnae_vf_cb, ae_handle);
 }
 
 int hns_dsaf_set_mac_uc_entry(struct dsaf_device *dsaf_dev,
@@ -435,5 +423,6 @@ void hns_dsaf_get_strings(int stringset, u8 *data, int port);
 
 void hns_dsaf_get_regs(struct dsaf_device *ddev, u32 port, void *data);
 int hns_dsaf_get_regs_count(void);
+void hns_dsaf_set_promisc_mode(struct dsaf_device *dsaf_dev, u32 en);
 
 #endif /* __HNS_DSAF_MAIN_H__ */

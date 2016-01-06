@@ -27,18 +27,19 @@
  * "cb" means control block
  */
 
-#include <linux/types.h>
-#include <linux/device.h>
 #include <linux/delay.h>
-#include <linux/netdevice.h>
+#include <linux/device.h>
 #include <linux/module.h>
+#include <linux/netdevice.h>
 #include <linux/notifier.h>
+#include <linux/phy.h>
+#include <linux/types.h>
 
-#define HNAE_DRIVER_VERSION "1.1.0"
+#define HNAE_DRIVER_VERSION "1.3.0"
 #define HNAE_DRIVER_NAME "hns"
-#define HNAE_COPYRIGHT "Copyright(c) 2015 - 2019 Huawei Corporation."
-#define HNAE_DRIVER_STRING "Hilisicon Network Subsystem Driver"
-#define HNAE_DEFAULT_DEVICE_DESCR "Hilisicon Network Subsystem"
+#define HNAE_COPYRIGHT "Copyright(c) 2015 Huawei Corporation."
+#define HNAE_DRIVER_STRING "Hisilicon Network Subsystem Driver"
+#define HNAE_DEFAULT_DEVICE_DESCR "Hisilicon Network Subsystem"
 
 #ifdef DEBUG
 
@@ -60,8 +61,9 @@ do { \
 
 #endif
 
+#define AE_VERSION_1 ('6' << 16 | '6' << 8 | '0')
+#define AE_VERSION_2 ('1' << 24 | '6' << 16 | '1' << 8 | '0')
 #define AE_NAME_SIZE 16
-#define AE_OPTS_SIZE 64
 
 /* some said the RX and TX RCB format should not be the same in the future. But
  * it is the same now...
@@ -192,23 +194,26 @@ struct ring_stats {
 	u64 io_err_cnt;
 	u64 sw_err_cnt;
 	u64 seg_pkt_cnt;
-	u64 reuse_pg_cnt;
-	u64 err_pkt_len;
-	u64 non_vld_descs;
-	u64 err_bd_num;
-	u64 csum_err;
 	union {
-		u64 tx_pkts;
-		u64 rx_pkts;
-	} pkts;
-	union {
-		u64 tx_bytes;
-		u64 rx_bytes;
-	} bytes;
-	union {
-		u64 tx_err_cnt;
-		u64 rx_err_cnt;
-	} err_cnt;
+		struct {
+			u64 tx_pkts;
+			u64 tx_bytes;
+			u64 tx_err_cnt;
+			u64 restart_queue;
+			u64 tx_busy;
+		};
+		struct {
+			u64 rx_pkts;
+			u64 rx_bytes;
+			u64 rx_err_cnt;
+			u64 reuse_pg_cnt;
+			u64 err_pkt_len;
+			u64 non_vld_descs;
+			u64 err_bd_num;
+			u64 l2_err;
+			u64 l3l4_csum_err;
+		};
+	};
 };
 
 struct hnae_queue;
@@ -238,6 +243,7 @@ struct hnae_ring {
 	int next_to_clean;
 
 	int flags;          /* ring attribute */
+	int irq_init_flag;
 };
 
 #define ring_ptr_move_fw(ring, p) \
@@ -294,6 +300,7 @@ struct hnae_buf_ops {
 
 struct hnae_queue {
 	void __iomem *io_base;
+	phys_addr_t phy_base;
 	struct hnae_ae_dev *dev;	/* the device who use this queue */
 	struct hnae_ring rx_ring, tx_ring;
 	struct hnae_handle *handle;
@@ -301,10 +308,10 @@ struct hnae_queue {
 
 /*hnae loop mode*/
 enum hnae_loop {
-	MAC_LOOP_NONE = 0,
-	MAC_INTERNALLOOP_MAC,
+	MAC_INTERNALLOOP_MAC = 0,
 	MAC_INTERNALLOOP_SERDES,
 	MAC_INTERNALLOOP_PHY,
+	MAC_LOOP_NONE,
 };
 
 /*hnae port type*/
@@ -391,7 +398,7 @@ enum hnae_port_type {
  */
 struct hnae_ae_ops {
 	struct hnae_handle *(*get_handle)(struct hnae_ae_dev *dev,
-					  const char *opts);
+					  u32 port_id);
 	void (*put_handle)(struct hnae_handle *handle);
 	void (*init_queue)(struct hnae_queue *q);
 	void (*fini_queue)(struct hnae_queue *q);
@@ -403,21 +410,19 @@ struct hnae_ae_ops {
 	int (*get_status)(struct hnae_handle *handle);
 	int (*get_info)(struct hnae_handle *handle,
 			u8 *auto_neg, u16 *speed, u8 *duplex);
-	int (*set_info)(struct hnae_handle *handle,
-			u8 auto_neg, u16 speed, u8 duplex);
 	void (*toggle_ring_irq)(struct hnae_ring *ring, u32 val);
 	void (*toggle_queue_status)(struct hnae_queue *queue, u32 val);
 	void (*adjust_link)(struct hnae_handle *handle, int speed, int duplex);
 	int (*set_loopback)(struct hnae_handle *handle,
 			    enum hnae_loop loop_mode, int en);
 	void (*get_ring_bdnum_limit)(struct hnae_queue *queue,
-				     u32 *uplimit, u32 *lowlimit);
+				     u32 *uplimit);
 	void (*get_pauseparam)(struct hnae_handle *handle,
 			       u32 *auto_neg, u32 *rx_en, u32 *tx_en);
 	int (*set_autoneg)(struct hnae_handle *handle, u8 enable);
 	int (*get_autoneg)(struct hnae_handle *handle);
-	void (*set_pauseparam)(struct hnae_handle *handle,
-			       u32 rx_en, u32 tx_en);
+	int (*set_pauseparam)(struct hnae_handle *handle,
+			      u32 auto_neg, u32 rx_en, u32 tx_en);
 	void (*get_coalesce_usecs)(struct hnae_handle *handle,
 				   u32 *tx_usecs, u32 *rx_usecs);
 	void (*get_rx_max_coalesced_frames)(struct hnae_handle *handle,
@@ -425,8 +430,7 @@ struct hnae_ae_ops {
 	void (*set_coalesce_usecs)(struct hnae_handle *handle, u32 timeout);
 	int (*set_coalesce_frames)(struct hnae_handle *handle,
 				   u32 coalesce_frames);
-	void (*get_ringnum)(struct hnae_handle *handle, u32 *ringnum);
-	void (*get_max_ringnum)(struct hnae_handle *handle, u32 *max_ringnum);
+	void (*set_promisc_mode)(struct hnae_handle *handle, u32 en);
 	int (*get_mac_addr)(struct hnae_handle *handle, void **p);
 	int (*set_mac_addr)(struct hnae_handle *handle, void *p);
 	int (*set_mc_addr)(struct hnae_handle *handle, void *addr);
@@ -463,19 +467,18 @@ struct hnae_handle {
 	phy_interface_t phy_if;
 	u32 if_support;
 	int q_num;
-	const char *ae_opts;
+	int vf_id;
+	u32 eport_id;
 	enum hnae_port_type port_type;
 	struct list_head node;    /* list to hnae_ae_dev->handle_list */
 	struct hnae_buf_ops *bops; /* operation for the buffer */
-	struct net_device_stats net_stats;
 	struct hnae_queue **qs;  /* array base of all queues */
 };
 
 #define ring_to_dev(ring) ((ring)->q->dev->dev)
 
 struct hnae_handle *hnae_get_handle(struct device *owner_dev, const char *ae_id,
-				    const char *ae_opts,
-				    struct hnae_buf_ops *bops);
+				    u32 port_id, struct hnae_buf_ops *bops);
 void hnae_put_handle(struct hnae_handle *handle);
 int hnae_ae_register(struct hnae_ae_dev *dev, struct module *owner);
 void hnae_ae_unregister(struct hnae_ae_dev *dev);

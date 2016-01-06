@@ -320,7 +320,7 @@ struct wl1271 {
 	/* Reg domain last configuration */
 	u32 reg_ch_conf_last[2]  __aligned(8);
 	/* Reg domain pending configuration */
-	u32 reg_ch_conf_pending[2]  __aligned(8);
+	u32 reg_ch_conf_pending[2];
 
 	/* Pointer that holds DMA-friendly block for the mailbox */
 	void *mbox;
@@ -500,6 +500,9 @@ struct wl1271 {
 	/* interface combinations supported by the hw */
 	const struct ieee80211_iface_combination *iface_combinations;
 	u8 n_iface_combinations;
+
+	/* dynamic fw traces */
+	u32 dynamic_fw_traces;
 };
 
 int wlcore_probe(struct wl1271 *wl, struct platform_device *pdev);
