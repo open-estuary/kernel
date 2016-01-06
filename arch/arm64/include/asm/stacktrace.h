@@ -19,7 +19,6 @@
 struct stackframe {
 	unsigned long fp;
 	unsigned long sp;
-        unsigned long lr;
 	unsigned long pc;
 };
 

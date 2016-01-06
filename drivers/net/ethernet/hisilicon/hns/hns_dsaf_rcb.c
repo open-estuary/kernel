@@ -33,6 +33,37 @@
 #define RCB_RESET_TRY_TIMES 10
 
 /**
+ *hns_rcb_wait_fbd_clean - clean fbd
+ *@qs: ring struct pointer array
+ *@qnum: num of array
+ *@flag: tx or rx flag
+ */
+void hns_rcb_wait_fbd_clean(struct hnae_queue **qs, int q_num, u32 flag)
+{
+	int i, wait_cnt;
+	u32 fbd_num;
+
+	for (wait_cnt = i = 0; i < q_num; wait_cnt++) {
+		usleep_range(200, 300);
+		fbd_num = 0;
+		if (flag & RCB_INT_FLAG_TX)
+			fbd_num += dsaf_read_dev(qs[i],
+						 RCB_RING_TX_RING_FBDNUM_REG);
+		if (flag & RCB_INT_FLAG_RX)
+			fbd_num += dsaf_read_dev(qs[i],
+						 RCB_RING_RX_RING_FBDNUM_REG);
+		if (!fbd_num)
+			i++;
+		if (wait_cnt >= 10000)
+			break;
+	}
+
+	if (i < q_num)
+		dev_err(qs[i]->handle->owner_dev,
+			"queue(%d) wait fbd(%d) clean fail!!\n", i, fbd_num);
+}
+
+/**
  *hns_rcb_reset_ring_hw - ring reset
  *@q: ring struct pointer
  */
@@ -42,26 +73,42 @@ void hns_rcb_reset_ring_hw(struct hnae_queue *q)
 	u32 try_cnt = 0;
 	u32 could_ret;
 
-	do {
+	u32 tx_fbd_num;
+
+	while (try_cnt++ < RCB_RESET_TRY_TIMES) {
+		usleep_range(100, 200);
+		tx_fbd_num = dsaf_read_dev(q, RCB_RING_TX_RING_FBDNUM_REG);
+		if (tx_fbd_num)
+			continue;
+
+		dsaf_write_dev(q, RCB_RING_PREFETCH_EN_REG, 0);
+
 		dsaf_write_dev(q, RCB_RING_T0_BE_RST, 1);
 
-		wait_cnt = 0;
+		msleep(20);
 		could_ret = dsaf_read_dev(q, RCB_RING_COULD_BE_RST);
+
+		wait_cnt = 0;
 		while (!could_ret && (wait_cnt < RCB_RESET_WAIT_TIMES)) {
-			usleep_range(100, 200);
+			dsaf_write_dev(q, RCB_RING_T0_BE_RST, 0);
+
+			dsaf_write_dev(q, RCB_RING_T0_BE_RST, 1);
+
+			msleep(20);
 			could_ret = dsaf_read_dev(q, RCB_RING_COULD_BE_RST);
+
 			wait_cnt++;
 		}
 
 		dsaf_write_dev(q, RCB_RING_T0_BE_RST, 0);
-		if (could_ret)
-			return;
 
-	} while (try_cnt++ < RCB_RESET_TRY_TIMES);
+		if (could_ret)
+			break;
+	}
 
 	if (try_cnt >= RCB_RESET_TRY_TIMES)
 		dev_err(q->dev->dev, "port%d reset ring fail\n",
-			hns_ae_get_port_cb(q->handle)->index);
+			hns_ae_get_vf_cb(q->handle)->port_index);
 }
 
 /**
@@ -138,15 +185,14 @@ static void hns_rcb_ring_init(struct ring_pair_cb *ring_pair, int ring_type)
 	struct rcb_common_cb *rcb_common = ring_pair->rcb_common;
 	u32 bd_size_type = rcb_common->dsaf_dev->buf_size_type;
 	struct hnae_ring *ring =
-		(RX_RING == ring_type) ? &q->rx_ring : &q->tx_ring;
+		(ring_type == RX_RING) ? &q->rx_ring : &q->tx_ring;
 	dma_addr_t dma = ring->desc_dma_addr;
 
-	if (RX_RING == ring_type) {
+	if (ring_type == RX_RING) {
 		dsaf_write_dev(q, RCB_RING_RX_RING_BASEADDR_L_REG,
 			       (u32)dma);
 		dsaf_write_dev(q, RCB_RING_RX_RING_BASEADDR_H_REG,
-			       (u32)(dma >> 32));
-
+			       (u32)((dma >> 31) >> 1));
 		dsaf_write_dev(q, RCB_RING_RX_RING_BD_LEN_REG,
 			       bd_size_type);
 		dsaf_write_dev(q, RCB_RING_RX_RING_BD_NUM_REG,
@@ -157,8 +203,7 @@ static void hns_rcb_ring_init(struct ring_pair_cb *ring_pair, int ring_type)
 		dsaf_write_dev(q, RCB_RING_TX_RING_BASEADDR_L_REG,
 			       (u32)dma);
 		dsaf_write_dev(q, RCB_RING_TX_RING_BASEADDR_H_REG,
-			       (u32)(dma >> 32));
-
+			       (u32)((dma >> 31) >> 1));
 		dsaf_write_dev(q, RCB_RING_TX_RING_BD_LEN_REG,
 			       bd_size_type);
 		dsaf_write_dev(q, RCB_RING_TX_RING_BD_NUM_REG,
@@ -208,7 +253,7 @@ static int  hns_rcb_set_port_coalesced_frames(struct rcb_common_cb *rcb_common,
 		port_idx = 0;
 	if (coalesced_frames >= rcb_common->desc_num ||
 	    coalesced_frames > HNS_RCB_MAX_COALESCED_FRAMES)
-				return -EINVAL;
+		return -EINVAL;
 
 	dsaf_write_dev(rcb_common, RCB_CFG_PKTLINE_REG + port_idx * 4,
 		       coalesced_frames);
@@ -244,14 +289,14 @@ static void hns_rcb_set_timeout(struct rcb_common_cb *rcb_common,
 
 static int hns_rcb_common_get_port_num(struct rcb_common_cb *rcb_common)
 {
-	if (HNS_DSAF_COMM_SERVICE_NW_IDX == rcb_common->comm_index)
+	if (rcb_common->comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX)
 		return HNS_RCB_SERVICE_NW_ENGINE_NUM;
 	else
 		return HNS_RCB_DEBUG_NW_ENGINE_NUM;
 }
 
 /*clr rcb comm exception irq**/
-static inline void hns_rcb_comm_exc_irq_en(
+static void hns_rcb_comm_exc_irq_en(
 			struct rcb_common_cb *rcb_common, int en)
 {
 	u32 clr_vlue = 0xfffffffful;
@@ -301,8 +346,8 @@ int hns_rcb_common_init_hw(struct rcb_common_cb *rcb_common)
 
 	for (i = 0; i < port_num; i++) {
 		hns_rcb_set_port_desc_cnt(rcb_common, i, rcb_common->desc_num);
-		hns_rcb_set_port_coalesced_frames(rcb_common, i,
-						  rcb_common->coalesced_frames);
+		(void)hns_rcb_set_port_coalesced_frames(
+			rcb_common, i, rcb_common->coalesced_frames);
 	}
 	hns_rcb_set_timeout(rcb_common, rcb_common->timeout);
 
@@ -346,13 +391,14 @@ static void hns_rcb_ring_get_cfg(struct hnae_queue *q, int ring_type)
 	int irq_idx;
 
 	ring_pair_cb = container_of(q, struct ring_pair_cb, q);
-	if (RX_RING == ring_type) {
+	if (ring_type == RX_RING) {
 		ring = &q->rx_ring;
 		ring->io_base = ring_pair_cb->q.io_base;
 		irq_idx = HNS_RCB_IRQ_IDX_RX;
 	} else {
 		ring = &q->tx_ring;
-		ring->io_base = ring_pair_cb->q.io_base + HNS_RCB_TX_REG_OFFSET;
+		ring->io_base = (u8 __iomem *)ring_pair_cb->q.io_base +
+			HNS_RCB_TX_REG_OFFSET;
 		irq_idx = HNS_RCB_IRQ_IDX_TX;
 	}
 
@@ -369,9 +415,7 @@ static void hns_rcb_ring_get_cfg(struct hnae_queue *q, int ring_type)
 	ring->buf_size = buf_size;
 	ring->desc_num = desc_num;
 	ring->max_desc_num_per_pkt = HNS_RCB_RING_MAX_BD_PER_PKT;
-	/*kenny: zhuangyuzheng, please update this value */
 	ring->max_raw_data_sz_per_desc = HNS_RCB_MAX_PKT_SIZE;
-	/*kenny: ditto, please update it.*/
 	ring->max_pkt_size = HNS_RCB_MAX_PKT_SIZE;
 	ring->next_to_use = 0;
 	ring->next_to_clean = 0;
@@ -385,29 +429,13 @@ static void hns_rcb_ring_pair_get_cfg(struct ring_pair_cb *ring_pair_cb)
 	hns_rcb_ring_get_cfg(&ring_pair_cb->q, TX_RING);
 }
 
-static void __iomem *hns_rcb_get_ring_vbase(struct rcb_common_cb *rcb_common,
-					    int ring_idx)
-{
-	u8 __iomem *base_addr;
-	int idx = rcb_common->comm_index;
-
-	if (HNS_DSAF_COMM_SERVICE_NW_IDX == idx)
-		base_addr = rcb_common->dsaf_dev->ppe_base + 0x90000 +
-			HNS_RCB_REG_OFFSET * ring_idx;
-	else
-		base_addr = rcb_common->dsaf_dev->sds_base +
-			(idx - 1) * HNS_DSAF_DEBUG_NW_REG_OFFSET + 0x90000;
-
-	return base_addr;
-}
-
 static int hns_rcb_get_port(struct rcb_common_cb *rcb_common, int ring_idx)
 {
 	int comm_index = rcb_common->comm_index;
 	int port;
 	int q_num;
 
-	if (HNS_DSAF_COMM_SERVICE_NW_IDX == comm_index) {
+	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX) {
 		q_num = (int)rcb_common->max_q_per_vf * rcb_common->max_vfn;
 		port = ring_idx / q_num;
 	} else {
@@ -421,12 +449,14 @@ static int hns_rcb_get_base_irq_idx(struct rcb_common_cb *rcb_common)
 {
 	int comm_index = rcb_common->comm_index;
 
-	if (HNS_DSAF_COMM_SERVICE_NW_IDX == comm_index)
-		return 18;
+	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX)
+		return HNS_SERVICE_RING_IRQ_IDX;
 	else
-		return 210 + (comm_index - 1) * 2;
+		return HNS_DEBUG_RING_IRQ_IDX + (comm_index - 1) * 2;
 }
 
+#define RCB_COMM_BASE_TO_RING_BASE(base, ringid)\
+	((base) + 0x10000 + HNS_RCB_REG_OFFSET * (ringid))
 /**
  *hns_rcb_get_cfg - get rcb config
  *@rcb_common: rcb common device
@@ -444,13 +474,15 @@ void hns_rcb_get_cfg(struct rcb_common_cb *rcb_common)
 		ring_pair_cb->rcb_common = rcb_common;
 		ring_pair_cb->dev = rcb_common->dsaf_dev->dev;
 		ring_pair_cb->index = i;
-		ring_pair_cb->q.io_base = hns_rcb_get_ring_vbase(rcb_common, i);
+		ring_pair_cb->q.io_base =
+			RCB_COMM_BASE_TO_RING_BASE(rcb_common->io_base, i);
 		ring_pair_cb->port_id_in_dsa = hns_rcb_get_port(rcb_common, i);
 		ring_pair_cb->virq[HNS_RCB_IRQ_IDX_TX]
 			= irq_of_parse_and_map(np, base_irq_idx + i * 2);
 		ring_pair_cb->virq[HNS_RCB_IRQ_IDX_RX]
 			= irq_of_parse_and_map(np, base_irq_idx + i * 2 + 1);
-
+		ring_pair_cb->q.phy_base =
+			RCB_COMM_BASE_TO_RING_BASE(rcb_common->phy_base, i);
 		hns_rcb_ring_pair_get_cfg(ring_pair_cb);
 	}
 }
@@ -543,10 +575,10 @@ int hns_rcb_set_coalesced_frames(struct dsaf_device *dsaf_dev,
  *@max_vfn : max vfn number
  *@max_q_per_vf:max ring number per vm
  */
-static void hns_rcb_get_queue_mode(enum dsaf_mode dsaf_mode, int comm_index,
-				   u16 *max_vfn, u16 *max_q_per_vf)
+void hns_rcb_get_queue_mode(enum dsaf_mode dsaf_mode, int comm_index,
+			    u16 *max_vfn, u16 *max_q_per_vf)
 {
-	if (HNS_DSAF_COMM_SERVICE_NW_IDX == comm_index) {
+	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX) {
 		switch (dsaf_mode) {
 		case DSAF_MODE_DISABLE_6PORT_0VM:
 			*max_vfn = 1;
@@ -554,6 +586,14 @@ static void hns_rcb_get_queue_mode(enum dsaf_mode dsaf_mode, int comm_index,
 			break;
 		case DSAF_MODE_DISABLE_FIX:
 			*max_vfn = 1;
+			*max_q_per_vf = 1;
+			break;
+		case DSAF_MODE_DISABLE_2PORT_64VM:
+			*max_vfn = 64;
+			*max_q_per_vf = 1;
+			break;
+		case DSAF_MODE_DISABLE_6PORT_16VM:
+			*max_vfn = 16;
 			*max_q_per_vf = 1;
 			break;
 		default:
@@ -567,21 +607,9 @@ static void hns_rcb_get_queue_mode(enum dsaf_mode dsaf_mode, int comm_index,
 	}
 }
 
-u32 hns_rcb_get_max_ringnum(struct dsaf_device *dsaf_dev)
-{
-	return DSAF_MAX_VM_NUM;
-}
-
-u32 hns_rcb_get_common_ringnum(struct dsaf_device *dsaf_dev, int common_idx)
-{
-	struct rcb_common_cb *rcb_comm  = dsaf_dev->rcb_common[common_idx];
-
-	return rcb_comm->ring_num;
-}
-
 int hns_rcb_get_ring_num(struct dsaf_device *dsaf_dev, int comm_index)
 {
-	if (HNS_DSAF_COMM_SERVICE_NW_IDX == comm_index) {
+	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX) {
 		switch (dsaf_dev->dsaf_mode) {
 		case DSAF_MODE_ENABLE_FIX:
 			return 1;
@@ -623,7 +651,7 @@ void __iomem *hns_rcb_common_get_vaddr(struct dsaf_device *dsaf_dev,
 {
 	void __iomem *base_addr;
 
-	if (HNS_DSAF_COMM_SERVICE_NW_IDX == comm_index)
+	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX)
 		base_addr = dsaf_dev->ppe_base + RCB_COMMON_REG_OFFSET;
 	else
 		base_addr = dsaf_dev->sds_base
@@ -631,6 +659,29 @@ void __iomem *hns_rcb_common_get_vaddr(struct dsaf_device *dsaf_dev,
 			+ RCB_COMMON_REG_OFFSET;
 
 	return base_addr;
+}
+
+static phys_addr_t hns_rcb_common_get_paddr(struct dsaf_device *dsaf_dev,
+					    int comm_index)
+{
+	struct device_node *np = dsaf_dev->dev->of_node;
+	phys_addr_t phy_addr;
+	const __be32 *tmp_addr;
+	u64 addr_offset = 0;
+	u64 size = 0;
+	int index = 0;
+
+	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX) {
+		index    = 2;
+		addr_offset = RCB_COMMON_REG_OFFSET;
+	} else {
+		index    = 1;
+		addr_offset = (comm_index - 1) * HNS_DSAF_DEBUG_NW_REG_OFFSET +
+				RCB_COMMON_REG_OFFSET;
+	}
+	tmp_addr  = of_get_address(np, index, &size, NULL);
+	phy_addr  = of_translate_address(np, tmp_addr);
+	return phy_addr + addr_offset;
 }
 
 int hns_rcb_common_get_cfg(struct dsaf_device *dsaf_dev,
@@ -662,6 +713,7 @@ int hns_rcb_common_get_cfg(struct dsaf_device *dsaf_dev,
 	rcb_common->max_q_per_vf = max_q_per_vf;
 
 	rcb_common->io_base = hns_rcb_common_get_vaddr(dsaf_dev, comm_index);
+	rcb_common->phy_base = hns_rcb_common_get_paddr(dsaf_dev, comm_index);
 
 	dsaf_dev->rcb_common[comm_index] = rcb_common;
 	return 0;
@@ -719,35 +771,33 @@ void hns_rcb_get_stats(struct hnae_queue *queue, u64 *data)
 	regs_buff[3] =
 		dsaf_read_dev(queue, RCB_RING_TX_RING_FBDNUM_REG);
 
-	regs_buff[4] = queue->tx_ring.stats.pkts.tx_pkts;
-	regs_buff[5] = queue->tx_ring.stats.bytes.tx_bytes;
-	regs_buff[6] = queue->tx_ring.stats.err_cnt.tx_err_cnt;
+	regs_buff[4] = queue->tx_ring.stats.tx_pkts;
+	regs_buff[5] = queue->tx_ring.stats.tx_bytes;
+	regs_buff[6] = queue->tx_ring.stats.tx_err_cnt;
 	regs_buff[7] = queue->tx_ring.stats.io_err_cnt;
 	regs_buff[8] = queue->tx_ring.stats.sw_err_cnt;
 	regs_buff[9] = queue->tx_ring.stats.seg_pkt_cnt;
-	regs_buff[10] = queue->tx_ring.stats.reuse_pg_cnt;
-	regs_buff[11] = queue->tx_ring.stats.err_pkt_len;
-	regs_buff[12] = queue->tx_ring.stats.non_vld_descs;
-	regs_buff[13] = queue->tx_ring.stats.err_bd_num;
-	regs_buff[14] = queue->tx_ring.stats.csum_err;
+	regs_buff[10] = queue->tx_ring.stats.restart_queue;
+	regs_buff[11] = queue->tx_ring.stats.tx_busy;
 
-	regs_buff[15] = hw_stats->rx_pkts;
-	regs_buff[16] = hw_stats->ppe_rx_ok_pkts;
-	regs_buff[17] = hw_stats->ppe_rx_drop_pkts;
-	regs_buff[18] =
+	regs_buff[12] = hw_stats->rx_pkts;
+	regs_buff[13] = hw_stats->ppe_rx_ok_pkts;
+	regs_buff[14] = hw_stats->ppe_rx_drop_pkts;
+	regs_buff[15] =
 		dsaf_read_dev(queue, RCB_RING_RX_RING_FBDNUM_REG);
 
-	regs_buff[19] = queue->rx_ring.stats.pkts.rx_pkts;
-	regs_buff[20] = queue->rx_ring.stats.bytes.rx_bytes;
-	regs_buff[21] = queue->rx_ring.stats.err_cnt.rx_err_cnt;
-	regs_buff[22] = queue->rx_ring.stats.io_err_cnt;
-	regs_buff[23] = queue->rx_ring.stats.sw_err_cnt;
-	regs_buff[24] = queue->rx_ring.stats.seg_pkt_cnt;
-	regs_buff[25] = queue->rx_ring.stats.reuse_pg_cnt;
-	regs_buff[26] = queue->rx_ring.stats.err_pkt_len;
-	regs_buff[27] = queue->rx_ring.stats.non_vld_descs;
-	regs_buff[28] = queue->rx_ring.stats.err_bd_num;
-	regs_buff[29] = queue->rx_ring.stats.csum_err;
+	regs_buff[16] = queue->rx_ring.stats.rx_pkts;
+	regs_buff[17] = queue->rx_ring.stats.rx_bytes;
+	regs_buff[18] = queue->rx_ring.stats.rx_err_cnt;
+	regs_buff[19] = queue->rx_ring.stats.io_err_cnt;
+	regs_buff[20] = queue->rx_ring.stats.sw_err_cnt;
+	regs_buff[21] = queue->rx_ring.stats.seg_pkt_cnt;
+	regs_buff[22] = queue->rx_ring.stats.reuse_pg_cnt;
+	regs_buff[23] = queue->rx_ring.stats.err_pkt_len;
+	regs_buff[24] = queue->rx_ring.stats.non_vld_descs;
+	regs_buff[25] = queue->rx_ring.stats.err_bd_num;
+	regs_buff[26] = queue->rx_ring.stats.l2_err;
+	regs_buff[27] = queue->rx_ring.stats.l3l4_csum_err;
 }
 
 /**
@@ -815,15 +865,9 @@ void hns_rcb_get_strings(int stringset, u8 *data, int index)
 	buff = buff + ETH_GSTRING_LEN;
 	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_seg_pkt", index);
 	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_reuse_pg", index);
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_restart_queue", index);
 	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_len_err", index);
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_non_vld_desc_err", index);
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_bd_num_err", index);
-	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_csumerr", index);
+	snprintf(buff, ETH_GSTRING_LEN, "tx_ring%d_tx_busy", index);
 	buff = buff + ETH_GSTRING_LEN;
 
 	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_rcb_pkt_num", index);
@@ -855,7 +899,9 @@ void hns_rcb_get_strings(int stringset, u8 *data, int index)
 	buff = buff + ETH_GSTRING_LEN;
 	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_bd_num_err", index);
 	buff = buff + ETH_GSTRING_LEN;
-	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_csum_err", index);
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_l2_err", index);
+	buff = buff + ETH_GSTRING_LEN;
+	snprintf(buff, ETH_GSTRING_LEN, "rx_ring%d_l3l4csum_err", index);
 }
 
 void hns_rcb_get_common_regs(struct rcb_common_cb *rcb_com, void *data)
@@ -973,4 +1019,3 @@ void hns_rcb_get_ring_regs(struct hnae_queue *queue, void *data)
 	for (i = 35; i < 40; i++)
 		regs[i] = 0xcccccc00 + ring_pair->index;
 }
-

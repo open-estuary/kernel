@@ -238,85 +238,23 @@ int pm8001_phy_control(struct asd_sas_phy *sas_phy, enum phy_func func,
   * command to HBA.
   * @shost: the scsi host data.
   */
-
-
-
-#define PM8001_SCAN_LATENCY 20
-struct pm8001_host_timer {
-    struct Scsi_Host *pm8001_host;
-    struct timer_list *timer;
-};
-
-void pm8001_scan_startlater(unsigned long v_ulData)
-{
-    struct pm8001_host_timer *pm_host_timer;
-    struct timer_list *pstTimer;
-    int i;
-    struct pm8001_hba_info *pm8001_ha;
-    struct sas_ha_struct *sha;
-    
-    pm_host_timer = (struct pm8001_host_timer *)v_ulData;
-    sha = SHOST_TO_SAS_HA(pm_host_timer->pm8001_host);    
-    pm8001_ha = sha->lldd_ha;
-
-    for (i = 1; i < pm8001_ha->chip->n_phy; i++)
-    {
-        PM8001_CHIP_DISP->phy_start_req(pm8001_ha, i);
-    }
-    
-    pstTimer = pm_host_timer->timer;
-	if (NULL != pstTimer)
-	{
-	    vfree(pstTimer);
-            pstTimer = NULL;
-	}
-   vfree(pm_host_timer);
-   pm_host_timer = NULL;
-    return;
-}
-
-
 void pm8001_scan_start(struct Scsi_Host *shost)
 {
+	int i;
 	struct pm8001_hba_info *pm8001_ha;
-    struct pm8001_host_timer *pm_host_timer;
-    struct timer_list *pstTimer;
 	struct sas_ha_struct *sha = SHOST_TO_SAS_HA(shost);
 	pm8001_ha = sha->lldd_ha;
-   
-    printk("sacn start v1.0\n");
-    
-    pm_host_timer = vmalloc(sizeof(struct pm8001_host_timer));
-    if(!pm_host_timer)
-    {
-        pm8001_printk("host timer memory allocation error\n");
-        return;
-    }
-    pm_host_timer->pm8001_host = shost;
 	/* SAS_RE_INITIALIZATION not available in SPCv/ve */
 	if (pm8001_ha->chip_id == chip_8001)
 		PM8001_CHIP_DISP->sas_re_init_req(pm8001_ha);
-
-    PM8001_CHIP_DISP->phy_start_req(pm8001_ha, 0);
-    pstTimer = vmalloc(sizeof(struct timer_list));
-    if (!pstTimer)
-	{
-		pm8001_printk("timer memory allocation error\n");
-		return;
-	}
-
-    init_timer(pstTimer);
-    pm_host_timer->timer = pstTimer;
-    pstTimer->data = (unsigned long)pm_host_timer;
-    
-	pstTimer->expires = jiffies + msecs_to_jiffies(PM8001_SCAN_LATENCY);
-	pstTimer->function = pm8001_scan_startlater;
-	add_timer(pstTimer);
+	for (i = 0; i < pm8001_ha->chip->n_phy; ++i)
+		PM8001_CHIP_DISP->phy_start_req(pm8001_ha, i);
 }
 
 int pm8001_scan_finished(struct Scsi_Host *shost, unsigned long time)
 {
 	struct sas_ha_struct *ha = SHOST_TO_SAS_HA(shost);
+
 	/* give the phy enabling interrupt event time to come in (1s
 	* is empirically about all it takes) */
 	if (time < HZ)
@@ -852,6 +790,7 @@ pm8001_exec_internal_task_abort(struct pm8001_hba_info *pm8001_ha,
 		ccb->device = pm8001_dev;
 		ccb->ccb_tag = ccb_tag;
 		ccb->task = task;
+		ccb->n_elem = 0;
 
 		res = PM8001_CHIP_DISP->task_abort(pm8001_ha,
 			pm8001_dev, flag, task_tag, ccb_tag);
@@ -1037,19 +976,27 @@ int pm8001_I_T_nexus_reset(struct domain_device *dev)
 	phy = sas_get_local_phy(dev);
 
 	if (dev_is_sata(dev)) {
-		DECLARE_COMPLETION_ONSTACK(completion_setstate);
 		if (scsi_is_sas_phy_local(phy)) {
 			rc = 0;
 			goto out;
 		}
 		rc = sas_phy_reset(phy, 1);
+		if (rc) {
+			PM8001_EH_DBG(pm8001_ha,
+			pm8001_printk("phy reset failed for device %x\n"
+			"with rc %d\n", pm8001_dev->device_id, rc));
+			rc = TMF_RESP_FUNC_FAILED;
+			goto out;
+		}
 		msleep(2000);
 		rc = pm8001_exec_internal_task_abort(pm8001_ha, pm8001_dev ,
 			dev, 1, 0);
-		pm8001_dev->setds_completion = &completion_setstate;
-		rc = PM8001_CHIP_DISP->set_dev_state_req(pm8001_ha,
-			pm8001_dev, 0x01);
-		wait_for_completion(&completion_setstate);
+		if (rc) {
+			PM8001_EH_DBG(pm8001_ha,
+			pm8001_printk("task abort failed %x\n"
+			"with rc %d\n", pm8001_dev->device_id, rc));
+			rc = TMF_RESP_FUNC_FAILED;
+		}
 	} else {
 		rc = sas_phy_reset(phy, 1);
 		msleep(2000);
