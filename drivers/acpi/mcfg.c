@@ -8,6 +8,7 @@
  */
 
 #include <linux/acpi.h>
+#include <linux/dmi.h>
 #include <linux/ecam.h>
 #include <linux/pci.h>
 #include <linux/pci-acpi.h>
@@ -34,6 +35,29 @@ int __weak raw_pci_write(unsigned int domain, unsigned int bus,
 	return PCIBIOS_DEVICE_NOT_FOUND;
 }
 
+extern struct pci_mcfg_fixup __start_acpi_mcfg_fixups[];
+extern struct pci_mcfg_fixup __end_acpi_mcfg_fixups[];
+
+static struct pci_ops *pci_mcfg_check_quirks(struct acpi_pci_root *root)
+{
+	struct pci_mcfg_fixup *f;
+	int bus_num = root->secondary.start;
+	int domain = root->segment;
+
+	/*
+	 * First match against PCI topology <domain:bus> then use DMI or
+	 * custom match handler.
+	 */
+	for (f = __start_acpi_mcfg_fixups; f < __end_acpi_mcfg_fixups; f++) {
+		if ((f->domain == domain || f->domain == PCI_MCFG_DOMAIN_ANY) &&
+		    (f->bus_num == bus_num || f->bus_num == PCI_MCFG_BUS_ANY) &&
+		    (f->system ? dmi_check_system(f->system) : 0 ||
+		     f->match ? f->match(f, root) : 0))
+			return f->ops;
+	}
+	return NULL;
+}
+
 void __iomem *
 pci_mcfg_dev_base(struct pci_bus *bus, unsigned int devfn, int offset)
 {
@@ -56,10 +80,15 @@ static struct pci_ops default_pci_mcfg_ops = {
 
 struct pci_ops *pci_mcfg_get_ops(struct acpi_pci_root *root)
 {
+	struct pci_ops *pci_mcfg_ops_quirk;
+
 	/*
-	 * TODO: Match against platform specific quirks and return
-	 * corresponding PCI config space accessor set.
+	 * Match against platform specific quirks and return corresponding
+	 * PCI config space accessor set.
 	 */
+	pci_mcfg_ops_quirk = pci_mcfg_check_quirks(root);
+	if (pci_mcfg_ops_quirk)
+		return pci_mcfg_ops_quirk;
 
 	return &default_pci_mcfg_ops;
 }

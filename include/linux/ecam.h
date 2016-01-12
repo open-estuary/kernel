@@ -20,6 +20,24 @@ struct pci_mmcfg_region {
 	bool hot_added;
 };
 
+struct pci_mcfg_fixup {
+	const struct dmi_system_id *system;
+	int (*match)(struct pci_mcfg_fixup *, struct acpi_pci_root *);
+	struct pci_ops *ops;
+	int domain;
+	int bus_num;
+};
+
+#define PCI_MCFG_DOMAIN_ANY	-1
+#define PCI_MCFG_BUS_ANY	-1
+
+/* Designate a routine to fix up buggy MCFG */
+#define DECLARE_ACPI_MCFG_FIXUP(system, match, ops, dom, bus)		\
+	static const struct pci_mcfg_fixup __mcfg_fixup_##system##dom##bus\
+	 __used	__attribute__((__section__(".acpi_fixup_mcfg"),		\
+				aligned((sizeof(void *))))) =		\
+	{ system, match, ops, dom, bus };
+
 struct pci_mmcfg_region *pci_mmconfig_lookup(int segment, int bus);
 struct pci_mmcfg_region *pci_mmconfig_alloc(int segment, int start,
 						   int end, u64 addr);
