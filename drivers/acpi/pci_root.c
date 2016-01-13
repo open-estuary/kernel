@@ -846,7 +846,10 @@ struct pci_bus *acpi_pci_root_create(struct acpi_pci_root *root,
 
 	pci_acpi_root_add_resources(info);
 	pci_add_resource(&info->resources, &root->secondary);
-	bus = pci_create_root_bus(NULL, busnum, ops->pci_ops,
+
+	/* Root bridge device needs to be sure of parent ACPI type */
+	ACPI_COMPANION_SET(&device->dev, device);
+	bus = pci_create_root_bus(&device->dev, busnum, ops->pci_ops,
 				  sysdata, &info->resources);
 	if (!bus)
 		goto out_release_info;
