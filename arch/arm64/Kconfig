@@ -515,6 +515,16 @@ config NUMA
 	  local memory of the CPU and add some more
 	  NUMA awareness to the kernel.
 
+config OF_NUMA
+	bool "Device Tree NUMA support"
+	depends on NUMA
+	depends on OF
+	default y
+	help
+	  Enable Device Tree NUMA support.
+	  This enables the numa mapping of cpu, memory, io and
+	  inter node distances using dt bindings.
+
 config NODES_SHIFT
 	int "Maximum NUMA Nodes (as a power of 2)"
 	range 1 10

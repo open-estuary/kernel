@@ -520,6 +520,8 @@ static void __init of_parse_and_init_cpus(void)
 
 		pr_debug("cpu logical map 0x%llx\n", hwid);
 		cpu_logical_map(cpu_count) = hwid;
+		/* map logical cpu to node */
+		of_numa_set_node_info(cpu_count, dn);
 next:
 		cpu_count++;
 	}
