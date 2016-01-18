@@ -78,6 +78,7 @@ static inline const struct cpumask *cpumask_of_node(int node)
 #define parent_node(node) (node)
 
 #define pcibus_to_node(bus) __pcibus_to_node(bus)
+#define cpumask_of_pcibus(bus) __cpumask_of_pcibus(bus)
 
 #define node_distance(a, b) __node_distance(a, b)
 

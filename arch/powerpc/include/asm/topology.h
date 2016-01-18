@@ -32,10 +32,6 @@ static inline int pcibus_to_node(struct pci_bus *bus)
 }
 #endif
 
-#define cpumask_of_pcibus(bus)	(pcibus_to_node(bus) == -1 ?		\
-				 cpu_all_mask :				\
-				 cpumask_of_node(pcibus_to_node(bus)))
-
 extern int __node_distance(int, int);
 #define node_distance(a, b) __node_distance(a, b)
 
