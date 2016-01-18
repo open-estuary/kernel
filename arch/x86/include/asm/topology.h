@@ -91,6 +91,7 @@ extern void setup_node_to_cpumask_map(void);
 #define parent_node(node) (node)
 
 #define pcibus_to_node(bus) __pcibus_to_node(bus)
+#define cpumask_of_pcibus(bus) __cpumask_of_pcibus(bus)
 
 extern int __node_distance(int, int);
 #define node_distance(a, b) __node_distance(a, b)
