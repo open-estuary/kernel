@@ -37,4 +37,14 @@ void numa_store_cpu_info(unsigned int cpu);
 static inline void numa_store_cpu_info(unsigned int cpu)		{ }
 static inline void arm64_numa_init(void)		{ }
 #endif	/* CONFIG_NUMA */
+
+struct device_node;
+#ifdef CONFIG_OF_NUMA
+int __init arm64_of_numa_init(void);
+void __init of_numa_set_node_info(unsigned int cpu, struct device_node *dn);
+#else
+static inline void of_numa_set_node_info(unsigned int cpu,
+		struct device_node *dn) { }
+#endif
+
 #endif	/* __ASM_NUMA_H */

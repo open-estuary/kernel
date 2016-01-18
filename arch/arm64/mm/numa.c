@@ -383,5 +383,13 @@ static int __init dummy_numa_init(void)
  */
 void __init arm64_numa_init(void)
 {
-	numa_init(dummy_numa_init);
+	int ret = -ENODEV;
+
+#ifdef CONFIG_OF_NUMA
+	if (!numa_off)
+		ret = numa_init(arm64_of_numa_init);
+#endif
+
+	if (ret)
+		numa_init(dummy_numa_init);
 }
