@@ -453,6 +453,7 @@ void __init paging_init(void)
 	zero_page = early_alloc(PAGE_SIZE);
 
 	bootmem_init();
+	memblock_dump_all();
 
 	empty_zero_page = virt_to_page(zero_page);
 
