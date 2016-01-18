@@ -45,6 +45,7 @@
 #include <asm/cputype.h>
 #include <asm/cpu_ops.h>
 #include <asm/mmu_context.h>
+#include <asm/numa.h>
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>
 #include <asm/processor.h>
@@ -125,6 +126,7 @@ int __cpu_up(unsigned int cpu, struct task_struct *idle)
 static void smp_store_cpu_info(unsigned int cpuid)
 {
 	store_cpu_topology(cpuid);
+	numa_store_cpu_info(cpuid);
 }
 
 /*
