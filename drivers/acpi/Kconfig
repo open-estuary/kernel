@@ -60,6 +60,9 @@ config ACPI_CCA_REQUIRED
 config IORT_TABLE
 	bool
 
+config ACPI_HAS_NUMA_ARCH_FIXUP
+	bool
+
 config ACPI_DEBUGGER
 	bool "AML debugger interface (EXPERIMENTAL)"
 	select ACPI_DEBUG

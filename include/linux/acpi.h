@@ -173,7 +173,12 @@ void acpi_numa_slit_init (struct acpi_table_slit *slit);
 void acpi_numa_processor_affinity_init (struct acpi_srat_cpu_affinity *pa);
 void acpi_numa_x2apic_affinity_init(struct acpi_srat_x2apic_cpu_affinity *pa);
 int acpi_numa_memory_affinity_init (struct acpi_srat_mem_affinity *ma);
+
+#ifdef CONFIG_ACPI_HAS_NUMA_ARCH_FIXUP
 void acpi_numa_arch_fixup(void);
+#else
+static inline void acpi_numa_arch_fixup(void) { }
+#endif
 
 #ifndef PHYS_CPUID_INVALID
 typedef u32 phys_cpuid_t;
