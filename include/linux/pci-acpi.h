@@ -141,6 +141,18 @@ extern struct list_head pci_mmcfg_list;
 #define PCI_MMCFG_BUS_OFFSET(bus)      ((bus) << 20)
 #define PCI_MMCFG_OFFSET(bus, devfn)   ((bus) << 20 | (devfn) << 12)
 
+#ifdef	CONFIG_PCI_MMCONFIG
+extern struct pci_ops *pci_mcfg_get_ops(struct acpi_pci_root *root);
+extern void __iomem *pci_mcfg_dev_base(struct pci_bus *bus, unsigned int devfn,
+				       int offset);
+#else
+static inline struct pci_ops *pci_mcfg_get_ops(struct acpi_pci_root *root)
+{ return NULL; }
+static inline void __iomem *pci_mcfg_dev_base(struct pci_bus *bus,
+					      unsigned int devfn, int offset)
+{ return NULL; }
+#endif
+
 #else	/* CONFIG_ACPI */
 static inline void acpi_pci_add_bus(struct pci_bus *bus) { }
 static inline void acpi_pci_remove_bus(struct pci_bus *bus) { }
