@@ -478,24 +478,35 @@ static void acpi_device_remove_notify_handler(struct acpi_device *device)
                              Device Matching
    -------------------------------------------------------------------------- */
 
+/**
+ * acpi_device_fix_parent - Get first physical node of an ACPI device
+ * @adev: ACPI device in question
+ */
+struct device *acpi_get_first_physical_node(struct acpi_device *adev)
+{
+	struct mutex *physical_node_lock = &adev->physical_node_lock;
+	struct device *node = NULL;
+
+	mutex_lock(physical_node_lock);
+
+	if (!list_empty(&adev->physical_node_list))
+		node = list_first_entry(&adev->physical_node_list,
+				struct acpi_device_physical_node, node)->dev;
+
+	mutex_unlock(physical_node_lock);
+
+	return node;
+}
+
 static struct acpi_device *acpi_primary_dev_companion(struct acpi_device *adev,
 						      const struct device *dev)
 {
-	struct mutex *physical_node_lock = &adev->physical_node_lock;
+	const struct device *node = acpi_get_first_physical_node(adev);
 
-	mutex_lock(physical_node_lock);
-	if (list_empty(&adev->physical_node_list)) {
-		adev = NULL;
-	} else {
-		const struct acpi_device_physical_node *node;
+	if (node && node == dev)
+		return adev;
 
-		node = list_first_entry(&adev->physical_node_list,
-					struct acpi_device_physical_node, node);
-		if (node->dev != dev)
-			adev = NULL;
-	}
-	mutex_unlock(physical_node_lock);
-	return adev;
+	return NULL;
 }
 
 /**
