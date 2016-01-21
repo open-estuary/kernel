@@ -209,6 +209,36 @@ static int __init slit_valid(struct acpi_table_slit *slit)
 	return 1;
 }
 
+/*
+ * Callback for SLIT parsing. It will get the distance information
+ * presented by SLIT and init the distance matrix of numa nodes
+ */
+void __init __weak acpi_numa_slit_init(struct acpi_table_slit *slit)
+{
+	int i, j;
+
+	for (i = 0; i < slit->locality_count; i++) {
+		const int from_node = pxm_to_node(i);
+
+		if (from_node == NUMA_NO_NODE)
+			continue;
+
+		for (j = 0; j < slit->locality_count; j++) {
+			const int to_node = pxm_to_node(j);
+
+			if (to_node == NUMA_NO_NODE)
+				continue;
+
+			numa_set_distance(from_node, to_node,
+				slit->entry[slit->locality_count * i + j]);
+
+			pr_debug("SLIT: Distance[%d][%d] = %d\n",
+				 from_node, to_node,
+				 slit->entry[slit->locality_count * i + j]);
+		}
+	}
+}
+
 static int __init acpi_parse_slit(struct acpi_table_header *table)
 {
 	struct acpi_table_slit *slit = (struct acpi_table_slit *)table;

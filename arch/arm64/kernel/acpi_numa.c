@@ -64,37 +64,6 @@ void __init acpi_numa_set_node_info(unsigned int cpu, u64 hwid)
 	cpu_to_node_map[cpu] = nid;
 }
 
-/*
- * Callback for SLIT parsing.
- * It will get the distance information presented by SLIT
- * and init the distance matrix of numa nodes
- */
-void __init acpi_numa_slit_init(struct acpi_table_slit *slit)
-{
-	int i, j;
-
-	for (i = 0; i < slit->locality_count; i++) {
-		const int from_node = pxm_to_node(i);
-
-		if (from_node == NUMA_NO_NODE)
-			continue;
-
-		for (j = 0; j < slit->locality_count; j++) {
-			const int to_node = pxm_to_node(j);
-
-			if (to_node == NUMA_NO_NODE)
-				continue;
-
-			pr_info("SLIT: Distance[%d][%d] = %d\n",
-					from_node, to_node,
-					slit->entry[
-					slit->locality_count * i + j]);
-			numa_set_distance(from_node, to_node,
-				slit->entry[slit->locality_count * i + j]);
-		}
-	}
-}
-
 static int __init get_mpidr_in_madt(int acpi_id, u64 *mpidr)
 {
 	unsigned long madt_end, entry;
