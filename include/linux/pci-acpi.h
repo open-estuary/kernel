@@ -22,6 +22,7 @@ static inline acpi_status pci_acpi_remove_pm_notifier(struct acpi_device *dev)
 {
 	return acpi_remove_pm_notifier(dev);
 }
+extern int acpi_pci_bus_domain_nr(struct device *parent);
 extern phys_addr_t acpi_pci_root_get_mcfg_addr(acpi_handle handle);
 
 static inline acpi_handle acpi_find_root_bridge_handle(struct pci_dev *pdev)
@@ -143,6 +144,7 @@ extern struct list_head pci_mmcfg_list;
 #else	/* CONFIG_ACPI */
 static inline void acpi_pci_add_bus(struct pci_bus *bus) { }
 static inline void acpi_pci_remove_bus(struct pci_bus *bus) { }
+static inline int acpi_pci_bus_domain_nr(struct device *parent) { return -1; }
 #endif	/* CONFIG_ACPI */
 
 #ifdef CONFIG_ACPI_APEI

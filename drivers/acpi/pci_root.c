@@ -419,6 +419,24 @@ out:
 }
 EXPORT_SYMBOL(acpi_pci_osc_control_set);
 
+int acpi_pci_bus_domain_nr(struct device *parent)
+{
+	struct acpi_device *acpi_dev = to_acpi_device(parent);
+	unsigned long long segment = 0;
+	acpi_status status;
+
+	/*
+	 * If _SEG method does not exist, following ACPI spec (6.5.6)
+	 * all PCI buses belong to domain 0.
+	 */
+	status = acpi_evaluate_integer(acpi_dev->handle, METHOD_NAME__SEG, NULL,
+				       &segment);
+	if (ACPI_FAILURE(status) && status != AE_NOT_FOUND)
+		dev_err(&acpi_dev->dev, "can't evaluate _SEG\n");
+
+	return segment;
+}
+
 static void negotiate_os_control(struct acpi_pci_root *root, int *no_aspm)
 {
 	u32 support, control, requested;
