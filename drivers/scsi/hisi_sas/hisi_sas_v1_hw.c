@@ -247,41 +247,36 @@
 /* ITCT header */
 /* qw0 */
 #define ITCT_HDR_DEV_TYPE_OFF		0
-#define ITCT_HDR_DEV_TYPE_MSK		(0x3 << ITCT_HDR_DEV_TYPE_OFF)
+#define ITCT_HDR_DEV_TYPE_MSK		(0x3ULL << ITCT_HDR_DEV_TYPE_OFF)
 #define ITCT_HDR_VALID_OFF		2
-#define ITCT_HDR_VALID_MSK		(0x1 << ITCT_HDR_VALID_OFF)
-#define ITCT_HDR_BREAK_REPLY_ENA_OFF	3
-#define ITCT_HDR_BREAK_REPLY_ENA_MSK	(0x1 << ITCT_HDR_BREAK_REPLY_ENA_OFF)
+#define ITCT_HDR_VALID_MSK		(0x1ULL << ITCT_HDR_VALID_OFF)
 #define ITCT_HDR_AWT_CONTROL_OFF	4
-#define ITCT_HDR_AWT_CONTROL_MSK	(0x1 << ITCT_HDR_AWT_CONTROL_OFF)
+#define ITCT_HDR_AWT_CONTROL_MSK	(0x1ULL << ITCT_HDR_AWT_CONTROL_OFF)
 #define ITCT_HDR_MAX_CONN_RATE_OFF	5
-#define ITCT_HDR_MAX_CONN_RATE_MSK	(0xf << ITCT_HDR_MAX_CONN_RATE_OFF)
+#define ITCT_HDR_MAX_CONN_RATE_MSK	(0xfULL << ITCT_HDR_MAX_CONN_RATE_OFF)
 #define ITCT_HDR_VALID_LINK_NUM_OFF	9
-#define ITCT_HDR_VALID_LINK_NUM_MSK	(0xf << ITCT_HDR_VALID_LINK_NUM_OFF)
+#define ITCT_HDR_VALID_LINK_NUM_MSK	(0xfULL << ITCT_HDR_VALID_LINK_NUM_OFF)
 #define ITCT_HDR_PORT_ID_OFF		13
-#define ITCT_HDR_PORT_ID_MSK		(0x7 << ITCT_HDR_PORT_ID_OFF)
+#define ITCT_HDR_PORT_ID_MSK		(0x7ULL << ITCT_HDR_PORT_ID_OFF)
 #define ITCT_HDR_SMP_TIMEOUT_OFF	16
-#define ITCT_HDR_SMP_TIMEOUT_MSK	(0xffff << ITCT_HDR_SMP_TIMEOUT_OFF)
-#define ITCT_HDR_MAX_BURST_BYTES_OFF	16
-#define ITCT_HDR_MAX_BURST_BYTES_MSK	(0xffffffff << \
-					ITCT_MAX_BURST_BYTES_OFF)
+#define ITCT_HDR_SMP_TIMEOUT_MSK	(0xffffULL << ITCT_HDR_SMP_TIMEOUT_OFF)
 /* qw1 */
 #define ITCT_HDR_MAX_SAS_ADDR_OFF	0
 #define ITCT_HDR_MAX_SAS_ADDR_MSK	(0xffffffffffffffff << \
 					ITCT_HDR_MAX_SAS_ADDR_OFF)
 /* qw2 */
 #define ITCT_HDR_IT_NEXUS_LOSS_TL_OFF	0
-#define ITCT_HDR_IT_NEXUS_LOSS_TL_MSK	(0xffff << \
+#define ITCT_HDR_IT_NEXUS_LOSS_TL_MSK	(0xffffULL << \
 					ITCT_HDR_IT_NEXUS_LOSS_TL_OFF)
 #define ITCT_HDR_BUS_INACTIVE_TL_OFF	16
-#define ITCT_HDR_BUS_INACTIVE_TL_MSK	(0xffff << \
+#define ITCT_HDR_BUS_INACTIVE_TL_MSK	(0xffffULL << \
 					ITCT_HDR_BUS_INACTIVE_TL_OFF)
 #define ITCT_HDR_MAX_CONN_TL_OFF	32
-#define ITCT_HDR_MAX_CONN_TL_MSK	(0xffff << \
+#define ITCT_HDR_MAX_CONN_TL_MSK	(0xffffULL << \
 					ITCT_HDR_MAX_CONN_TL_OFF)
 #define ITCT_HDR_REJ_OPEN_TL_OFF	48
-#define ITCT_HDR_REJ_OPEN_TL_MSK	(0xffff << \
-					ITCT_REJ_OPEN_TL_OFF)
+#define ITCT_HDR_REJ_OPEN_TL_MSK	(0xffffULL << \
+					ITCT_HDR_REJ_OPEN_TL_OFF)
 
 /* Err record header */
 #define ERR_HDR_DMA_TX_ERR_TYPE_OFF	0
@@ -291,6 +286,20 @@
 
 struct hisi_sas_complete_v1_hdr {
 	__le32 data;
+};
+
+struct hisi_sas_err_record_v1 {
+	/* dw0 */
+	__le32 dma_err_type;
+
+	/* dw1 */
+	__le32 trans_tx_fail_type;
+
+	/* dw2 */
+	__le32 trans_rx_fail_type;
+
+	/* dw3 */
+	u32 rsvd;
 };
 
 enum {
@@ -396,6 +405,8 @@ enum {
 	TRANS_RX_SMP_FRAME_LEN_ERR, /* 0x319 */
 	TRANS_RX_SMP_RESP_TIMEOUT_ERR, /* 0x31a */
 };
+
+#define HISI_SAS_COMMAND_ENTRIES_V1_HW 8192
 
 #define HISI_SAS_PHY_MAX_INT_NR (HISI_SAS_PHY_INT_NR * HISI_SAS_MAX_PHYS)
 #define HISI_SAS_CQ_MAX_INT_NR (HISI_SAS_MAX_QUEUES)
@@ -533,10 +544,10 @@ static void setup_itct_v1_hw(struct hisi_hba *hisi_hba,
 	itct->sas_addr = __swab64(itct->sas_addr);
 
 	/* qw2 */
-	itct->qw2 = cpu_to_le64((500 < ITCT_HDR_IT_NEXUS_LOSS_TL_OFF) |
-				(0xff00 < ITCT_HDR_BUS_INACTIVE_TL_OFF) |
-				(0xff00 < ITCT_HDR_MAX_CONN_TL_OFF) |
-				(0xff00 < ITCT_HDR_REJ_OPEN_TL_OFF));
+	itct->qw2 = cpu_to_le64((500ULL << ITCT_HDR_IT_NEXUS_LOSS_TL_OFF) |
+				(0xff00ULL << ITCT_HDR_BUS_INACTIVE_TL_OFF) |
+				(0xff00ULL << ITCT_HDR_MAX_CONN_TL_OFF) |
+				(0xff00ULL << ITCT_HDR_REJ_OPEN_TL_OFF));
 }
 
 static void free_device_v1_hw(struct hisi_hba *hisi_hba,
@@ -544,7 +555,8 @@ static void free_device_v1_hw(struct hisi_hba *hisi_hba,
 {
 	u64 dev_id = sas_dev->device_id;
 	struct hisi_sas_itct *itct = &hisi_hba->itct[dev_id];
-	u32 qw0, reg_val = hisi_sas_read32(hisi_hba, CFG_AGING_TIME);
+	u64 qw0;
+	u32 reg_val = hisi_sas_read32(hisi_hba, CFG_AGING_TIME);
 
 	reg_val |= CFG_AGING_TIME_ITCT_REL_MSK;
 	hisi_sas_write32(hisi_hba, CFG_AGING_TIME, reg_val);
@@ -1100,7 +1112,7 @@ static void slot_err_v1_hw(struct hisi_hba *hisi_hba,
 			   struct hisi_sas_slot *slot)
 {
 	struct task_status_struct *ts = &task->task_status;
-	struct hisi_sas_err_record *err_record = slot->status_buffer;
+	struct hisi_sas_err_record_v1 *err_record = slot->status_buffer;
 	struct device *dev = &hisi_hba->pdev->dev;
 
 	switch (task->task_proto) {
@@ -1224,7 +1236,6 @@ static int slot_complete_v1_hw(struct hisi_hba *hisi_hba,
 	struct domain_device *device;
 	enum exec_status sts;
 	struct hisi_sas_complete_v1_hdr *complete_queue =
-			(struct hisi_sas_complete_v1_hdr *)
 			hisi_hba->complete_hdr[slot->cmplt_queue];
 	struct hisi_sas_complete_v1_hdr *complete_hdr;
 	u32 cmplt_hdr_data;
@@ -1803,6 +1814,7 @@ static const struct hisi_sas_hw hisi_sas_v1_hw = {
 	.phy_disable = disable_phy_v1_hw,
 	.phy_hard_reset = phy_hard_reset_v1_hw,
 	.get_wideport_bitmap = get_wideport_bitmap_v1_hw,
+	.max_command_entries = HISI_SAS_COMMAND_ENTRIES_V1_HW,
 	.complete_hdr_size = sizeof(struct hisi_sas_complete_v1_hdr),
 };
 
