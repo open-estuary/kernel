@@ -651,6 +651,7 @@ static struct scsi_host_template ahci_platform_sht = {
 
 #ifdef CONFIG_ACPI
 static const struct acpi_device_id xgene_ahci_acpi_match[] = {
+	{ "APMC0D09", XGENE_AHCI_V1},
 	{ "APMC0D0D", XGENE_AHCI_V1},
 	{ "APMC0D32", XGENE_AHCI_V2},
 	{},
