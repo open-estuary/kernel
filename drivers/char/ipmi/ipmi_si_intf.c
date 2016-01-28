@@ -1474,11 +1474,20 @@ static int std_irq_setup(struct smi_info *info)
 	return rv;
 }
 
+#ifdef CONFIG_HISI_LPC
+extern int lpc_io_read_byte(unsigned int addr);
+extern int lpc_io_write_byte(unsigned char value, unsigned int addr);
+#endif
+
 static unsigned char port_inb(const struct si_sm_io *io, unsigned int offset)
 {
 	unsigned int addr = io->addr_data;
 
+#ifdef CONFIG_HISI_LPC
+	return lpc_io_read_byte(addr + (offset * io->regspacing));
+#else
 	return inb(addr + (offset * io->regspacing));
+#endif
 }
 
 static void port_outb(const struct si_sm_io *io, unsigned int offset,
@@ -1486,7 +1495,11 @@ static void port_outb(const struct si_sm_io *io, unsigned int offset,
 {
 	unsigned int addr = io->addr_data;
 
+#ifdef CONFIG_HISI_LPC
+	lpc_io_write_byte(b, addr + (offset * io->regspacing));
+#else
 	outb(b, addr + (offset * io->regspacing));
+#endif
 }
 
 static unsigned char port_inw(const struct si_sm_io *io, unsigned int offset)
@@ -1534,8 +1547,9 @@ static void port_cleanup(struct smi_info *info)
 static int port_setup(struct smi_info *info)
 {
 	unsigned int addr = info->io.addr_data;
+#ifndef CONFIG_HISI_LPC
 	int          idx;
-
+#endif
 	if (!addr)
 		return -ENODEV;
 
@@ -1570,6 +1584,7 @@ static int port_setup(struct smi_info *info)
 	 * entire I/O region.  Therefore we must register each I/O
 	 * port separately.
 	 */
+#ifndef CONFIG_HISI_LPC
 	for (idx = 0; idx < info->io_size; idx++) {
 		if (request_region(addr + idx * info->io.regspacing,
 				   info->io.regsize, DEVICE_NAME) == NULL) {
@@ -1581,19 +1596,32 @@ static int port_setup(struct smi_info *info)
 			return -EIO;
 		}
 	}
+#endif
 	return 0;
 }
 
 static unsigned char intf_mem_inb(const struct si_sm_io *io,
 				  unsigned int offset)
 {
+#ifdef CONFIG_HISI_LPC
+	unsigned int addr = io->addr_data;
+
+	return lpc_io_read_byte(addr + (offset * io->regspacing));
+#else
 	return readb((io->addr)+(offset * io->regspacing));
+#endif
 }
 
 static void intf_mem_outb(const struct si_sm_io *io, unsigned int offset,
 			  unsigned char b)
 {
+#ifdef CONFIG_HISI_LPC
+	unsigned int addr = io->addr_data;
+
+	lpc_io_write_byte(b, addr + (offset * io->regspacing));
+#else
 	writeb(b, (io->addr)+(offset * io->regspacing));
+#endif
 }
 
 static unsigned char intf_mem_inw(const struct si_sm_io *io,
@@ -1699,7 +1727,7 @@ static int mem_setup(struct smi_info *info)
 	 */
 	mapsize = ((info->io_size * info->io.regspacing)
 		   - (info->io.regspacing - info->io.regsize));
-
+#ifndef CONFIG_HISI_LPC
 	if (request_mem_region(addr, mapsize, DEVICE_NAME) == NULL)
 		return -EIO;
 
@@ -1708,6 +1736,7 @@ static int mem_setup(struct smi_info *info)
 		release_mem_region(addr, mapsize);
 		return -EIO;
 	}
+#endif
 	return 0;
 }
 
