@@ -22,6 +22,41 @@
 #include "pcie-designware.h"
 #include "pcie-hisi.h"
 
+#ifdef CONFIG_PCI_HISI_ACPI
+
+/* Hip05 support ECAM to access EP configuration space but not support RC. */
+static int hisi_rd_other_conf(struct pcie_port *pp, struct pci_bus *bus,
+		unsigned int devfn, int where, int size, u32 *value)
+{
+	void __iomem *addr = pp->dbi_base;
+	int ret;
+
+	if (bus->parent->number == pp->root_bus_nr)
+		writel(PCIE_ATU_TYPE_CFG0, addr + PCIE_ATU_CR1);
+	else
+		writel(PCIE_ATU_TYPE_CFG1, addr + PCIE_ATU_CR1);
+	ret = pci_generic_config_read(bus, devfn, where, size, value);
+
+	return ret;
+}
+
+static int hisi_wr_other_conf(struct pcie_port *pp, struct pci_bus *bus,
+		unsigned int devfn, int where, int size, u32 value)
+{
+	void __iomem *addr = pp->dbi_base;
+	int ret;
+
+	if (bus->parent->number == pp->root_bus_nr)
+		writel(PCIE_ATU_TYPE_CFG0, addr + PCIE_ATU_CR1);
+	else
+		writel(PCIE_ATU_TYPE_CFG1, addr + PCIE_ATU_CR1);
+	ret = pci_generic_config_write(bus, devfn, where, size, value);
+
+	return ret;
+}
+
+#endif /* CONFIG_PCI_HISI_ACPI */
+
 /* HipXX PCIe host only supports 32-bit config access */
 static int hisi_pcie_cfg_read(struct pcie_port *pp, int where, int size,
 			      u32 *val)
@@ -82,6 +117,10 @@ static int hisi_pcie_link_up(struct pcie_port *pp)
 }
 
 struct pcie_host_ops hisi_pcie_host_ops = {
+#ifdef CONFIG_PCI_HISI_ACPI
+	.rd_other_conf = hisi_rd_other_conf,
+	.wr_other_conf = hisi_wr_other_conf,
+#endif /* CONFIG_ACPI_HOST_GENERIC */
 	.rd_own_conf = hisi_pcie_cfg_read,
 	.wr_own_conf = hisi_pcie_cfg_write,
 	.link_up = hisi_pcie_link_up,
