@@ -11,6 +11,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/acpi.h>
 #include <linux/irq.h>
 #include <linux/irqdomain.h>
 #include <linux/kernel.h>
@@ -19,6 +20,7 @@
 #include <linux/of_address.h>
 #include <linux/of_pci.h>
 #include <linux/pci.h>
+#include <linux/pci-acpi.h>
 #include <linux/pci_regs.h>
 #include <linux/platform_device.h>
 #include <linux/types.h>
@@ -46,17 +48,13 @@
 #define PCIE_MSI_INTR0_ENABLE		0x828
 #define PCIE_MSI_INTR0_MASK		0x82C
 #define PCIE_MSI_INTR0_STATUS		0x830
-
 #define PCIE_ATU_VIEWPORT		0x900
 #define PCIE_ATU_REGION_INBOUND		(0x1 << 31)
 #define PCIE_ATU_REGION_OUTBOUND	(0x0 << 31)
 #define PCIE_ATU_REGION_INDEX1		(0x1 << 0)
 #define PCIE_ATU_REGION_INDEX0		(0x0 << 0)
-#define PCIE_ATU_CR1			0x904
 #define PCIE_ATU_TYPE_MEM		(0x0 << 0)
 #define PCIE_ATU_TYPE_IO		(0x2 << 0)
-#define PCIE_ATU_TYPE_CFG0		(0x4 << 0)
-#define PCIE_ATU_TYPE_CFG1		(0x5 << 0)
 #define PCIE_ATU_CR2			0x908
 #define PCIE_ATU_ENABLE			(0x1 << 31)
 #define PCIE_ATU_BAR_MODE_ENABLE	(0x1 << 30)
@@ -69,7 +67,7 @@
 #define PCIE_ATU_FUNC(x)		(((x) & 0x7) << 16)
 #define PCIE_ATU_UPPER_TARGET		0x91C
 
-static struct pci_ops dw_pcie_ops;
+struct pci_ops dw_pcie_ops;
 
 int dw_pcie_cfg_read(void __iomem *addr, int size, u32 *val)
 {
@@ -657,8 +655,15 @@ static int dw_pcie_valid_config(struct pcie_port *pp,
 static int dw_pcie_rd_conf(struct pci_bus *bus, u32 devfn, int where,
 			int size, u32 *val)
 {
-	struct pcie_port *pp = bus->sysdata;
 	int ret;
+	struct pcie_port *pp;
+#ifdef CONFIG_ACPI_PCI_HOST_GENERIC
+	struct acpi_pci_root *root = bus->sysdata;
+
+	pp = root->sysdata;
+#else
+	pp = bus->sysdata;
+#endif /* CONFIG_ACPI_PCI_HOST_GENERIC */
 
 	if (dw_pcie_valid_config(pp, bus, PCI_SLOT(devfn)) == 0) {
 		*val = 0xffffffff;
@@ -681,8 +686,15 @@ static int dw_pcie_rd_conf(struct pci_bus *bus, u32 devfn, int where,
 static int dw_pcie_wr_conf(struct pci_bus *bus, u32 devfn,
 			int where, int size, u32 val)
 {
-	struct pcie_port *pp = bus->sysdata;
 	int ret;
+	struct pcie_port *pp;
+#ifdef CONFIG_ACPI_PCI_HOST_GENERIC
+	struct acpi_pci_root *root = bus->sysdata;
+
+	pp = root->sysdata;
+#else
+	pp = bus->sysdata;
+#endif /* CONFIG_ACPI_PCI_HOST_GENERIC */
 
 	if (dw_pcie_valid_config(pp, bus, PCI_SLOT(devfn)) == 0)
 		return PCIBIOS_DEVICE_NOT_FOUND;
@@ -700,7 +712,10 @@ static int dw_pcie_wr_conf(struct pci_bus *bus, u32 devfn,
 	return ret;
 }
 
-static struct pci_ops dw_pcie_ops = {
+struct pci_ops dw_pcie_ops = {
+#ifdef CONFIG_ACPI_PCI_HOST_GENERIC
+	.map_bus = pci_mcfg_dev_base,
+#endif /* CONFIG_ACPI_PCI_HOST_GENERIC */
 	.read = dw_pcie_rd_conf,
 	.write = dw_pcie_wr_conf,
 };
