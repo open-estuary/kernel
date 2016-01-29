@@ -106,6 +106,39 @@ extern const u8 pci_acpi_dsm_uuid[];
 #define RESET_DELAY_DSM		0x08
 #define FUNCTION_DELAY_DSM	0x09
 
+/* common API to maintain list of MCFG regions */
+/* "PCI MMCONFIG %04x [bus %02x-%02x]" */
+#define PCI_MMCFG_RESOURCE_NAME_LEN (22 + 4 + 2 + 2)
+
+struct pci_mmcfg_region {
+	struct list_head list;
+	struct resource res;
+	u64 address;
+	char __iomem *virt;
+	u16 segment;
+	u8 start_bus;
+	u8 end_bus;
+	char name[PCI_MMCFG_RESOURCE_NAME_LEN];
+};
+
+extern int pci_mmconfig_insert(struct device *dev, u16 seg, u8 start, u8 end,
+			       phys_addr_t addr);
+extern int pci_mmconfig_delete(u16 seg, u8 start, u8 end);
+
+extern struct pci_mmcfg_region *pci_mmconfig_lookup(int segment, int bus);
+extern struct pci_mmcfg_region *pci_mmconfig_add(int segment, int start,
+							int end, u64 addr);
+extern int pci_mmconfig_map_resource(struct device *dev,
+	struct pci_mmcfg_region *mcfg);
+extern void pci_mmconfig_unmap_resource(struct pci_mmcfg_region *mcfg);
+extern int pci_mmconfig_enabled(void);
+extern int __init pci_mmconfig_parse_table(void);
+
+extern struct list_head pci_mmcfg_list;
+
+#define PCI_MMCFG_BUS_OFFSET(bus)      ((bus) << 20)
+#define PCI_MMCFG_OFFSET(bus, devfn)   ((bus) << 20 | (devfn) << 12)
+
 #else	/* CONFIG_ACPI */
 static inline void acpi_pci_add_bus(struct pci_bus *bus) { }
 static inline void acpi_pci_remove_bus(struct pci_bus *bus) { }
