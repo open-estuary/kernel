@@ -53,6 +53,9 @@ struct gic_chip_data {
 	unsigned int		irq_nr;
 };
 
+static bool main_gic_init = false;
+
+/* presents the main gic node */
 static struct gic_chip_data gic_data __read_mostly;
 static struct static_key supports_deactivate = STATIC_KEY_INIT_TRUE;
 
@@ -900,6 +903,11 @@ static int __init gic_validate_dist_version(void __iomem *dist_base)
 	return 0;
 }
 
+static int auxiliary_gic_init(void __iomem *dist_base)
+{
+	return 0;
+}
+
 static int __init gic_of_init(struct device_node *node, struct device_node *parent)
 {
 	void __iomem *dist_base;
@@ -920,6 +928,11 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 		pr_err("%s: no distributor detected, giving up\n",
 			node->full_name);
 		goto out_unmap_dist;
+	}
+
+	if (main_gic_init) {
+		auxiliary_gic_init(dist_base);
+		return 0;
 	}
 
 	if (of_property_read_u32(node, "#redistributor-regions", &nr_redist_regions))
@@ -957,8 +970,12 @@ static int __init gic_of_init(struct device_node *node, struct device_node *pare
 
 	err = gic_init_bases(dist_base, rdist_regs, nr_redist_regions,
 			     redist_stride, &node->fwnode);
-	if (!err)
-		return 0;
+	if (err)
+		goto  out_unmap_rdist;
+
+	main_gic_init = true;
+
+	return 0;
 
 out_unmap_rdist:
 	for (i = 0; i < nr_redist_regions; i++)
