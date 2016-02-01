@@ -486,16 +486,26 @@
 		};
 	};
 
+	sas_ctrl0: sas_ctrl@c0000000 {
+		compatible = "hisilicon,sas-ctrl", "syscon";
+		reg = <0x0 0xc0000000 0x0 0x10000>;
+	};
+
+	sas_ctrl1: sas_ctrl@b0000000 {
+		compatible = "hisilicon,sas-ctrl", "syscon";
+		reg = <0x0 0xb0000000 0x0 0x10000>;
+	};
+
 	sas0: sas@c1000000 {
-		compatible = "hisilicon,sas-controller-v1";
-		controller-id = <0>;
-		reg = <0x0 0xc1000000 0x0 0x10000>,
-			<0x0 0xc0000000 0x0 0x10000>;
-		reset-reg = <0xa60 0x338>;
-		reset-status-reg = <0x5a30 0x338>;
+		compatible = "hisilicon,hip05-sas-v1";
+		sas-addr = [50 01 88 20 16 00 00 0a];
+		reg = <0x0 0xc1000000 0x0 0x10000>;
+		hisilicon,sas-syscon = <&sas_ctrl0>;
+		ctrl-reset-reg = <0xa60>;
+		ctrl-reset-sts-reg = <0x5a30>;
+		ctrl-clock-ena-reg = <0x338>;
 		queue-count = <32>;
 		phy-count = <8>;
-		#interrupt-cells = <2>;
 		dma-coherent;
 		interrupt-parent = <&mbigen_dsa>;
 		interrupts = <259 4>, <263 4>,<264 4>,<265 4>,/* phy irq(0~79) */
@@ -516,15 +526,15 @@
 	};
 
 	sas1: sas@b1000000 {
-		compatible = "hisilicon,sas-controller-v1";
-		controller-id = <1>;
-		reg = <0x0 0xb1000000 0x0 0x10000>,
-			<0x0 0xb0000000 0x0 0x10000>;
-		reset-reg = <0xa18 0x318>;
-		reset-status-reg = <0x5a0c 0x530c>;
+		compatible = "hisilicon,hip05-sas-v1";
+		sas-addr = [50 01 88 20 16 00 00 00];
+		reg = <0x0 0xb1000000 0x0 0x10000>;
+		hisilicon,sas-syscon = <&sas_ctrl1>;
+		ctrl-reset-reg = <0xa18>;
+		ctrl-reset-sts-reg = <0x5a0c>;
+		ctrl-clock-ena-reg = <0x318>;
 		queue-count = <32>;
 		phy-count = <8>;
-		#interrupt-cells = <2>;
 		dma-coherent;
 		interrupt-parent = <&mbigen_pcie>;
 		interrupts = <259 4>, <263 4>,<264 4>,<265 4>,/* phy irq(0~79) */
