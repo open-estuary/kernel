@@ -35,3 +35,11 @@
 &uart0 {
 	status = "ok";
 };
+
+&sas0 {
+	status = "okay";
+};
+
+&sas1 {
+	status = "okay";
+};
