@@ -716,10 +716,10 @@ static phys_addr_t hns_rcb_common_get_paddr(struct dsaf_device *dsaf_dev,
 	int index = 0;
 
 	if (comm_index == HNS_DSAF_COMM_SERVICE_NW_IDX) {
-		index    = 2;
+		index    = 1;
 		addr_offset = RCB_COMMON_REG_OFFSET;
 	} else {
-		index    = 1;
+		index    = 0;
 		addr_offset = (comm_index - 1) * HNS_DSAF_DEBUG_NW_REG_OFFSET +
 				RCB_COMMON_REG_OFFSET;
 	}
