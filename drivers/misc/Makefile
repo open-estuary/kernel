@@ -58,3 +58,4 @@ obj-$(CONFIG_VEXPRESS_SYSCFG)	+= vexpress-syscfg.o
 obj-$(CONFIG_CXL_BASE)		+= cxl/
 obj-$(CONFIG_HISI_DJTAG)	+= hisi-djtag/
 obj-$(CONFIG_HISI_LPC)          += hisi-lpc/
+obj-$(CONFIG_HI6220_SYSCFG)     += hi6220-sysconfig.o
