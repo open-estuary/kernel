@@ -1,0 +1,23 @@
+Hisilicon Hi6220 GPIO controller bindings
+
+Required properties:
+	- compatible: "arm,pl061","arm,primecell"
+	- gpio-controller: Marks the device node as a GPIO controller.
+	- #gpio-cells: Should be 2. See gpio.txt in this directory for a
+		 description of	the cells format.
+	- interrupt-controller: Mark the device node as an interrupt controller
+
+Example:
+
+	gpio0: gpio@f8011000 {
+		compatible = "arm,pl061", "arm,primecell";
+		reg = <0x0 0xf8011000 0x0 0x1000>;
+		interrupts = <0	52 0x4>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		clocks = <&ao_ctrl 2>;
+		clock-names = "apb_pclk";
+		status = "ok";
+	};
