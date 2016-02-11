@@ -74,6 +74,7 @@ static struct pci_mmcfg_region *pci_mmconfig_alloc(int segment, int start,
 	new->segment = segment;
 	new->start_bus = start;
 	new->end_bus = end;
+	new->hot_added = false;
 
 	res = &new->res;
 	res->start = addr + PCI_MMCFG_BUS_OFFSET(start);
@@ -205,6 +206,7 @@ int pci_mmconfig_insert(struct device *dev, u16 seg, u8 start, u8 end,
 	}
 	rc = pci_mmconfig_map_resource(dev, cfg);
 	if (!rc) {
+		cfg->hot_added = true;
 		list_add_sorted(cfg);
 		dev_info(dev, "MMCONFIG at %pR (base %#lx)\n",
 				 &cfg->res, (unsigned long)addr);
@@ -228,7 +230,7 @@ int pci_mmconfig_delete(u16 seg, u8 start, u8 end)
 	mutex_lock(&pci_mmcfg_lock);
 	list_for_each_entry_rcu(cfg, &pci_mmcfg_list, list)
 		if (cfg->segment == seg && cfg->start_bus == start &&
-		    cfg->end_bus == end) {
+		    cfg->end_bus == end && cfg->hot_added) {
 			list_del_rcu(&cfg->list);
 			synchronize_rcu();
 			pci_mmconfig_unmap_resource(cfg);

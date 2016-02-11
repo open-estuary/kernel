@@ -119,6 +119,7 @@ struct pci_mmcfg_region {
 	u8 start_bus;
 	u8 end_bus;
 	char name[PCI_MMCFG_RESOURCE_NAME_LEN];
+	bool hot_added;
 };
 
 extern int pci_mmconfig_insert(struct device *dev, u16 seg, u8 start, u8 end,
