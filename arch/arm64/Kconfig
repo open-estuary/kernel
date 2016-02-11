@@ -207,6 +207,10 @@ source "drivers/pci/Kconfig"
 source "drivers/pci/pcie/Kconfig"
 source "drivers/pci/hotplug/Kconfig"
 
+config PCI_MMCONFIG
+	def_bool y
+	depends on ACPI
+
 endmenu
 
 menu "Kernel Features"
