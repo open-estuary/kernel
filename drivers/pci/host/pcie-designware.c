@@ -406,6 +406,9 @@ int dw_pcie_host_init(struct pcie_port *pp)
 	struct device_node *np = pp->dev->of_node;
 	struct platform_device *pdev = to_platform_device(pp->dev);
 	struct pci_bus *bus, *child;
+#ifdef CONFIG_ARM
+	struct pci_host_bridge *bridge;
+#endif
 	struct resource *cfg_res;
 	u32 val;
 	int i, ret;
@@ -548,7 +551,9 @@ int dw_pcie_host_init(struct pcie_port *pp)
 
 #ifdef CONFIG_ARM
 	/* support old dtbs that incorrectly describe IRQs */
-	pci_fixup_irqs(pci_common_swizzle, of_irq_parse_and_map_pci);
+	bridge = pci_find_host_bridge(bus);
+	bridge->swizzle_irq = pci_common_swizzle;
+	bridge->map_irq = of_irq_parse_and_map_pci;
 #endif
 
 	if (!pci_has_flag(PCI_PROBE_ONLY)) {
