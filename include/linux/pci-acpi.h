@@ -123,10 +123,6 @@ struct pci_mmcfg_region {
 	bool hot_added;
 };
 
-extern int pci_mmconfig_insert(struct device *dev, u16 seg, u8 start, u8 end,
-			       phys_addr_t addr);
-extern int pci_mmconfig_delete(u16 seg, u8 start, u8 end);
-
 extern struct pci_mmcfg_region *pci_mmconfig_lookup(int segment, int bus);
 extern struct pci_mmcfg_region *pci_mmconfig_add(int segment, int start,
 							int end, u64 addr);
@@ -142,10 +138,16 @@ extern struct list_head pci_mmcfg_list;
 #define PCI_MMCFG_OFFSET(bus, devfn)   ((bus) << 20 | (devfn) << 12)
 
 #ifdef	CONFIG_PCI_MMCONFIG
+extern int pci_mmconfig_insert(struct device *dev, u16 seg, u8 start, u8 end,
+			       phys_addr_t addr);
+extern int pci_mmconfig_delete(u16 seg, u8 start, u8 end);
 extern struct pci_ops *pci_mcfg_get_ops(struct acpi_pci_root *root);
 extern void __iomem *pci_mcfg_dev_base(struct pci_bus *bus, unsigned int devfn,
 				       int offset);
 #else
+static inline int pci_mmconfig_insert(struct device *dev, u16 seg, u8 start,
+				      u8 end, phys_addr_t addr) { return 0; }
+static inline int pci_mmconfig_delete(u16 seg, u8 start, u8 end) { return 0; }
 static inline struct pci_ops *pci_mcfg_get_ops(struct acpi_pci_root *root)
 { return NULL; }
 static inline void __iomem *pci_mcfg_dev_base(struct pci_bus *bus,

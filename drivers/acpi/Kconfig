@@ -335,6 +335,13 @@ config ACPI_PCI_SLOT
 	  i.e., segment/bus/device/function tuples, with physical slots in
 	  the system.  If you are unsure, say N.
 
+config ACPI_PCI_HOST_GENERIC
+	bool
+	help
+	  Select this config option from the architecture Kconfig,
+	  if it is preferred to enable ACPI PCI host controller driver which
+	  has no arch-specific assumptions.
+
 config X86_PM_TIMER
 	bool "Power Management Timer Support" if EXPERT
 	depends on X86
