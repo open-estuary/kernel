@@ -512,9 +512,11 @@ static int platform_drv_probe(struct device *_dev)
 	if (ret < 0)
 		return ret;
 
-	ret = of_dma_configure_ops(_dev, _dev->of_node);
-	if (ret < 0)
-		goto done;
+	if (_dev->of_node) {
+		ret = of_dma_configure_ops(_dev, _dev->of_node);
+		if (ret < 0)
+			goto done;
+	}
 
 	ret = dev_pm_domain_attach(_dev, true);
 	if (ret != -EPROBE_DEFER) {
