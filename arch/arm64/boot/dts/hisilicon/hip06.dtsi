@@ -489,4 +489,11 @@
 			reg-shift = <2>;
 		};
 	};
+
+	ipmi_0:ipmi@000000e4{
+		device_type = "ipmi";
+		compatible = "ipmi-bt";
+		reg = <0x0 0x000000e4 0x0 0x10000>;
+	};
+
 };
