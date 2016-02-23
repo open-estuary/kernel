@@ -1,0 +1,19 @@
+Low Pin Count bus driver
+
+Usually LPC controller is part of PCI host bridge, so the legacy ISA
+port locate on LPC bus can be accessed directly. But some SoC have
+independent LPC controller, and we can access the legacy port by specifying
+LPC address cycle. Thus, LPC driver is introduced.
+
+Required properties:
+- compatible: "low-pin-count"
+- reg: specifies low pin count address range
+
+Example:
+
+	lpc_0: lpc@a01b0000 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+                compatible = "low-pin-count";
+                reg = <0x0 0xa01b0000 0x0 0x10000>;
+        };
