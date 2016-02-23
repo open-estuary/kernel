@@ -1,0 +1,27 @@
+* Hisilicon DesignWare lpc UART
+
+Required properties:
+- compatible : "hisilicon,16550-lpc-uart"
+- reg : offset and length of the register set for the device.
+
+Clock handling:
+The clock rate of the input clock needs to be supplied by one of
+- clocks : phandle to the input clock
+
+The supplying peripheral clock can also be handled, needing a second property
+- clock-names: tuple listing input clock names.
+
+Optional properties:
+
+- reg-shift : quantity to shift the register offsets by.  If this property is
+  not present then the register offsets are not shifted.
+
+Example:
+
+	uart1: uart@02f8 {
+		compatible = "hisilicon,16550-lpc-uart";
+		reg = <0 0x02f8 0x0 0x100>;
+		clocks = <&refclk18461mhz>;
+		clock-names = "clk";
+		reg-shift = <0>;
+	};
