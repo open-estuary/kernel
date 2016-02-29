@@ -473,6 +473,31 @@
 					<381 4>;/* chip fatal error irq(125) */
 			status = "disabled";
 		};
+
+		pc_sysctrl0: system-controller@0x80010000 {
+			compatible = "hisilicon,hip05-sysctrl", "syscon";
+			reg = <0x0 0x80010000 0x0 0x10000>;
+		};
+
+		djtag0: djtag@0 {
+			compatible = "hisilicon,hip05-djtag";
+			syscon = <&pc_sysctrl0>;
+		};
+
+		llc0: llc@0 {
+			compatible = "hisilicon,hip05-llc";
+			djtag = <&djtag0 2>;
+			interrupt-parent = <&mbigen_pc>;
+			interrupts = <141 4>,<142 4>,
+					<143 4>,<144 4>;
+			status = "okay";
+		};
+
+		mn0: mn@0 {
+                        compatible = "hisilicon,hip05-mn";
+                        djtag = <&djtag0 2>;
+                        status = "okay";
+                };
 	};
 
 	/include/ "hip05_hns.dtsi"
