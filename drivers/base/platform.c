@@ -512,7 +512,7 @@ static int platform_drv_probe(struct device *_dev)
 	if (ret < 0)
 		return ret;
 
-	if (_dev->of_node) {
+	if (acpi_disabled) {
 		ret = of_dma_configure_ops(_dev, _dev->of_node);
 		if (ret < 0)
 			goto done;
