@@ -25,6 +25,10 @@
 #include <linux/perf/arm_pmu.h>
 #include <linux/platform_device.h>
 
+#ifdef CONFIG_HISI_PERFCTR
+#include "perf_event_hisi.h"
+#endif
+
 /*
  * ARMv8 PMUv3 Performance Events handling code.
  * Common event types.
@@ -267,7 +271,6 @@ static inline int armv8pmu_select_counter(int idx)
 	u32 counter = ARMV8_IDX_TO_COUNTER(idx);
 	asm volatile("msr pmselr_el0, %0" :: "r" (counter));
 	isb();
-
 	return idx;
 }
 
@@ -279,13 +282,19 @@ static inline u32 armv8pmu_read_counter(struct perf_event *event)
 	u32 value = 0;
 
 	if (!armv8pmu_counter_valid(cpu_pmu, idx))
+#ifdef CONFIG_HISI_PERFCTR
+	{
+		if (!armv8_hisi_counter_valid(idx))
+#endif
 		pr_err("CPU%u reading wrong counter %d\n",
 			smp_processor_id(), idx);
+#ifdef CONFIG_HISI_PERFCTR
+	}
+#endif
 	else if (idx == ARMV8_IDX_CYCLE_COUNTER)
 		asm volatile("mrs %0, pmccntr_el0" : "=r" (value));
 	else if (armv8pmu_select_counter(idx) == idx)
 		asm volatile("mrs %0, pmxevcntr_el0" : "=r" (value));
-
 	return value;
 }
 
@@ -296,17 +305,34 @@ static inline void armv8pmu_write_counter(struct perf_event *event, u32 value)
 	int idx = hwc->idx;
 
 	if (!armv8pmu_counter_valid(cpu_pmu, idx))
+#ifdef CONFIG_HISI_PERFCTR
+	{
+		if (!armv8_hisi_counter_valid(idx))
+#endif
 		pr_err("CPU%u writing wrong counter %d\n",
 			smp_processor_id(), idx);
+#ifdef CONFIG_HISI_PERFCTR
+		}
+#endif
 	else if (idx == ARMV8_IDX_CYCLE_COUNTER)
 		asm volatile("msr pmccntr_el0, %0" :: "r" (value));
+#ifdef CONFIG_HISI_PERFCTR
+	if (armv8_hisi_counter_valid(idx))
+		hisi_pmu_write_counter(idx, value);
+#endif
 	else if (armv8pmu_select_counter(idx) == idx)
 		asm volatile("msr pmxevcntr_el0, %0" :: "r" (value));
 }
 
 static inline void armv8pmu_write_evtype(int idx, u32 val)
 {
+#ifdef CONFIG_HISI_PERFCTR
+	if (armv8_hisi_counter_valid(idx))
+		hisi_pmu_write_evtype(idx, val);
+	else if (armv8pmu_select_counter(idx) == idx) {
+#else
 	if (armv8pmu_select_counter(idx) == idx) {
+#endif
 		val &= ARMV8_EVTYPE_MASK;
 		asm volatile("msr pmxevtyper_el0, %0" :: "r" (val));
 	}
@@ -314,28 +340,64 @@ static inline void armv8pmu_write_evtype(int idx, u32 val)
 
 static inline int armv8pmu_enable_counter(int idx)
 {
-	u32 counter = ARMV8_IDX_TO_COUNTER(idx);
+	u32 counter;
+
+#ifdef CONFIG_HISI_PERFCTR
+	if (armv8_hisi_counter_valid(idx)) {
+		hisi_pmu_enable_counter(idx);
+		return idx;
+	}
+#endif
+
+	counter = ARMV8_IDX_TO_COUNTER(idx);
 	asm volatile("msr pmcntenset_el0, %0" :: "r" (BIT(counter)));
 	return idx;
 }
 
 static inline int armv8pmu_disable_counter(int idx)
 {
-	u32 counter = ARMV8_IDX_TO_COUNTER(idx);
+	u32 counter;
+
+#ifdef CONFIG_HISI_PERFCTR
+		if (armv8_hisi_counter_valid(idx)) {
+			hisi_pmu_disable_counter(idx);
+			return idx;
+		}
+#endif
+
+	counter = ARMV8_IDX_TO_COUNTER(idx);
 	asm volatile("msr pmcntenclr_el0, %0" :: "r" (BIT(counter)));
 	return idx;
 }
 
 static inline int armv8pmu_enable_intens(int idx)
 {
-	u32 counter = ARMV8_IDX_TO_COUNTER(idx);
+	u32 counter;
+
+#ifdef CONFIG_HISI_PERFCTR
+	if (armv8_hisi_counter_valid(idx)) {
+		hisi_pmu_enable_intens(idx);
+		return idx;
+	}
+#endif
+
+	counter = ARMV8_IDX_TO_COUNTER(idx);
 	asm volatile("msr pmintenset_el1, %0" :: "r" (BIT(counter)));
 	return idx;
 }
 
 static inline int armv8pmu_disable_intens(int idx)
 {
-	u32 counter = ARMV8_IDX_TO_COUNTER(idx);
+	u32 counter;
+	
+#ifdef CONFIG_HISI_PERFCTR
+		if (armv8_hisi_counter_valid(idx)) {
+			hisi_pmu_enable_intens(idx);
+			return idx;
+		}
+#endif
+
+	counter = ARMV8_IDX_TO_COUNTER(idx);
 	asm volatile("msr pmintenclr_el1, %0" :: "r" (BIT(counter)));
 	isb();
 	/* Clear the overflow flag in case an interrupt is pending. */
@@ -376,6 +438,11 @@ static void armv8pmu_enable_event(struct perf_event *event)
 	/*
 	 * Disable counter
 	 */
+#ifdef CONFIG_HISI_PERFCTR
+	if (armv8_hisi_counter_valid(idx))
+		hisi_pmu_disable_counter(idx);
+	else
+#endif
 	armv8pmu_disable_counter(idx);
 
 	/*
@@ -412,6 +479,11 @@ static void armv8pmu_disable_event(struct perf_event *event)
 	/*
 	 * Disable counter
 	 */
+#ifdef CONFIG_HISI_PERFCTR
+	if (armv8_hisi_counter_valid(idx))
+		hisi_pmu_disable_counter(idx);
+	else
+#endif
 	armv8pmu_disable_counter(idx);
 
 	/*
@@ -522,6 +594,26 @@ static int armv8pmu_get_event_idx(struct pmu_hw_events *cpuc,
 		return ARMV8_IDX_CYCLE_COUNTER;
 	}
 
+#ifdef CONFIG_HISI_PERFCTR
+	/* For HiSilicon SoC LLC, MN1 return appropriate counter index */
+	if (evtype >= ARMV8_HISI_PERFCTR_LLC_READ_ALLOCATE &&
+				evtype < ARMV8_HISI_PERFCTR_EVENT_MAX) {
+		/*
+		 * Find counter index corresponding to the Event type register
+		 * FIXME: As I have 8 counters and max 8 events cfg in event
+		 * select register, event index to counter index is a direct
+		 * mapping.
+		 * To avoid collision with armv8 counter index Hisilicon index
+		 * will start from ARMV8_HISI_IDX_LLC_COUNTER0 for LLC and
+		 * correspondingly for MN1.
+		 */
+		idx = hisi_pmu_get_event_idx(hwc);
+		if (idx >= 0)
+			return idx;
+		else
+			return -EAGAIN;
+	}
+#endif
 	/*
 	 * For anything other than a cycle counter, try and use
 	 * the events counters

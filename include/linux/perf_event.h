@@ -160,7 +160,9 @@ struct hw_perf_event {
 	 * local64_cmpxchg() such that pmu::read() can be called nested.
 	 */
 	local64_t			prev_count;
-
+#ifdef CONFIG_HISI_PERFCTR
+	void				*perf_event_data;
+#endif
 	/*
 	 * The period to start the next sample with.
 	 */
