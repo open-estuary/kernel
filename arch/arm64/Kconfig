@@ -569,6 +569,15 @@ config HW_PERF_EVENTS
 	def_bool y
 	depends on ARM_PMU
 
+config HISI_PERFCTR
+	bool "Enable hardware event counter support for HiSilicon SoC"
+	depends on HW_PERF_EVENTS
+	select HISI_DJTAG
+	default y
+	help
+	 Enable hardware event counter support for Hisilicon SoC LLC,
+	 and MN1 events for Hisilicon P660 and Hi1610 SoC.
+
 config SYS_SUPPORTS_HUGETLBFS
 	def_bool y
 
