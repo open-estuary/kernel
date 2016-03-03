@@ -443,6 +443,42 @@
 		reg = <0x0 0xa0080000 0x0 0x10000>;
 	};
 
+	mbigen_dsa_srv: interrupt-controller_srv@c0080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa 0x40800>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			num-pins = <409>;
+			reg = <0x0 0xc0080000 0x0 0x10000>;
+		};
+
+	mbigen_dsa_dbg0: interrupt-controller_dbg0@c0080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa 0x40b1c>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			num-pins = <9>;
+			reg = <0x0 0xc0080000 0x0 0x10000>;
+		};
+
+	mbigen_dsa_dbg1: interrupt-controller_dbg1@c0080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa 0x40b1d>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			num-pins = <9>;
+			reg = <0x0 0xc0080000 0x0 0x10000>;
+		};
+
+	mbigen_dsa_xbar: interrupt-controller_xbar@c0080000 {
+			compatible = "hisilicon,mbigen-v2";
+			msi-parent = <&its_dsa 0x40b1f>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			num-pins = <18>;
+			reg = <0x0 0xc0080000 0x0 0x10000>;
+		};
+
 	timer {
 		compatible = "arm,armv8-timer";
 		interrupts = <1 13 4>,
@@ -478,6 +514,16 @@
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
 			clock-frequency = <175000000>;
+		};
+
+		peri_c_subctrl: syscon@60000000 {
+			compatible = "hisilicon,hip05-perisubc", "syscon";
+			reg = < 0x0 0x60000000 0x0 0x10000>;
+		};
+
+		dsaf_subctl: dsaf_subctl@c0000000 {
+			compatible = "hisilicon,dsaf-ctrl", "syscon";
+			reg = <0x0 0xc0000000 0x0 0x10000>;
 		};
 
 		uart0: uart@60300000 {
