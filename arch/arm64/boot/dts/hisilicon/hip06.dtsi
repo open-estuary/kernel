@@ -443,6 +443,15 @@
 		reg = <0x0 0xa0080000 0x0 0x10000>;
 	};
 
+	mbigen_pcie_usb: interrupt-controller_usb@a0080000 {
+		compatible = "hisilicon,mbigen-v2";
+		msi-parent = <&its_dsa 0x40080>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		num-pins = <2>;
+		reg = <0x0 0xa0080000 0x0 0x10000>;
+	};
+
 	mbigen_dsa_srv: interrupt-controller_srv@c0080000 {
 			compatible = "hisilicon,mbigen-v2";
 			msi-parent = <&its_dsa 0x40800>;
@@ -450,7 +459,7 @@
 			#interrupt-cells = <2>;
 			num-pins = <409>;
 			reg = <0x0 0xc0080000 0x0 0x10000>;
-		};
+	};
 
 	mbigen_dsa_dbg0: interrupt-controller_dbg0@c0080000 {
 			compatible = "hisilicon,mbigen-v2";
@@ -459,7 +468,7 @@
 			#interrupt-cells = <2>;
 			num-pins = <9>;
 			reg = <0x0 0xc0080000 0x0 0x10000>;
-		};
+	};
 
 	mbigen_dsa_dbg1: interrupt-controller_dbg1@c0080000 {
 			compatible = "hisilicon,mbigen-v2";
@@ -468,7 +477,7 @@
 			#interrupt-cells = <2>;
 			num-pins = <9>;
 			reg = <0x0 0xc0080000 0x0 0x10000>;
-		};
+	};
 
 	mbigen_dsa_xbar: interrupt-controller_xbar@c0080000 {
 			compatible = "hisilicon,mbigen-v2";
@@ -477,7 +486,7 @@
 			#interrupt-cells = <2>;
 			num-pins = <18>;
 			reg = <0x0 0xc0080000 0x0 0x10000>;
-		};
+	};
 
 	timer {
 		compatible = "arm,armv8-timer";
@@ -666,6 +675,24 @@
 					<627 1>,<628 1>,<629 1>,<630 1>,<631 1>,
 					<632 1>,<633 1>,<634 1>,<635 1>,<636 1>,
 					<637 1>,<638 1>,<639 1>;
+			status = "disabled";
+		};
+
+		usb_ohci: ohci@a7030000 {
+			compatible = "generic-ohci";
+			reg = <0x0 0xa7030000 0x0 0x10000>;
+			interrupt-parent = <&mbigen_pcie_usb>;
+			interrupts = <64 4>;
+			dma-coherent;
+			status = "disabled";
+		};
+
+		usb_ehci: ehci@a7020000 {
+			compatible = "generic-ehci";
+			reg = <0x0 0xa7020000 0x0 0x10000>;
+			interrupt-parent = <&mbigen_pcie_usb>;
+			interrupts = <65 4>;
+			dma-coherent;
 			status = "disabled";
 		};
 	};
