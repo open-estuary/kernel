@@ -321,7 +321,7 @@
 		};
 
 		pcie_subctl: pcie_subctl@b0000000 {
-			compatible = "hisilicon,pcie-ctrl", "syscon";
+			compatible = "hisilicon,pcie-sas-subctrl", "syscon";
 			reg = <0x0 0xb0000000 0x0 0x10000>;
 		};
 
@@ -498,6 +498,56 @@
                         djtag = <&djtag0 2>;
                         status = "okay";
                 };
+
+		pcie@0xb0080000 {
+			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+			reg = <0 0xb0080000 0 0x10000>, <0x220 0x04000000 0 0x04000000>;
+			reg-names = "rc_dbi",  "ecam-cfg";
+			bus-range = <64  127>;
+			msi-map = <0x4000 &its_pcie 0x0 0x4000>;
+			msi-map-mask = <0xffff>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			ranges = <0x02000000 0 0xb0000000 0x220 0x08000000 0 0x7ff0000>,
+					 <0x01000000 0 0x0 0x220 0x0fff0000 0 0x10000>;
+			num-lanes = <8>;
+			port-id = <1>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0xf800 0 0 7>;
+			interrupt-map = <0x0 0 0 1 &mbigen_pcie 10 4
+					 0x0 0 0 2 &mbigen_pcie 11 4
+					 0x0 0 0 3 &mbigen_pcie 12 4
+					 0x0 0 0 4 &mbigen_pcie 13 4>;
+
+			status = "ok";
+		};
+
+		pcie@0xb0090000 {
+			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+			reg = <0 0xb0090000 0 0x10000>, <0x240 0x08000000 0 0x04000000>;
+			reg-names = "rc_dbi", "ecam-cfg";
+			bus-range = <128 191>;
+			msi-map = <0x8000 &its_pcie 0x0 0x4000>;
+			msi-map-mask = <0xffff>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			ranges = <0x02000000 0 0xc0000000 0x240 0x0c000000 0 0x3ff0000>,
+					 <0x01000000 0 0x0 0x240 0x0fff0000 0 0x10000>;
+			num-lanes = <8>;
+			port-id = <2>;
+			#interrupt-cells = <1>;
+			interrupt-map-mask = <0xf800 0 0 7>;
+			interrupt-map = <0x0 0 0 1 &mbigen_pcie 19 4
+					 0x0 0 0 2 &mbigen_pcie 20 4
+					 0x0 0 0 3 &mbigen_pcie 21 4
+					 0x0 0 0 4 &mbigen_pcie 22 4>;
+
+			status = "ok";
+		};
 	};
 
 	/include/ "hip05_hns.dtsi"
