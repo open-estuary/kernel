@@ -54,3 +54,11 @@
 &sas2 {
 	status = "okay";
 };
+
+&usb_ohci {
+	status = "okay";
+};
+
+&usb_ehci {
+	status = "okay";
+};
