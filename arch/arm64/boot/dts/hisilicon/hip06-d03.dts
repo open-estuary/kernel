@@ -55,6 +55,10 @@
 	status = "okay";
 };
 
+&pcie2 {
+	status = "okay";
+};
+
 &usb_ohci {
 	status = "okay";
 };

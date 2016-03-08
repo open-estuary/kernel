@@ -549,8 +549,8 @@
 			reg = <0x0 0xc0000000 0x0 0x10000>;
 		};
 
-		sas_ctrl1: sas_ctrl@a0000000 {
-			compatible = "hisilicon,sas-ctrl", "syscon";
+		pcie_sas_ctrl: pcie_sas_subctrl@a0000000 {
+			compatible = "hisilicon,pcie-sas-subctrl", "syscon";
 			reg = <0x0 0xa0000000 0x0 0x10000>;
 		};
 
@@ -599,7 +599,7 @@
 			compatible = "hisilicon,hip06-sas-v2";
 			reg = <0 0xa2000000 0 0x10000>;
 			sas-addr = [50 01 88 20 16 00 00 00];
-			hisilicon,sas-syscon = <&sas_ctrl1>;
+			hisilicon,sas-syscon = <&pcie_sas_ctrl>;
 			am-max-trans;
 			ctrl-reset-reg = <0xa18>;
 			ctrl-reset-sts-reg = <0x5a0c>;
@@ -641,7 +641,7 @@
 			compatible = "hisilicon,hip06-sas-v2";
 			reg = <0 0xa3000000 0 0x10000>;
 			sas-addr = [50 01 88 20 16 00 00 00];
-			hisilicon,sas-syscon = <&sas_ctrl1>;
+			hisilicon,sas-syscon = <&pcie_sas_ctrl>;
 			ctrl-reset-reg = <0xae0>;
 			ctrl-reset-sts-reg = <0x5a70>;
 			ctrl-clock-ena-reg = <0x3a8>;
@@ -693,6 +693,25 @@
 			interrupt-parent = <&mbigen_pcie_usb>;
 			interrupts = <65 4>;
 			dma-coherent;
+			status = "disabled";
+		};
+
+		pcie2: pcie@a00a0000 {
+			compatible = "hisilicon,hip06-pcie", "snps,dw-pcie";
+			reg = <0 0xa00a0000 0 0x10000>, <0 0xa8000000 0 0x1000000>;
+			reg-names = "rc_dbi", "ecam-cfg";
+			bus-range = <128 144>;
+			msi-map = <0x8000 &its_dsa 0x0 0x1000>;
+			msi-map-mask = <0xffff>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			/* AXI: 0xa800_0000 ~ 0xb000_0000 for PCIe2 */
+			ranges = <0x02000000 0 0xaa000000 0 0xaa000000 0 0x5ff0000
+				  0x01000000 0 0x0        0 0xafff0000 0 0x10000>;
+			num-lanes = <8>;
+			port-id = <1>;
 			status = "disabled";
 		};
 	};
