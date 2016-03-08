@@ -692,6 +692,8 @@ static void __init arch_timer_common_init(void)
 	arch_timer_banner(arch_timers_present);
 	arch_counter_register(arch_timers_present);
 	arch_timer_arch_init();
+
+	arch_timer_kvm_info.virtual_irq = arch_timer_ppi[VIRT_PPI];
 }
 
 static void __init arch_timer_init(void)
