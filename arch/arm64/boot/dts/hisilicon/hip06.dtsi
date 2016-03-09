@@ -696,6 +696,24 @@
 			status = "disabled";
 		};
 
+		gpio0: gpio@602e0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,dw-apb-gpio";
+			reg = <0x0 0x602e0000 0x0 0x10000>;
+
+			porta: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				gpio-controller;
+				#gpio-cells = <2>;
+				snps,nr-gpios = <32>;
+				reg = <0>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupts = <0 312 4>;
+			};
+		};
+
 		pcie2: pcie@a00a0000 {
 			compatible = "hisilicon,hip06-pcie", "snps,dw-pcie";
 			reg = <0 0xa00a0000 0 0x10000>, <0 0xa8000000 0 0x1000000>;
