@@ -113,7 +113,6 @@ void  lpc_io_write_byte(u8 value, unsigned long addr)
 	int ret;
 
 	if (!lpc_dev) {
-		pr_err("device is not register\n!");
 		return;
 	}
 	spin_lock_irqsave(&lpc_dev->lock, flags);
@@ -211,7 +210,6 @@ u8 lpc_io_read_byte(unsigned long addr)
 	unsigned long flags;
 
 	if (!lpc_dev) {
-		pr_err("device is not register!\n");
 		return 0;
 	}
 
