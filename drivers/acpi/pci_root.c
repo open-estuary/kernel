@@ -646,8 +646,8 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 	if (!bus)
 		return NULL;
 
-	pci_bus_claim_resources(bus);
-	pci_assign_unassigned_bus_resources(bus);
+	pci_bus_size_bridges(bus);
+	pci_bus_assign_resources(bus);
 
 	/*
 	 * After the PCI-E bus has been walked and all devices discovered,
