@@ -23,7 +23,7 @@
 	};
 
 	chosen {
-		bootargs = "earlycon=hisilpcuart,mmio,0xa01b0000,0,0x2f8 initrd=0x7000000,500M";
+		bootargs = "rdinit=/sbin/init console=ttyS1,115200 earlycon=hisilpcuart,mmio,0xa01b0000,0,0x2f8 initrd=0x7000000,500M";
 	};
 
 	gpio_keys {
