@@ -292,6 +292,7 @@
 		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_HIGH>;
 	};
 
+	/include/ "hip05_hns.dtsi"
 	soc {
 		compatible = "simple-bus";
 		#address-cells = <2>;
@@ -549,6 +550,4 @@
 			status = "ok";
 		};
 	};
-
-	/include/ "hip05_hns.dtsi"
 };
