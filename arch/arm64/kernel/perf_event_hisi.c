@@ -41,7 +41,7 @@
 
 /* Map cfg_en values for LLC Banks */
 const int llc_cfgen_map[] = { HISI_LLC_BANK0_CFGEN, HISI_LLC_BANK1_CFGEN,
-				HISI_LLC_BANK1_CFGEN, HISI_LLC_BANK3_CFGEN
+				HISI_LLC_BANK2_CFGEN, HISI_LLC_BANK3_CFGEN
 };
 
 /* LLC information */
@@ -66,20 +66,20 @@ static int hisi_djtag_readreg(int module_id, int bank, u32 offset,
 
 	ret = djtag_readl(djtag_node, offset, module_id, chain_id, pvalue);
 	if (ret)
-		pr_info("Djtag:%s Read failed!\n", djtag_node->full_name);
+		pr_err("Djtag:%s Read failed!\n", djtag_node->full_name);
 
 	return ret;
 }
 
 /* djtag write interface */
 static int hisi_djtag_writereg(int module_id, int bank, u32 offset, u32 value,
-							struct device_node *djtag_node)
+						struct device_node *djtag_node)
 {
 	int ret;
 
 	ret = djtag_writel(djtag_node, offset, module_id, bank, value);
 	if (ret)
-		pr_info("Djtag:%s Write failed!\n", djtag_node->full_name);
+		pr_err("Djtag:%s Write failed!\n", djtag_node->full_name);
 
 	return ret;
 }
@@ -287,12 +287,12 @@ void hisi_pmu_clear_event_idx(int idx)
 	u32 module_idx = (((idx & HISI_CNTR_DIE_MASK) >> 8) - 1);
 
 	if (ARMV8_HISI_IDX_LLC_COUNTER0 <= cntr_idx &&
-		 cntr_idx <= ARMV8_HISI_IDX_LLC_COUNTER_MAX) {
+		cntr_idx <= ARMV8_HISI_IDX_LLC_COUNTER_MAX) {
 		hisi_clear_llc_event_idx(idx);
 	} else if (ARMV8_HISI_IDX_MN_COUNTER0 <= cntr_idx &&
 			cntr_idx <= ARMV8_HISI_IDX_MN_COUNTER_MAX) {
 		__clear_bit(cntr_idx - ARMV8_HISI_IDX_MN_COUNTER0,
-				mn_data[module_idx].hisi_mn_event_used_mask);
+			mn_data[module_idx].hisi_mn_event_used_mask);
 	}
 
 	return;
@@ -321,7 +321,7 @@ int hisi_pmu_get_event_idx(struct hw_perf_event *event)
 						HISI_ARMV8_MAX_CFG_LLC_CNTR);
 
 		if (event_idx == HISI_ARMV8_MAX_CFG_LLC_CNTR) {
-			pr_err("LLC: Hardware counters not free!\n");
+			pr_info("LLC: Hardware counters not free!\n");
 			return -EAGAIN;
 		}
 
@@ -355,7 +355,7 @@ int hisi_pmu_get_event_idx(struct hw_perf_event *event)
 						HISI_ARMV8_MAX_CFG_MN_CNTR);
 
 		if (event_idx == HISI_ARMV8_MAX_CFG_MN_CNTR) {
-			pr_err("MN: Hardware counters not free!\n");
+			pr_info("MN: Hardware counters not free!\n");
 			return -EAGAIN;
 		}
 
@@ -975,7 +975,7 @@ irqreturn_t hisi_llc_event_handle_irq(int irq_num, void *dev)
 			atomic_inc(
 			&llc_data[llc_idx].bank[i].cntr_ovflw[bit_pos]);
 			pr_debug("LLC: handle_irq - The counter overflow " \
-				"times is 0x%x\n",
+					"times is %u\n",
 				llc_data[llc_idx].bank[i].cntr_ovflw[bit_pos]);
 		}
 	}

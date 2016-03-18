@@ -551,7 +551,7 @@ __hw_perf_event_init(struct perf_event *event)
 #ifdef CONFIG_HISI_PERFCTR
 	/*
 	 * Initialize event counter variables to support multiple
-	 * HiSilicon Soc die/banks
+	 * HiSilicon SoC CPU die and banks
 	 */
 	evtype = hwc->config_base & HISI_ARMV8_EVTYPE_EVENT;
 
