@@ -12,7 +12,6 @@
 /dts-v1/;
 
 #include "hip06.dtsi"
-#include "hip06_hns.dtsi"
 / {
 	model = "Hisilicon Hip06 D03 Development Board";
 	compatible = "hisilicon,hip06-d03";
