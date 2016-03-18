@@ -501,6 +501,7 @@
 		interrupts = <1 7 4>;
 	};
 
+	/include/ "hip06_hns.dtsi"
 	soc {
 		compatible = "simple-bus";
 		#address-cells = <2>;
