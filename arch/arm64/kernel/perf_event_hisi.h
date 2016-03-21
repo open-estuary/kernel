@@ -60,6 +60,20 @@ enum armv8_hisi_mn_event_types {
 	ARMV8_HISI_PERFCTR_MN_COPYBK_REQ		= 0x31C,
 	ARMV8_HISI_PERFCTR_MN_OTHER_REQ			= 0x31D,
 	ARMV8_HISI_PERFCTR_MN_RETRY_REQ			= 0x31E,
+};
+
+/*
+ * ARMv8 HiSilicon DDR RAW event types.
+ */
+enum armv8_hisi_ddr_event_types {
+	ARMV8_HISI_PERFCTR_DDRC0_FLUX_READ_BW           = 0x31F,
+	ARMV8_HISI_PERFCTR_DDRC0_FLUX_WRITE_BW          = 0x320,
+	ARMV8_HISI_PERFCTR_DDRC0_FLUX_READ_LAT          = 0x321,
+	ARMV8_HISI_PERFCTR_DDRC0_FLUX_WRITE_LAT         = 0x322,
+	ARMV8_HISI_PERFCTR_DDRC1_FLUX_READ_BW           = 0x323,
+	ARMV8_HISI_PERFCTR_DDRC1_FLUX_WRITE_BW          = 0x324,
+	ARMV8_HISI_PERFCTR_DDRC1_FLUX_READ_LAT          = 0x325,
+	ARMV8_HISI_PERFCTR_DDRC1_FLUX_WRITE_LAT         = 0x326,
 	ARMV8_HISI_PERFCTR_EVENT_MAX,
 };
 
@@ -109,10 +123,13 @@ enum hisi_die_id {
 #define HISI_ARMV8_EVTYPE_EVENT	0x3ff
 #define HISI_ARMV8_MAX_CFG_LLC_CNTR	0x08
 #define HISI_ARMV8_MAX_CFG_MN_CNTR 0x04
+#define HISI_ARMV8_MAX_CFG_DDR_CNTR 0x08
 
 /* HW perf modules supported index */
 #define HISI_LLC_MODULE_ID	0x04
 #define HISI_MN1_MODULE_ID	0x0B
+#define HISI_DDRC0_MODULE_ID	0x08
+#define HISI_DDRC1_MODULE_ID	0x0D
 
 #define HISI_LLC_BANK0_CFGEN  0x02
 #define HISI_LLC_BANK1_CFGEN  0x04
@@ -151,6 +168,18 @@ enum hisi_die_id {
 #define HISI_MN_EVENT_TYPE	0x48
 #define HISI_MN_EVENT_EN	0x1
 
+#define HISI_DDRC_CTRL_PERF		0x010
+#define HISI_DDRC_CFG_PERF		0x270
+#define HISI_DDRC_FLUX_WR		0x380
+#define HISI_DDRC_FLUX_RD		0x384
+#define HISI_DDRC_FLUX_WCMD		0x388
+#define HISI_DDRC_FLUX_RCMD		0x38C
+#define HISI_DDRC_FLUX_WLATCNT1		0x3A4
+#define HISI_DDRC_FLUX_RLAT_CNT1	0x3AC
+
+#define DDR_REG_READ(addr, value) (value = *(volatile u32 *)(addr))
+#define DDR_REG_WRITE(addr, value) (*(volatile u32 *)(addr) = value)
+
 #define MAX_BANKS 8
 #define NUM_LLC_BANKS 4
 #define MAX_DIE 8
@@ -162,10 +191,15 @@ struct hisi_hwc_prev_counter {
 struct hisi_mn_hwc_data_info {
 	local64_t event_start_count;
 };
- 
+
 struct hisi_llc_hwc_data_info {
 	u32 num_banks;
 	struct hisi_hwc_prev_counter *hwc_prev_counters;
+};
+
+struct hisi_ddr_hwc_data_info {
+       local64_t cpu_start_time;
+       local64_t event_start_count;
 };
 
 typedef struct bank_info_t {
@@ -189,12 +223,25 @@ typedef struct hisi_mn_data_t {
 				HISI_ARMV8_MAX_CFG_MN_CNTR);
 } hisi_mn_data;
 
+typedef struct hisi_ddr_data_t {
+	u64 ddrc0_reg_map;
+	u64 ddrc1_reg_map;
+	DECLARE_BITMAP(hisi_ddrc0_event_used_mask,
+		       HISI_ARMV8_MAX_CFG_DDR_CNTR);
+	DECLARE_BITMAP(hisi_ddrc1_event_used_mask,
+		       HISI_ARMV8_MAX_CFG_DDR_CNTR);
+} hisi_ddr_data;
+
 u64 hisi_pmu_event_update(struct perf_event *,
-					struct hw_perf_event *, int);
+				struct hw_perf_event *, int);
 u64 hisi_llc_event_update(struct perf_event *,
 				struct hw_perf_event *, int);
 u64 hisi_mn_event_update(struct perf_event *,
 				struct hw_perf_event *, int);
+u64 hisi_armv8_ddr_update_start_value(struct perf_event *,
+				struct hw_perf_event *, int);
+u64 hisi_ddr_event_update(struct perf_event *,
+			  struct hw_perf_event *, int);
 int hisi_pmu_enable_counter(int);
 void hisi_pmu_disable_counter(int);
 int armv8_hisi_counter_valid(int);
@@ -205,11 +252,13 @@ int hisi_pmu_enable_intens(int);
 int hisi_pmu_disable_intens(int);
 int hisi_pmu_get_event_idx(struct hw_perf_event *);
 void hisi_pmu_clear_event_idx(int);
-void hisi_pmu_enable_counting(void);
+void hisi_pmu_enable_counting(int);
 void hisi_set_llc_evtype(int, u32);
 void hisi_set_mn_evtype(int, u32);
 u32 hisi_read_llc_counter(int, struct device_node *, int);
 u32 hisi_read_mn_counter(int, struct device_node *, int);
+u64 hisi_read_ddr_counter(unsigned long);
 int hisi_init_llc_hw_perf_event(struct hw_perf_event *);
 int hisi_init_mn_hw_perf_event(struct hw_perf_event *);
+int hisi_init_ddr_hw_perf_event(struct hw_perf_event *);
 irqreturn_t hisi_llc_event_handle_irq(int, void *);

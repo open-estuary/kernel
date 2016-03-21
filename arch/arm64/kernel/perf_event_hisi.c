@@ -84,6 +84,87 @@ static int hisi_djtag_writereg(int module_id, int bank, u32 offset, u32 value,
 	return ret;
 }
 
+/* DDR information for DDRC0 and DDRC1 for each Die */
+hisi_ddr_data ddr_data[MAX_DIE];
+
+int gnum_ddrs = 0;
+
+static inline u64 update_ddr_event_data(unsigned long raw_event_code,
+					local64_t *pevent_start_count) {
+	u64 new_raw_count;
+	u64 prev_raw_count;
+
+again:
+	prev_raw_count = local64_read(pevent_start_count);
+	new_raw_count = hisi_read_ddr_counter(raw_event_code);
+
+	if (local64_cmpxchg(pevent_start_count, prev_raw_count,
+				new_raw_count) != prev_raw_count)
+		goto again;
+
+	return new_raw_count;
+}
+
+u64 hisi_armv8_ddr_update_start_value(struct perf_event *event,
+					struct hw_perf_event *hwc,
+					int idx) {
+	struct hisi_ddr_hwc_data_info *phisi_hwc_data = hwc->perf_event_data;
+	u32 raw_event_code = hwc->config_base;
+	u64 new_raw_count = 0;
+	s64 cpu_prev_start_time;
+	ktime_t time_start;
+
+	new_raw_count = update_ddr_event_data(raw_event_code,
+				&phisi_hwc_data->event_start_count);
+
+again:
+	/* Update Start CPU time */
+	time_start = ktime_get();
+	cpu_prev_start_time = local64_read(&phisi_hwc_data->cpu_start_time);
+	if (local64_cmpxchg(&phisi_hwc_data->cpu_start_time,
+				cpu_prev_start_time, time_start.tv64)
+				!= cpu_prev_start_time)
+		goto again;
+
+	return new_raw_count;
+}
+
+u64 hisi_ddr_event_update(struct perf_event *event,
+			  struct hw_perf_event *hwc, int idx) {
+	struct hisi_ddr_hwc_data_info *phisi_hwc_data = hwc->perf_event_data;
+	unsigned long raw_event_code = hwc->config_base;
+	ktime_t time_start;
+	u64 delta, prev_raw_count, new_raw_count = 0;
+	s64 cpu_start_time;
+	s64 elapsed_ns;
+
+	cpu_start_time = local64_read(&phisi_hwc_data->cpu_start_time);
+	time_start.tv64 = cpu_start_time;
+
+	elapsed_ns = ktime_to_ns(ktime_sub(ktime_get(), time_start));
+
+	pr_debug("DDR: Elapsed time is %llx\n", elapsed_ns);
+
+again:
+	prev_raw_count = local64_read(&phisi_hwc_data->event_start_count);
+	new_raw_count = hisi_read_ddr_counter(raw_event_code);
+
+	if (local64_cmpxchg(&phisi_hwc_data->event_start_count, prev_raw_count,
+				new_raw_count) != prev_raw_count)
+		goto again;
+
+	delta = (new_raw_count - prev_raw_count) &
+		HISI_ARMV8_MAX_PERIOD;
+
+	pr_debug("DDR:delta for event:0x%lx is %llu\n",
+					 raw_event_code, delta);
+
+	local64_add(delta, &event->count);
+	local64_sub(delta, &hwc->period_left);
+
+	return new_raw_count;
+}
+
 u64 hisi_llc_event_update(struct perf_event *event,
 				struct hw_perf_event *hwc, int idx)
 {
@@ -218,6 +299,9 @@ u64 hisi_pmu_event_update(struct perf_event *event,
 	} else if (ARMV8_HISI_IDX_MN_COUNTER0 <= cntr_idx &&
 			cntr_idx <= ARMV8_HISI_IDX_MN_COUNTER_MAX) {
 		new_raw_count = hisi_mn_event_update(event, hwc, idx);
+	} else if (ARMV8_HISI_IDX_DDRC0_COUNTER0 <= cntr_idx &&
+			cntr_idx <= ARMV8_HISI_IDX_DDRC1_COUNTER_MAX) {
+		new_raw_count = hisi_ddr_event_update(event, hwc, idx);
 	}
 
 	return new_raw_count;
@@ -293,6 +377,14 @@ void hisi_pmu_clear_event_idx(int idx)
 			cntr_idx <= ARMV8_HISI_IDX_MN_COUNTER_MAX) {
 		__clear_bit(cntr_idx - ARMV8_HISI_IDX_MN_COUNTER0,
 			mn_data[module_idx].hisi_mn_event_used_mask);
+	} else if (ARMV8_HISI_IDX_DDRC0_COUNTER0 <= cntr_idx &&
+			cntr_idx <= ARMV8_HISI_IDX_DDRC0_COUNTER_MAX) {
+		__clear_bit(cntr_idx - ARMV8_HISI_IDX_DDRC0_COUNTER0,
+			ddr_data[module_idx].hisi_ddrc0_event_used_mask);
+	} else if (ARMV8_HISI_IDX_DDRC1_COUNTER0 <= cntr_idx &&
+			cntr_idx <= ARMV8_HISI_IDX_DDRC1_COUNTER_MAX) {
+		__clear_bit(cntr_idx - ARMV8_HISI_IDX_DDRC1_COUNTER0,
+			ddr_data[module_idx].hisi_ddrc1_event_used_mask);
 	}
 
 	return;
@@ -306,6 +398,7 @@ int hisi_pmu_get_event_idx(struct hw_perf_event *event)
 	u32 dieID = (raw_event_code & HISI_HW_DIE_MASK) >> 20;
 	u32 module_idx = dieID - 1;
 	u32 counter_idx;
+	void *bitmap_addr;
 
 	if (!dieID || (HISI_HW_DIE_MAX < dieID)) {
 		pr_err("Invalid DieID=%d in event code!\n", dieID);
@@ -381,6 +474,46 @@ int hisi_pmu_get_event_idx(struct hw_perf_event *event)
 		pr_debug("MN:event_idx=%d MN index:%d\n",
 				event_idx, module_idx);
 		event_idx = event_idx + counter_idx;
+	} else if (evtype >= ARMV8_HISI_PERFCTR_DDRC0_FLUX_READ_BW &&
+			evtype < ARMV8_HISI_PERFCTR_EVENT_MAX) {
+		if(evtype >= ARMV8_HISI_PERFCTR_DDRC0_FLUX_READ_BW &&
+			evtype <= ARMV8_HISI_PERFCTR_DDRC0_FLUX_WRITE_LAT) {
+			bitmap_addr =
+			ddr_data[module_idx].hisi_ddrc0_event_used_mask;
+			counter_idx = ARMV8_HISI_IDX_DDRC0_COUNTER0;
+		} else {
+			bitmap_addr =
+			ddr_data[module_idx].hisi_ddrc1_event_used_mask;
+			counter_idx = ARMV8_HISI_IDX_DDRC1_COUNTER0;
+		}
+
+		event_idx = find_first_zero_bit(bitmap_addr,
+						HISI_ARMV8_MAX_CFG_DDR_CNTR);
+		if (event_idx == HISI_ARMV8_MAX_CFG_DDR_CNTR) {
+			pr_info("DDR: Hardware counters not free!\n");
+			return -EAGAIN;
+		}
+
+		__set_bit(event_idx, bitmap_addr);
+
+		switch (module_idx + 1) {
+		case HISI_SOC0_TOTEMC:
+			counter_idx = counter_idx |
+				(HISI_SOC0_TOTEMC << 8) ;
+			break;
+		case HISI_SOC0_TOTEMA:
+			counter_idx = counter_idx |
+				(HISI_SOC0_TOTEMA << 8) ;
+			break;
+		default:
+			return -EINVAL;
+			break;
+		}
+
+		pr_debug("DDR:event_idx=%d DDR index:%d\n",
+			 event_idx, module_idx);
+
+		event_idx = event_idx + counter_idx;
 	}
 
 	return event_idx;
@@ -393,6 +526,24 @@ int hisi_pmu_enable_intens(int idx)
 
 int hisi_pmu_disable_intens(int idx)
 {
+	return 0;
+}
+
+int hisi_init_ddr_hw_perf_event(struct hw_perf_event *hwc)
+{
+	struct hisi_ddr_hwc_data_info *hisi_ddr_hwc_data;
+
+	/* Create event counter local variables for storing DDR prev_count
+	 * cpu start and end_times */
+	hisi_ddr_hwc_data = (struct hisi_ddr_hwc_data_info *)kzalloc(
+				sizeof(struct hisi_ddr_hwc_data_info),
+								GFP_ATOMIC);
+	if (unlikely(!hisi_ddr_hwc_data)) {
+		pr_err("Alloc failed for hisi hwc die data!.\n");
+		return -ENOMEM;
+	}
+
+	hwc->perf_event_data = hisi_ddr_hwc_data;
 	return 0;
 }
 
@@ -811,6 +962,66 @@ u32 hisi_read_mn_counter(int idx, struct device_node *djtag_node, int bank)
 	return value;
 }
 
+u64 hisi_read_ddr_counter(unsigned long raw_event_code) {
+	u32 value;
+	u32 reg_offset = 0;
+	unsigned long evtype = raw_event_code & HISI_ARMV8_EVTYPE_EVENT;
+	u32 dieID = (raw_event_code & HISI_HW_DIE_MASK) >> 20;
+	u32 ddr_idx = dieID - 1;
+	u64 ddrc_reg_map = 0;
+
+	if (evtype >= ARMV8_HISI_PERFCTR_DDRC0_FLUX_READ_BW &&
+		evtype <= ARMV8_HISI_PERFCTR_DDRC0_FLUX_WRITE_LAT) {
+		ddrc_reg_map = ddr_data[ddr_idx].ddrc0_reg_map;
+	}
+	else if (evtype >= ARMV8_HISI_PERFCTR_DDRC1_FLUX_READ_BW &&
+		 evtype <= ARMV8_HISI_PERFCTR_DDRC1_FLUX_WRITE_LAT) {
+		ddrc_reg_map = ddr_data[ddr_idx].ddrc1_reg_map;
+	}
+	else {
+		pr_err("Unknown DDR evevnt!");
+		return 0;
+	}
+
+	if(!ddrc_reg_map) {
+		pr_err("DDR reg address bot mapped!\n");
+		return 0;
+	}
+
+	switch (evtype) {
+	case ARMV8_HISI_PERFCTR_DDRC1_FLUX_READ_BW:
+	case ARMV8_HISI_PERFCTR_DDRC0_FLUX_READ_BW:
+		reg_offset = HISI_DDRC_FLUX_RCMD;
+		break;
+
+	case ARMV8_HISI_PERFCTR_DDRC1_FLUX_WRITE_BW:
+	case ARMV8_HISI_PERFCTR_DDRC0_FLUX_WRITE_BW:
+		reg_offset = HISI_DDRC_FLUX_WCMD;
+		break;
+
+	case ARMV8_HISI_PERFCTR_DDRC1_FLUX_READ_LAT:
+	case ARMV8_HISI_PERFCTR_DDRC0_FLUX_READ_LAT:
+		reg_offset = HISI_DDRC_FLUX_RLAT_CNT1;
+		break;
+
+	case ARMV8_HISI_PERFCTR_DDRC1_FLUX_WRITE_LAT:
+	case ARMV8_HISI_PERFCTR_DDRC0_FLUX_WRITE_LAT:
+		reg_offset = HISI_DDRC_FLUX_WLATCNT1;
+		break;
+
+	default :
+		pr_err("unknown DDR evevnt");
+		return 0;
+	}
+
+	DDR_REG_READ(ddrc_reg_map + reg_offset, value);
+
+	pr_debug("DDR:Value read for evtype=0x%lx regoffset:%d is %d\n",
+						 evtype, reg_offset, value);
+
+	return (value);
+}
+
 u32 hisi_pmu_read_counter(int idx)
 {
 	int ret = 0;
@@ -974,9 +1185,6 @@ irqreturn_t hisi_llc_event_handle_irq(int irq_num, void *dev)
 			&llc_data[llc_idx].bank[i].cntr_ovflw[bit_pos]);
 			atomic_inc(
 			&llc_data[llc_idx].bank[i].cntr_ovflw[bit_pos]);
-			pr_debug("LLC: handle_irq - The counter overflow " \
-					"times is %u\n",
-				llc_data[llc_idx].bank[i].cntr_ovflw[bit_pos]);
 		}
 	}
 
@@ -1110,6 +1318,120 @@ static struct platform_driver hisi_pmu_llc_driver = {
 	.remove = hisi_pmu_llc_dev_remove,
 };
 module_platform_driver(hisi_pmu_llc_driver);
+
+static void init_hisi_ddr(u64 ulddrc_baseaddr) {
+	u32 value;
+
+	DDR_REG_WRITE(ulddrc_baseaddr + HISI_DDRC_CTRL_PERF, 0);
+	DDR_REG_READ(ulddrc_baseaddr + HISI_DDRC_CTRL_PERF, value);
+
+	DDR_REG_READ(ulddrc_baseaddr + HISI_DDRC_CFG_PERF, value);
+	value = value & 0x2fffffff;
+
+	DDR_REG_WRITE(ulddrc_baseaddr + HISI_DDRC_CFG_PERF, value);
+
+	DDR_REG_WRITE(ulddrc_baseaddr + HISI_DDRC_CTRL_PERF, 1);
+
+	DDR_REG_READ(ulddrc_baseaddr + HISI_DDRC_CTRL_PERF, value);
+}
+
+static int init_hisi_ddr_dts_data(struct platform_device *pdev) {
+	struct resource *res;
+	int i, j, num_ddrs = 0;
+
+	/* Get the number of DDRC's supported in a Totem */
+	while ((res = platform_get_resource(pdev,
+					IORESOURCE_MEM, num_ddrs))) {
+		num_ddrs++;
+	}
+
+	for (i = 0, j = 0; i < (num_ddrs/2); i++, j+=2) {
+		res = platform_get_resource(pdev, IORESOURCE_MEM, j);
+		/* Continue for zero entries */
+		if (0 == res->start &&
+			0 == resource_size(res)) {
+			pr_debug("Continuing for DDR Zero address entry\n");
+			continue;
+		}
+		pr_debug("ddrc0 res->name=%s res->start is 0x%llx size=0x%pa\n",
+			 res->name, res->start, resource_size(res));
+		ddr_data[i].ddrc0_reg_map =
+			(u64)ioremap_nocache(res->start,
+						resource_size(res));
+		if (!ddr_data[i].ddrc0_reg_map) {
+			pr_err("ioremap failed for DDR!\n");
+			goto err;
+		}
+		init_hisi_ddr(ddr_data[i].ddrc0_reg_map);
+
+		res = platform_get_resource(pdev, IORESOURCE_MEM, j+1);
+		pr_debug("ddrc1 res->name=%s res->start is 0x%llx size=0x%pa\n",
+			 res->name, res->start, resource_size(res));
+		ddr_data[i].ddrc1_reg_map =
+			(u64)ioremap_nocache(res->start,
+						resource_size(res));
+		if (!ddr_data[i].ddrc1_reg_map) {
+			pr_err("ioremap failed for DDR!\n");
+			continue;
+		}
+		init_hisi_ddr(ddr_data[i].ddrc1_reg_map);
+	}
+
+	/* Update gnum_ddrs */
+	gnum_ddrs = i;
+
+	return 0;
+err:
+	if(ddr_data[i].ddrc0_reg_map)
+		iounmap((void *)ddr_data[i].ddrc0_reg_map);
+	if(ddr_data[i].ddrc1_reg_map)
+		iounmap((void *)ddr_data[i].ddrc1_reg_map);
+
+	if(0 == i)
+		return -1;
+	else
+		return 0;
+}
+
+static int hisi_pmu_ddr_dev_probe(struct platform_device *pdev) {
+	int ret;
+
+	ret = init_hisi_ddr_dts_data(pdev);
+	if(ret)
+		return ret;
+
+	return 0;
+}
+
+static int hisi_pmu_ddr_dev_remove(struct platform_device *pdev) {
+	int i;
+
+	for (i = 0; i < gnum_ddrs; i++) {
+		if (ddr_data[i].ddrc0_reg_map)
+			iounmap((void *)ddr_data[i].ddrc0_reg_map);
+		if (ddr_data[i].ddrc1_reg_map)
+			iounmap((void *)ddr_data[i].ddrc1_reg_map);
+	}
+
+	return 0;
+}
+
+static struct of_device_id ddr_of_match[] = {
+	{ .compatible = "hisilicon,hip05-ddr", },
+	{ .compatible = "hisilicon,hip06-ddr", },
+	{},
+};
+MODULE_DEVICE_TABLE(of, ddr_of_match);
+
+static struct platform_driver hisi_pmu_ddr_driver = {
+	.driver = {
+		.name = "hisi-ddr-perf",
+		.of_match_table = ddr_of_match,
+	},
+	.probe = hisi_pmu_ddr_dev_probe,
+	.remove = hisi_pmu_ddr_dev_remove,
+};
+module_platform_driver(hisi_pmu_ddr_driver);
 
 static int init_hisi_mn_data(struct platform_device *pdev)
 {
