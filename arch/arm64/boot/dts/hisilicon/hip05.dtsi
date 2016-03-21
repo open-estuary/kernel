@@ -495,10 +495,19 @@
 		};
 
 		mn0: mn@0 {
-                        compatible = "hisilicon,hip05-mn";
-                        djtag = <&djtag0 2>;
-                        status = "okay";
-                };
+			compatible = "hisilicon,hip05-mn";
+			djtag = <&djtag0 2>;
+			status = "okay";
+	 	};
+
+		ddrc: ddrc@0 {
+			compatible = "hisilicon,hip05-ddr";
+			reg = <0x0 0x0>, /* TOTEMA DDRC0 */
+				<0x0 0x0>, /* TOTEMA DDRC1 */
+				<0x80348000 0x10000>, /* TOTEMC DDRC0 */
+				<0x80358000 0x10000>; /* TOTEMC DDRC1 */
+			status = "okay";
+		};
 
 		pcie@0xb0080000 {
 			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
