@@ -326,6 +326,12 @@ armpmu_add(struct perf_event *event, int flags)
 	if (flags & PERF_EF_START)
 		armpmu_start(event, PERF_EF_RELOAD);
 
+#ifdef CONFIG_HISI_PERFCTR
+	if (cntr_idx >= ARMV8_HISI_IDX_DDRC0_COUNTER0 &&
+	    cntr_idx <= ARMV8_HISI_IDX_DDRC1_COUNTER_MAX) {
+		hisi_armv8_ddr_update_start_value(event, hwc, idx);
+	}
+#endif
 	/* Propagate our changes to the userspace mapping. */
 	perf_event_update_userpage(event);
 
@@ -456,12 +462,16 @@ hw_perf_event_destroy(struct perf_event *event)
 		evtype <= ARMV8_HISI_PERFCTR_LLC_DGRAM_1B_ECC) {
 		if (NULL != phwc_data) {
 			if (NULL !=
-			 ((struct hisi_llc_hwc_data_info *)phwc_data)->hwc_prev_counters)
-				kfree(((struct hisi_llc_hwc_data_info *)phwc_data)->hwc_prev_counters);
+			 ((struct hisi_llc_hwc_data_info *)
+				phwc_data)->hwc_prev_counters)
+			kfree(((struct hisi_llc_hwc_data_info *)
+					phwc_data)->hwc_prev_counters);
 			kfree(phwc_data);
 		}
-	} else if ((evtype >= ARMV8_HISI_PERFCTR_MN_EO_BARR_REQ &&
-			 evtype <= ARMV8_HISI_PERFCTR_MN_RETRY_REQ)) {
+	}  else if((evtype >= ARMV8_HISI_PERFCTR_DDRC0_FLUX_READ_BW &&
+			evtype < ARMV8_HISI_PERFCTR_EVENT_MAX) ||
+			(evtype >= ARMV8_HISI_PERFCTR_MN_EO_BARR_REQ &&
+				evtype <= ARMV8_HISI_PERFCTR_MN_RETRY_REQ)) {
 		if (NULL != phwc_data)
 			kfree(phwc_data);
 	}
@@ -569,6 +579,12 @@ __hw_perf_event_init(struct perf_event *event)
 				evtype <= ARMV8_HISI_PERFCTR_MN_RETRY_REQ) {
 		/* If event type is for MN */
 		err = hisi_init_mn_hw_perf_event(hwc);
+		if (err)
+			return err;
+	} else if (evtype >= ARMV8_HISI_PERFCTR_DDRC0_FLUX_READ_BW &&
+			evtype < ARMV8_HISI_PERFCTR_EVENT_MAX) {
+		/* If event type is for DDR */
+		err = hisi_init_ddr_hw_perf_event(hwc);
 		if (err)
 			return err;
 	}
