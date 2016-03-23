@@ -199,7 +199,7 @@ int __weak pci_mmconfig_map_resource(struct device *dev,
 		return -ENOMEM;
 	}
 
-	mcfg->virt = vaddr;
+	mcfg->virt = vaddr - PCI_MMCFG_BUS_OFFSET(mcfg->start_bus);
 	return 0;
 }
 
