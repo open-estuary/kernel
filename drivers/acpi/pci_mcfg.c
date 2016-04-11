@@ -84,6 +84,29 @@ static struct pci_ops default_pci_mcfg_ops = {
 	.write = pci_generic_config_write,
 };
 
+static const struct dmi_system_id qcom_qdf2432[] = { 
+	{ 
+		.ident = "Qualcomm Technologies QDF2432", 
+		.matches = { 
+			DMI_MATCH(DMI_SYS_VENDOR, "Qualcomm"), 
+			DMI_MATCH(DMI_PRODUCT_NAME, "QDF2432"), 
+		}, 
+	}, 
+	{ } 
+}; 
+
+static struct pci_ops qcom_qdf2432_pci_mcfg_ops = { 
+	.map_bus = pci_mcfg_dev_base, 
+	.read = pci_generic_config_read32, 
+	.write = pci_generic_config_write32, 
+}; 
+
+DECLARE_ACPI_MCFG_FIXUP(qcom_qdf2432, 
+		NULL, 
+		&qcom_qdf2432_pci_mcfg_ops, 
+		PCI_MCFG_DOMAIN_ANY, 
+		PCI_MCFG_BUS_ANY); 
+
 struct pci_ops *pci_mcfg_get_ops(struct acpi_pci_root *root)
 {
 	struct pci_ops *pci_mcfg_ops_quirk;
