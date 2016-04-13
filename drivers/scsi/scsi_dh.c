@@ -76,10 +76,10 @@ static const char *
 scsi_dh_find_driver(struct scsi_device *sdev)
 {
 	const struct scsi_dh_blist *b;
-#if 0
+
 	if (scsi_device_tpgs(sdev))
 		return "alua";
-#endif
+
 	for (b = scsi_dh_blist; b->vendor; b++) {
 		if (!strncmp(sdev->vendor, b->vendor, strlen(b->vendor)) &&
 		    !strncmp(sdev->model, b->model, strlen(b->model))) {
