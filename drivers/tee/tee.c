@@ -11,13 +11,13 @@
  * GNU General Public License for more details.
  *
  */
-#include <linux/device.h>
 #include <linux/cdev.h>
+#include <linux/device.h>
 #include <linux/fs.h>
 #include <linux/idr.h>
 #include <linux/slab.h>
-#include <linux/uaccess.h>
 #include <linux/tee_drv.h>
+#include <linux/uaccess.h>
 #include "tee_private.h"
 
 #define TEE_NUM_DEVICES	32
@@ -87,7 +87,7 @@ static int tee_release(struct inode *inode, struct file *filp)
 }
 
 static int tee_ioctl_version(struct tee_context *ctx,
-		struct tee_ioctl_version_data __user *uvers)
+			     struct tee_ioctl_version_data __user *uvers)
 {
 	struct tee_ioctl_version_data vers;
 
@@ -98,7 +98,7 @@ static int tee_ioctl_version(struct tee_context *ctx,
 }
 
 static int tee_ioctl_shm_alloc(struct tee_context *ctx,
-		struct tee_ioctl_shm_alloc_data __user *udata)
+			       struct tee_ioctl_shm_alloc_data __user *udata)
 {
 	long ret;
 	struct tee_ioctl_shm_alloc_data data;
@@ -137,7 +137,8 @@ static int tee_ioctl_shm_alloc(struct tee_context *ctx,
 }
 
 static int params_from_user(struct tee_context *ctx, struct tee_param *params,
-		size_t num_params, struct tee_ioctl_param __user *uparams)
+			    size_t num_params,
+			    struct tee_ioctl_param __user *uparams)
 {
 	size_t n;
 
@@ -192,7 +193,7 @@ static int params_from_user(struct tee_context *ctx, struct tee_param *params,
 }
 
 static int params_to_user(struct tee_ioctl_param __user *uparams,
-		size_t num_params, struct tee_param *params)
+			  size_t num_params, struct tee_param *params)
 {
 	size_t n;
 
@@ -232,7 +233,7 @@ static bool param_is_memref(struct tee_param *param)
 }
 
 static int tee_ioctl_open_session(struct tee_context *ctx,
-		struct tee_ioctl_buf_data __user *ubuf)
+				  struct tee_ioctl_buf_data __user *ubuf)
 {
 	int rc;
 	size_t n;
@@ -264,7 +265,7 @@ static int tee_ioctl_open_session(struct tee_context *ctx,
 
 	if (arg.num_params) {
 		params = kcalloc(arg.num_params, sizeof(struct tee_param),
-				GFP_KERNEL);
+				 GFP_KERNEL);
 		if (!params)
 			return -ENOMEM;
 		uparams = (struct tee_ioctl_param __user *)(uarg + 1);
@@ -306,7 +307,7 @@ out:
 }
 
 static int tee_ioctl_invoke(struct tee_context *ctx,
-		struct tee_ioctl_buf_data __user *ubuf)
+			    struct tee_ioctl_buf_data __user *ubuf)
 {
 	int rc;
 	size_t n;
@@ -336,7 +337,7 @@ static int tee_ioctl_invoke(struct tee_context *ctx,
 
 	if (arg.num_params) {
 		params = kcalloc(arg.num_params, sizeof(struct tee_param),
-				GFP_KERNEL);
+				 GFP_KERNEL);
 		if (!params)
 			return -ENOMEM;
 		uparams = (struct tee_ioctl_param __user *)(uarg + 1);
@@ -367,9 +368,8 @@ out:
 	return rc;
 }
 
-
 static int tee_ioctl_cancel(struct tee_context *ctx,
-		struct tee_ioctl_cancel_arg __user *uarg)
+			    struct tee_ioctl_cancel_arg __user *uarg)
 {
 	struct tee_ioctl_cancel_arg arg;
 
@@ -398,8 +398,8 @@ static int tee_ioctl_close_session(struct tee_context *ctx,
 }
 
 static int params_to_supp(struct tee_context *ctx,
-		struct tee_ioctl_param __user *uparams,
-		size_t num_params, struct tee_param *params)
+			  struct tee_ioctl_param __user *uparams,
+			  size_t num_params, struct tee_param *params)
 {
 	size_t n;
 
@@ -440,7 +440,7 @@ static int params_to_supp(struct tee_context *ctx,
 }
 
 static int tee_ioctl_supp_recv(struct tee_context *ctx,
-		struct tee_ioctl_buf_data __user *ubuf)
+			       struct tee_ioctl_buf_data __user *ubuf)
 {
 	int rc;
 	struct tee_ioctl_buf_data buf;
@@ -489,8 +489,8 @@ out:
 	return rc;
 }
 
-static int params_from_supp(struct tee_param *params,
-		size_t num_params, struct tee_ioctl_param __user *uparams)
+static int params_from_supp(struct tee_param *params, size_t num_params,
+			    struct tee_ioctl_param __user *uparams)
 {
 	size_t n;
 
@@ -536,7 +536,7 @@ static int params_from_supp(struct tee_param *params,
 }
 
 static int tee_ioctl_supp_send(struct tee_context *ctx,
-		struct tee_ioctl_buf_data __user *ubuf)
+			       struct tee_ioctl_buf_data __user *ubuf)
 {
 	long rc;
 	struct tee_ioctl_buf_data buf;
@@ -580,7 +580,6 @@ out:
 	kfree(params);
 	return rc;
 }
-
 
 static long tee_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
@@ -627,9 +626,22 @@ static void tee_release_device(struct device *dev)
 	kfree(teedev);
 }
 
+/**
+ * tee_device_alloc() - Allocate a new struct tee_device instance
+ * @teedesc:	Descriptor for this driver
+ * @dev:	Parent device for this device
+ * @pool:	Shared memory pool, NULL if not used
+ * @driver_data: Private driver data for this device
+ *
+ * Allocates a new struct tee_device instance. The device is
+ * removed by tee_device_unregister().
+ *
+ * @returns a pointer to a 'struct tee_device' or an ERR_PTR on failure
+ */
 struct tee_device *tee_device_alloc(const struct tee_desc *teedesc,
-			struct device *dev, struct tee_shm_pool *pool,
-			void *driver_data)
+				    struct device *dev,
+				    struct tee_shm_pool *pool,
+				    void *driver_data)
 {
 	struct tee_device *teedev;
 	void *ret;
@@ -706,7 +718,7 @@ err:
 EXPORT_SYMBOL_GPL(tee_device_alloc);
 
 static ssize_t implementation_id_show(struct device *dev,
-			struct device_attribute *attr, char *buf)
+				      struct device_attribute *attr, char *buf)
 {
 	struct tee_device *teedev = container_of(dev, struct tee_device, dev);
 	struct tee_ioctl_version_data vers;
@@ -725,6 +737,15 @@ static const struct attribute_group tee_dev_group = {
 	.attrs = tee_dev_attrs,
 };
 
+/**
+ * tee_device_register() - Registers a TEE device
+ * @teedev:	Device to register
+ *
+ * tee_device_unregister() need to be called to remove the @teedev if
+ * this function fails.
+ *
+ * @returns < 0 on failure
+ */
 int tee_device_register(struct tee_device *teedev)
 {
 	int rc;
@@ -772,7 +793,6 @@ err_sysfs_create_group:
 err_device_add:
 	cdev_del(&teedev->cdev);
 	return rc;
-
 }
 EXPORT_SYMBOL_GPL(tee_device_register);
 
@@ -802,6 +822,14 @@ bool tee_device_get(struct tee_device *teedev)
 	return true;
 }
 
+/**
+ * tee_device_unregister() - Removes a TEE device
+ * @teedev:	Device to unregister
+ *
+ * This function should be called to remove the @teedev even if
+ * tee_device_register() hasn't been called yet. Does nothing if
+ * @teedev is NULL.
+ */
 void tee_device_unregister(struct tee_device *teedev)
 {
 	if (!teedev)
@@ -827,6 +855,11 @@ void tee_device_unregister(struct tee_device *teedev)
 }
 EXPORT_SYMBOL_GPL(tee_device_unregister);
 
+/**
+ * tee_get_drvdata() - Return driver_data pointer
+ * @teedev:	Device containing the driver_data pointer
+ * @returns the driver_data pointer supplied to tee_register().
+ */
 void *tee_get_drvdata(struct tee_device *teedev)
 {
 	return dev_get_drvdata(&teedev->dev);
