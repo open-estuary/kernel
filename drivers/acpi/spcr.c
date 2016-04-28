@@ -87,6 +87,10 @@ int __init parse_spcr(bool earlycon)
 		break;
 	case ACPI_DBG2_16550_COMPATIBLE:
 	case ACPI_DBG2_16550_SUBSET:
+		if (table->serial_port.space_id ==
+			ACPI_ADR_SPACE_SYSTEM_MEMORY &&
+		    table->serial_port.bit_width == 32)
+			iotype = "mmio32";
 		uart = "uart";
 		break;
 	default:
