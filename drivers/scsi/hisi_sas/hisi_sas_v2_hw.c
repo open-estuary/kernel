@@ -721,30 +721,41 @@ static int reset_hw_v2_hw(struct hisi_hba *hisi_hba)
 			return -EIO;
 	}
 
-	/* reset and disable clock*/
-	regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_reset_reg,
-			reset_val);
-	regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_clock_ena_reg + 4,
-			reset_val);
-	msleep(1);
-	regmap_read(hisi_hba->ctrl, hisi_hba->ctrl_reset_sts_reg, &val);
-	if (reset_val != (val & reset_val)) {
-		dev_err(dev, "SAS reset fail.\n");
-		return -EIO;
-	}
+	if (ACPI_HANDLE(dev)) {
+		acpi_status s;
 
-	/* De-reset and enable clock*/
-	regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_reset_reg + 4,
-			reset_val);
-	regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_clock_ena_reg,
-			reset_val);
-	msleep(1);
-	regmap_read(hisi_hba->ctrl, hisi_hba->ctrl_reset_sts_reg,
-			&val);
-	if (val & reset_val) {
-		dev_err(dev, "SAS de-reset fail.\n");
-		return -EIO;
-	}
+		s = acpi_evaluate_object(ACPI_HANDLE(dev), "_RST", NULL, NULL);
+		if (ACPI_FAILURE(s)) {
+			dev_err(dev, "Reset failed\n");
+			return -EIO;
+		}
+	} else if (hisi_hba->ctrl) {
+		/* reset and disable clock*/
+		regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_reset_reg,
+				reset_val);
+		regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_clock_ena_reg + 4,
+				reset_val);
+		msleep(1);
+		regmap_read(hisi_hba->ctrl, hisi_hba->ctrl_reset_sts_reg, &val);
+		if (reset_val != (val & reset_val)) {
+			dev_err(dev, "SAS reset fail.\n");
+			return -EIO;
+		}
+
+		/* De-reset and enable clock*/
+		regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_reset_reg + 4,
+				reset_val);
+		regmap_write(hisi_hba->ctrl, hisi_hba->ctrl_clock_ena_reg,
+				reset_val);
+		msleep(1);
+		regmap_read(hisi_hba->ctrl, hisi_hba->ctrl_reset_sts_reg,
+				&val);
+		if (val & reset_val) {
+			dev_err(dev, "SAS de-reset fail.\n");
+			return -EIO;
+		}
+	} else
+		dev_warn(dev, "no reset method\n");
 
 	return 0;
 }
@@ -2257,12 +2268,20 @@ static const struct of_device_id sas_v2_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, sas_v2_of_match);
 
+static const struct acpi_device_id sas_v2_acpi_match[] = {
+	{ "HISI0162", 0 },
+	{ }
+};
+
+MODULE_DEVICE_TABLE(acpi, sas_v2_acpi_match);
+
 static struct platform_driver hisi_sas_v2_driver = {
 	.probe = hisi_sas_v2_probe,
 	.remove = hisi_sas_v2_remove,
 	.driver = {
 		.name = DRV_NAME,
 		.of_match_table = sas_v2_of_match,
+		.acpi_match_table = ACPI_PTR(sas_v2_acpi_match),
 	},
 };
 
