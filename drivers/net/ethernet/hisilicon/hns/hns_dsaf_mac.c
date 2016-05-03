@@ -638,6 +638,104 @@ free_mac_drv:
 	return ret;
 }
 
+static int
+hns_phy_parse_addr(struct device *dev, struct fwnode_handle *fwnode)
+{
+	u32 addr;
+	int ret;
+
+	ret = fwnode_property_read_u32(fwnode, "phy-addr", &addr);
+	if (ret) {
+		dev_err(dev, "has invalid PHY address ret:%d\n", ret);
+		return ret;
+	}
+
+	if (addr >= PHY_MAX_ADDR) {
+		dev_err(dev, "PHY address %i is too large\n", addr);
+		return -EINVAL;
+	}
+
+	return addr;
+}
+
+static int
+hns_mac_register_phy(struct mii_bus *mdio, struct fwnode_handle *child,
+		     u32 addr)
+{
+	struct phy_device *phy;
+	const char *phy_type;
+	bool is_c45;
+	int rc;
+
+	rc = fwnode_property_read_string(child, "phy-mode", &phy_type);
+	if (rc < 0)
+		return rc;
+
+	if (!strcmp(phy_type, phy_modes(PHY_INTERFACE_MODE_XGMII)))
+		is_c45 = 1;
+	else if (!strcmp(phy_type, phy_modes(PHY_INTERFACE_MODE_SGMII)))
+		is_c45 = 0;
+	else
+		return -ENODATA;
+
+	phy = get_phy_device(mdio, addr, is_c45);
+	if (!phy || IS_ERR(phy))
+		return -EIO;
+
+	/* Associate the fw node with the device structure so it
+	 * can be looked up later
+	 */
+	phy->dev.fwnode = child;
+
+	if (mdio->irq)
+		phy->irq = mdio->irq[addr];
+
+	/* All data is now stored in the phy struct;
+	 * register it
+	 */
+	rc = phy_device_register(phy);
+	if (rc) {
+		phy_device_free(phy);
+		return -ENODEV;
+	}
+
+	dev_dbg(&mdio->dev, "registered phy at address %i\n", addr);
+
+	return 0;
+}
+
+static void hns_mac_miibus_register(struct hns_mac_cb *mac_cb)
+{
+	struct acpi_reference_args args;
+	struct device *dev;
+	struct mii_bus *mii_bus;
+	int rc;
+	int addr;
+
+	/* Loop over the child nodes and register a phy_device for each one */
+	if (!to_acpi_device_node(mac_cb->fw_port))
+		return;
+
+	rc = acpi_node_get_property_reference(
+			mac_cb->fw_port, "mdio-node", 0, &args);
+	if (rc)
+		return;
+
+	addr = hns_phy_parse_addr(mac_cb->dev, mac_cb->fw_port);
+	if (addr < 0)
+		return;
+
+	/* dev address in adev */
+	dev = ACPI_DEV(to_acpi_device_node(acpi_fwnode_handle(args.adev)));
+	mii_bus = dev_get_drvdata(dev);
+	rc = hns_mac_register_phy(mii_bus, mac_cb->fw_port, addr);
+	if (!rc) {
+		mac_cb->phy_fwnode = mac_cb->fw_port;
+		dev_dbg(mac_cb->dev, "mac%d register phy addr:%d\n",
+			mac_cb->mac_id, addr);
+	}
+}
+
 /**
  *hns_mac_get_info  - get mac information from device node
  *@mac_cb: mac device
@@ -741,6 +839,11 @@ static int  hns_mac_get_info(struct hns_mac_cb *mac_cb)
 				mac_cb->cpld_ctrl_reg = cpld_args.args[0];
 			}
 		}
+	} else if (ACPI_COMPANION(dev)) {
+		hns_mac_miibus_register(mac_cb);
+	} else {
+		dev_err(mac_cb->dev, "mac%d cannot find phy node\n",
+			mac_cb->mac_id);
 	}
 
 	return 0;
