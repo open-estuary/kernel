@@ -7,6 +7,7 @@
  * (at your option) any later version.
  */
 
+#include <linux/acpi.h>
 #include <linux/device.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
@@ -32,6 +33,13 @@ const char *g_dsaf_mode_match[DSAF_MODE_MAX] = {
 	[DSAF_MODE_DISABLE_SP] = "single-port",
 };
 
+static const struct acpi_device_id hns_dsaf_acpi_match[] = {
+	{ "HISI00B1", 0 },
+	{ "HISI00B2", 0 },
+	{ },
+};
+MODULE_DEVICE_TABLE(acpi, hns_dsaf_acpi_match);
+
 int hns_dsaf_get_cfg(struct dsaf_device *dsaf_dev)
 {
 	int ret, i;
@@ -43,12 +51,25 @@ int hns_dsaf_get_cfg(struct dsaf_device *dsaf_dev)
 	struct regmap *syscon;
 	struct resource *res;
 	struct device_node *np = dsaf_dev->dev->of_node;
+	struct fwnode_handle *fwnode = dsaf_dev->dev->fwnode;
+	struct acpi_device *adev;
 	struct platform_device *pdev = to_platform_device(dsaf_dev->dev);
 
-	if (of_device_is_compatible(np, "hisilicon,hns-dsaf-v1"))
-		dsaf_dev->dsaf_ver = AE_VERSION_1;
-	else
-		dsaf_dev->dsaf_ver = AE_VERSION_2;
+	if (IS_ENABLED(CONFIG_OF) && np) {
+		if (of_device_is_compatible(np, "hisilicon,hns-dsaf-v1"))
+			dsaf_dev->dsaf_ver = AE_VERSION_1;
+		else
+			dsaf_dev->dsaf_ver = AE_VERSION_2;
+	} else if (ACPI_COMPANION(dsaf_dev->dev)) {
+		adev = to_acpi_device_node(fwnode);
+		if (!acpi_match_device_ids(adev, &hns_dsaf_acpi_match[0]))
+			dsaf_dev->dsaf_ver = AE_VERSION_1;
+		else
+			dsaf_dev->dsaf_ver = AE_VERSION_2;
+	} else {
+		dev_err(dsaf_dev->dev, "cannot get cfd data from of or acpi\n");
+		return -ENXIO;
+	}
 
 	ret = device_property_read_string(dsaf_dev->dev, "mode", &mode_str);
 	if (ret) {
@@ -80,32 +101,40 @@ int hns_dsaf_get_cfg(struct dsaf_device *dsaf_dev)
 	else
 		dsaf_dev->dsaf_tc_mode = HRD_DSAF_4TC_MODE;
 
-	syscon = syscon_node_to_regmap(
-			of_parse_phandle(np, "subctrl-syscon", 0));
-	if (IS_ERR_OR_NULL(syscon)) {
-		res = platform_get_resource(pdev, IORESOURCE_MEM, res_idx++);
-		if (!res) {
-			dev_err(dsaf_dev->dev, "subctrl info is needed!\n");
-			return -ENOMEM;
-		}
-		dsaf_dev->sc_base = devm_ioremap_resource(&pdev->dev, res);
-		if (!dsaf_dev->sc_base) {
-			dev_err(dsaf_dev->dev, "subctrl can not map!\n");
-			return -ENOMEM;
-		}
+	if (IS_ENABLED(CONFIG_OF) && np) {
+		syscon = syscon_node_to_regmap(
+				of_parse_phandle(np, "subctrl-syscon", 0));
+		if (IS_ERR_OR_NULL(syscon)) {
+			res = platform_get_resource(pdev, IORESOURCE_MEM,
+						    res_idx++);
+			if (!res) {
+				dev_err(dsaf_dev->dev, "subctrl info is needed!\n");
+				return -ENOMEM;
+			}
 
-		res = platform_get_resource(pdev, IORESOURCE_MEM, res_idx++);
-		if (!res) {
-			dev_err(dsaf_dev->dev, "serdes-ctrl info is needed!\n");
-			return -ENOMEM;
+			dsaf_dev->sc_base = devm_ioremap_resource(&pdev->dev,
+								  res);
+			if (!dsaf_dev->sc_base) {
+				dev_err(dsaf_dev->dev, "subctrl can not map!\n");
+				return -ENOMEM;
+			}
+
+			res = platform_get_resource(pdev, IORESOURCE_MEM,
+						    res_idx++);
+			if (!res) {
+				dev_err(dsaf_dev->dev, "serdes-ctrl info is needed!\n");
+				return -ENOMEM;
+			}
+
+			dsaf_dev->sds_base = devm_ioremap_resource(&pdev->dev,
+								   res);
+			if (!dsaf_dev->sds_base) {
+				dev_err(dsaf_dev->dev, "serdes-ctrl can not map!\n");
+				return -ENOMEM;
+			}
+		} else {
+			dsaf_dev->sub_ctrl = syscon;
 		}
-		dsaf_dev->sds_base = devm_ioremap_resource(&pdev->dev, res);
-		if (!dsaf_dev->sds_base) {
-			dev_err(dsaf_dev->dev, "serdes-ctrl can not map!\n");
-			return -ENOMEM;
-		}
-	} else {
-		dsaf_dev->sub_ctrl = syscon;
 	}
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "ppe-base");
@@ -2681,6 +2710,7 @@ static struct platform_driver g_dsaf_driver = {
 	.driver = {
 		.name = DSAF_DRV_NAME,
 		.of_match_table = g_dsaf_match,
+		.acpi_match_table = hns_dsaf_acpi_match,
 	},
 };
 

@@ -7,6 +7,7 @@
  * (at your option) any later version.
  */
 
+#include <linux/acpi.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
@@ -650,6 +651,7 @@ static int  hns_mac_get_info(struct hns_mac_cb *mac_cb)
 	struct of_phandle_args cpld_args;
 	u32 ret;
 	struct device_node *phy_np;
+	struct device *dev = mac_cb->dev;
 
 	mac_cb->link = false;
 	mac_cb->half_duplex = false;
@@ -673,6 +675,9 @@ static int  hns_mac_get_info(struct hns_mac_cb *mac_cb)
 	 * from dsaf node
 	 */
 	if (!mac_cb->fw_port) {
+		if (!is_of_node(dev->fwnode))
+			return -ENXIO;
+
 		phy_np = of_parse_phandle(np, "phy-handle", mac_cb->mac_id);
 		mac_cb->phy_fwnode = phy_np ? &phy_np->fwnode : NULL;
 
@@ -682,55 +687,59 @@ static int  hns_mac_get_info(struct hns_mac_cb *mac_cb)
 
 		return 0;
 	}
-	if (!is_of_node(mac_cb->fw_port))
-		return -EINVAL;
-	/* parse property from port subnode in dsaf */
-	phy_np = of_parse_phandle(to_of_node(mac_cb->fw_port), "phy-handle", 0);
-	mac_cb->phy_fwnode = phy_np ? &phy_np->fwnode : NULL;
-	if (mac_cb->phy_fwnode)
-		dev_dbg(mac_cb->dev, "mac%d gets a phy node\n", mac_cb->mac_id);
 
-	syscon = syscon_node_to_regmap(
-			of_parse_phandle(to_of_node(mac_cb->fw_port),
-					 "serdes-syscon", 0));
-	if (IS_ERR_OR_NULL(syscon)) {
-		dev_err(mac_cb->dev, "serdes-syscon is needed!\n");
-		return -EINVAL;
-	}
-	mac_cb->serdes_ctrl = syscon;
+	if (is_of_node(mac_cb->fw_port)) {
+		/* parse property from port subnode in dsaf */
+		phy_np = of_parse_phandle(to_of_node(mac_cb->fw_port),
+					  "phy-handle", 0);
+		mac_cb->phy_fwnode = phy_np ? &phy_np->fwnode : NULL;
+		if (mac_cb->phy_fwnode)
+			dev_dbg(mac_cb->dev, "mac%d gets a phy node\n",
+				mac_cb->mac_id);
 
-	ret = fwnode_property_read_u32(mac_cb->fw_port,
-				       "port-rst-offset",
-				       &mac_cb->port_rst_off);
-	if (ret) {
-		dev_dbg(mac_cb->dev,
-			"mac%d port-rst-offset not found, use default value.\n",
-			mac_cb->mac_id);
-	}
-
-	ret = fwnode_property_read_u32(mac_cb->fw_port,
-				       "port-mode-offset",
-				       &mac_cb->port_mode_off);
-	if (ret) {
-		dev_dbg(mac_cb->dev,
-			"mac%d port-mode-offset not found, use default value.\n",
-			mac_cb->mac_id);
-	}
-
-	ret = of_parse_phandle_with_fixed_args(to_of_node(mac_cb->fw_port),
-					       "cpld-syscon", 1, 0, &cpld_args);
-	if (ret) {
-		dev_dbg(mac_cb->dev, "mac%d no cpld-syscon found.\n",
-			mac_cb->mac_id);
-		mac_cb->cpld_ctrl = NULL;
-	} else {
-		syscon = syscon_node_to_regmap(cpld_args.np);
+		syscon = syscon_node_to_regmap(
+				of_parse_phandle(to_of_node(mac_cb->fw_port),
+						 "serdes-syscon", 0));
 		if (IS_ERR_OR_NULL(syscon)) {
-			dev_dbg(mac_cb->dev, "no cpld-syscon found!\n");
+			dev_err(mac_cb->dev, "serdes-syscon is needed!\n");
+			return -EINVAL;
+		}
+		mac_cb->serdes_ctrl = syscon;
+
+		ret = fwnode_property_read_u32(mac_cb->fw_port,
+					       "port-rst-offset",
+					       &mac_cb->port_rst_off);
+		if (ret) {
+			dev_dbg(mac_cb->dev,
+				"mac%d port-rst-offset not found, use default value.\n",
+				mac_cb->mac_id);
+		}
+
+		ret = fwnode_property_read_u32(mac_cb->fw_port,
+					       "port-mode-offset",
+					       &mac_cb->port_mode_off);
+		if (ret) {
+			dev_dbg(mac_cb->dev,
+				"mac%d port-mode-offset not found, use default value.\n",
+				mac_cb->mac_id);
+		}
+
+		ret = of_parse_phandle_with_fixed_args(
+			to_of_node(mac_cb->fw_port), "cpld-syscon", 1, 0,
+			&cpld_args);
+		if (ret) {
+			dev_dbg(mac_cb->dev, "mac%d no cpld-syscon found.\n",
+				mac_cb->mac_id);
 			mac_cb->cpld_ctrl = NULL;
 		} else {
-			mac_cb->cpld_ctrl = syscon;
-			mac_cb->cpld_ctrl_reg = cpld_args.args[0];
+			syscon = syscon_node_to_regmap(cpld_args.np);
+			if (IS_ERR_OR_NULL(syscon)) {
+				dev_dbg(mac_cb->dev, "no cpld-syscon found!\n");
+				mac_cb->cpld_ctrl = NULL;
+			} else {
+				mac_cb->cpld_ctrl = syscon;
+				mac_cb->cpld_ctrl_reg = cpld_args.args[0];
+			}
 		}
 	}
 
