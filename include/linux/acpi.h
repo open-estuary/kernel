@@ -49,10 +49,16 @@ static inline acpi_handle acpi_device_handle(struct acpi_device *adev)
 	return adev ? adev->handle : NULL;
 }
 
+static inline struct device *acpi_device_to_device(struct acpi_device *adev)
+{
+	return adev ? &adev->dev : NULL;
+}
+
 #define ACPI_COMPANION(dev)		to_acpi_device_node((dev)->fwnode)
 #define ACPI_COMPANION_SET(dev, adev)	set_primary_fwnode(dev, (adev) ? \
 	acpi_fwnode_handle(adev) : NULL)
 #define ACPI_HANDLE(dev)		acpi_device_handle(ACPI_COMPANION(dev))
+#define ACPI_DEV(adev)			acpi_device_to_device(adev)
 
 /**
  * ACPI_DEVICE_CLASS - macro used to describe an ACPI device with
@@ -475,6 +481,7 @@ struct platform_device *acpi_create_platform_device(struct acpi_device *);
 #define ACPI_COMPANION(dev)		(NULL)
 #define ACPI_COMPANION_SET(dev, adev)	do { } while (0)
 #define ACPI_HANDLE(dev)		(NULL)
+#define ACPI_DEV(adev)			(NULL)
 #define ACPI_DEVICE_CLASS(_cls, _msk)	.cls = (0), .cls_msk = (0),
 
 struct fwnode_handle;
