@@ -649,6 +649,7 @@ static int  hns_mac_get_info(struct hns_mac_cb *mac_cb)
 	struct regmap *syscon;
 	struct of_phandle_args cpld_args;
 	u32 ret;
+	struct device_node *phy_np;
 
 	mac_cb->link = false;
 	mac_cb->half_duplex = false;
@@ -672,21 +673,23 @@ static int  hns_mac_get_info(struct hns_mac_cb *mac_cb)
 	 * from dsaf node
 	 */
 	if (!mac_cb->fw_port) {
-		mac_cb->phy_node = of_parse_phandle(np, "phy-handle",
-						    mac_cb->mac_id);
-		if (mac_cb->phy_node)
-			dev_dbg(mac_cb->dev, "mac%d phy_node: %s\n",
-				mac_cb->mac_id, mac_cb->phy_node->name);
+		phy_np = of_parse_phandle(np, "phy-handle", mac_cb->mac_id);
+		mac_cb->phy_fwnode = phy_np ? &phy_np->fwnode : NULL;
+
+		if (mac_cb->phy_fwnode)
+			dev_dbg(mac_cb->dev, "mac%d gets a phy node\n",
+				mac_cb->mac_id);
+
 		return 0;
 	}
 	if (!is_of_node(mac_cb->fw_port))
 		return -EINVAL;
 	/* parse property from port subnode in dsaf */
-	mac_cb->phy_node = of_parse_phandle(to_of_node(mac_cb->fw_port),
-					    "phy-handle", 0);
-	if (mac_cb->phy_node)
-		dev_dbg(mac_cb->dev, "mac%d phy_node: %s\n",
-			mac_cb->mac_id, mac_cb->phy_node->name);
+	phy_np = of_parse_phandle(to_of_node(mac_cb->fw_port), "phy-handle", 0);
+	mac_cb->phy_fwnode = phy_np ? &phy_np->fwnode : NULL;
+	if (mac_cb->phy_fwnode)
+		dev_dbg(mac_cb->dev, "mac%d gets a phy node\n", mac_cb->mac_id);
+
 	syscon = syscon_node_to_regmap(
 			of_parse_phandle(to_of_node(mac_cb->fw_port),
 					 "serdes-syscon", 0));
