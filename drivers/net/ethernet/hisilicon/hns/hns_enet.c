@@ -227,6 +227,77 @@ static int hns_nic_maybe_stop_tx(
 	return 0;
 }
 
+static int hns_nic_phy_match(struct device *dev, void *phy_fwnode)
+{
+	if (IS_ENABLED(CONFIG_OF) && dev->of_node)
+		return &dev->of_node->fwnode == phy_fwnode;
+	else if (ACPI_COMPANION(dev))
+		return dev->fwnode == phy_fwnode;
+	else
+		return 0;
+}
+
+/**
+ * hns_nic_phy_find_device - Give a PHY node, find the phy_device
+ * @phy_fwnode: Pointer to the phy's framework node
+ *
+ * If successful, returns a pointer to the phy_device with the embedded
+ * struct device refcount incremented by one, or NULL on failure.
+ */
+static
+struct phy_device *hns_nic_phy_find_device(struct fwnode_handle *phy_fwnode)
+{
+	struct device *d;
+
+	if (!phy_fwnode)
+		return NULL;
+
+	d = bus_find_device(&mdio_bus_type, NULL,
+			    phy_fwnode, hns_nic_phy_match);
+
+	return d ? to_phy_device(d) : NULL;
+}
+
+static
+struct phy_device *hns_nic_phy_attach(struct net_device *dev,
+				      struct fwnode_handle *phy_fwnode,
+				      u32 flags,
+				      phy_interface_t iface)
+{
+	struct phy_device *phy = hns_nic_phy_find_device(phy_fwnode);
+	int ret;
+
+	if (!phy)
+		return NULL;
+
+	ret = phy_attach_direct(dev, phy, flags, iface);
+
+	return ret ? NULL : phy;
+}
+
+static
+struct phy_device *hns_nic_phy_connect(struct net_device *dev,
+				       struct fwnode_handle *phy_fwnode,
+				       void (*hndlr)(struct net_device *),
+				       u32 flags,
+				       phy_interface_t iface)
+{
+	struct phy_device *phy = hns_nic_phy_find_device(phy_fwnode);
+	int ret;
+
+	if (!phy)
+		return NULL;
+
+	phy->dev_flags = flags;
+
+	ret = phy_connect_direct(dev, phy, hndlr, iface);
+
+	/* refcount is held by phy_connect_direct() on success */
+	put_device(&phy->dev);
+
+	return ret ? NULL : phy;
+}
+
 static int hns_nic_maybe_stop_tso(
 	struct sk_buff **out_skb, int *bnum, struct hnae_ring *ring)
 {
@@ -1002,11 +1073,12 @@ int hns_nic_init_phy(struct net_device *ndev, struct hnae_handle *h)
 		return 0;
 
 	if (h->phy_if != PHY_INTERFACE_MODE_XGMII)
-		phy_dev = of_phy_connect(ndev, to_of_node(h->phy_fwnode),
-					 hns_nic_adjust_link, 0, h->phy_if);
+		phy_dev = hns_nic_phy_connect(ndev, h->phy_fwnode,
+					      hns_nic_adjust_link,
+					      0, h->phy_if);
 	else
-		phy_dev = of_phy_attach(ndev, to_of_node(h->phy_fwnode), 0,
-					h->phy_if);
+		phy_dev = hns_nic_phy_attach(ndev, h->phy_fwnode,
+					     0, h->phy_if);
 
 	if (unlikely(!phy_dev) || IS_ERR(phy_dev))
 		return !phy_dev ? -ENODEV : PTR_ERR(phy_dev);
