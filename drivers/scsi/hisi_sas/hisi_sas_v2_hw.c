@@ -499,7 +499,6 @@ hisi_sas_device *alloc_dev_quirk_v2_hw(struct domain_device *device)
 	struct hisi_sas_device *sas_dev = NULL;
 	int i, sata_dev = dev_is_sata(device);
 
-	spin_lock(&hisi_hba->lock);
 	for (i = 0; i < HISI_SAS_MAX_DEVICES; i++) {
 		/*
 		 * SATA device id bit0 should be 0
@@ -516,7 +515,6 @@ hisi_sas_device *alloc_dev_quirk_v2_hw(struct domain_device *device)
 			break;
 		}
 	}
-	spin_unlock(&hisi_hba->lock);
 
 	return sas_dev;
 }
