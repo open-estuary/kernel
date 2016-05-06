@@ -43,6 +43,7 @@ int acpi_pci_disabled = 1;	/* skip ACPI PCI scan and IRQ initialization */
 EXPORT_SYMBOL(acpi_pci_disabled);
 
 static bool param_acpi_off __initdata;
+static bool param_acpi_on __initdata;
 static bool param_acpi_force __initdata;
 
 static int __init parse_acpi(char *arg)
@@ -53,6 +54,8 @@ static int __init parse_acpi(char *arg)
 	/* "acpi=off" disables both ACPI table parsing and interpreter */
 	if (strcmp(arg, "off") == 0)
 		param_acpi_off = true;
+	else if (strcmp(arg, "on") == 0) /* prefer ACPI over DT */
+		param_acpi_on = true;
 	else if (strcmp(arg, "force") == 0) /* force ACPI to be enabled */
 		param_acpi_force = true;
 	else
@@ -186,10 +189,11 @@ void __init acpi_boot_table_init(void)
 	 * Enable ACPI instead of device tree unless
 	 * - ACPI has been disabled explicitly (acpi=off), or
 	 * - the device tree is not empty (it has more than just a /chosen node)
-	 *   and ACPI has not been force enabled (acpi=force)
+	 *   and ACPI has not been [force] enabled (acpi=on|force)
 	 */
 	if (param_acpi_off ||
-	    (!param_acpi_force && of_scan_flat_dt(dt_scan_depth1_nodes, NULL)))
+	    (!param_acpi_on && !param_acpi_force &&
+	     of_scan_flat_dt(dt_scan_depth1_nodes, NULL)))
 		goto done;
 
 	/*
