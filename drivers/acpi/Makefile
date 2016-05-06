@@ -81,6 +81,7 @@ obj-$(CONFIG_ACPI_CUSTOM_METHOD)+= custom_method.o
 obj-$(CONFIG_ACPI_BGRT)		+= bgrt.o
 obj-$(CONFIG_ACPI_CPPC_LIB)	+= cppc_acpi.o
 obj-$(CONFIG_IORT_TABLE) 	+= iort.o
+obj-$(CONFIG_ACPI_SPCR_TABLE)	+= spcr.o
 
 # processor has its own "processor." module_param namespace
 processor-y			:= processor_driver.o
