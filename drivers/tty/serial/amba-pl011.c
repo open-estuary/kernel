@@ -2232,8 +2232,6 @@ static int __init pl011_console_match(struct console *co, char *name, int idx,
 
 		port = &amba_ports[i]->port;
 
-		if (port->iotype != iotype)
-			continue;
 		if ((iotype == UPIO_MEM || iotype == UPIO_MEM32) &&
 		    (port->mapbase != addr))
 			continue;
