@@ -205,7 +205,7 @@ static inline int __pcibus_to_node(const struct pci_bus *bus)
 }
 
 static inline const struct cpumask *
-cpumask_of_pcibus(const struct pci_bus *bus)
+__cpumask_of_pcibus(const struct pci_bus *bus)
 {
 	return cpu_online_mask;
 }

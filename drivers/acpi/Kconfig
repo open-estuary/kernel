@@ -60,6 +60,9 @@ config ACPI_CCA_REQUIRED
 config IORT_TABLE
 	bool
 
+config ACPI_HAS_NUMA_ARCH_FIXUP
+	bool
+
 config ACPI_DEBUGGER
 	bool "AML debugger interface (EXPERIMENTAL)"
 	select ACPI_DEBUG
@@ -286,7 +289,7 @@ config ACPI_THERMAL
 config ACPI_NUMA
 	bool "NUMA support"
 	depends on NUMA
-	depends on (X86 || IA64)
+	depends on (X86 || IA64 || ARM64)
 	default y if IA64_GENERIC || IA64_SGI_SN2
 
 config ACPI_CUSTOM_DSDT_FILE
