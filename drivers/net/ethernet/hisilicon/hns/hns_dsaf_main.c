@@ -62,10 +62,10 @@ int hns_dsaf_get_cfg(struct dsaf_device *dsaf_dev)
 			dsaf_dev->dsaf_ver = AE_VERSION_2;
 	} else if (ACPI_COMPANION(dsaf_dev->dev)) {
 		adev = to_acpi_device_node(fwnode);
-		if (!acpi_match_device_ids(adev, &hns_dsaf_acpi_match[0]))
-			dsaf_dev->dsaf_ver = AE_VERSION_1;
-		else
+		if (!acpi_match_device_ids(adev, &hns_dsaf_acpi_match[1]))
 			dsaf_dev->dsaf_ver = AE_VERSION_2;
+		else
+			dsaf_dev->dsaf_ver = AE_VERSION_1;
 	} else {
 		dev_err(dsaf_dev->dev, "cannot get cfd data from of or acpi\n");
 		return -ENXIO;
