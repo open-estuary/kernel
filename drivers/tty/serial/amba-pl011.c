@@ -81,6 +81,7 @@ struct vendor_data {
 	bool			cts_event_workaround;
 	bool			always_enabled;
 	bool			fixed_options;
+	bool			access_32b;
 
 	unsigned int (*get_fifosize)(struct amba_device *dev);
 };
@@ -103,6 +104,7 @@ static struct vendor_data vendor_arm = {
 };
 
 static struct vendor_data vendor_sbsa = {
+	.access_32b		= true,
 	.oversampling		= false,
 	.dma_threshold		= false,
 	.cts_event_workaround	= false,
@@ -2230,8 +2232,6 @@ static int __init pl011_console_match(struct console *co, char *name, int idx,
 
 		port = &amba_ports[i]->port;
 
-		if (port->iotype != iotype)
-			continue;
 		if ((iotype == UPIO_MEM || iotype == UPIO_MEM32) &&
 		    (port->mapbase != addr))
 			continue;
@@ -2375,7 +2375,7 @@ static int pl011_setup_port(struct device *dev, struct uart_amba_port *uap,
 	uap->port.dev = dev;
 	uap->port.mapbase = mmiobase->start;
 	uap->port.membase = base;
-	uap->port.iotype = UPIO_MEM;
+	uap->port.iotype = uap->vendor->access_32b ? UPIO_MEM32 : UPIO_MEM;
 	uap->port.fifosize = uap->fifosize;
 	uap->port.flags = UPF_BOOT_AUTOCONF;
 	uap->port.line = index;
