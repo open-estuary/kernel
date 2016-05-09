@@ -79,6 +79,29 @@ void irq_domain_free_fwnode(struct fwnode_handle *fwnode)
 }
 
 /**
+ * irq_domain_get_irqchip_fwnode_name - Retrieve associated name of
+ *                                      specified irqchip fwnode
+ * @fwnode: Specified fwnode_handle
+ *
+ * Returns associated name of the specified fwnode, or NULL on failure.
+ */
+const char *irq_domain_get_irqchip_fwnode_name(struct fwnode_handle *fwnode)
+{
+
+	if (IS_ENABLED(CONFIG_OF) && is_of_node(fwnode))
+		return to_of_node(fwnode)->full_name;
+
+	if (is_fwnode_irqchip(fwnode)) {
+		struct irqchip_fwid *fwid;
+
+		fwid = container_of(fwnode, struct irqchip_fwid, fwnode);
+		return fwid->name;
+	}
+
+	return NULL;
+}
+
+/**
  * __irq_domain_add() - Allocate a new irq_domain data structure
  * @of_node: optional device-tree node of the interrupt controller
  * @size: Size of linear map; 0 for radix mapping only
@@ -1125,9 +1148,9 @@ static void irq_domain_free_irqs_recursive(struct irq_domain *domain,
 	}
 }
 
-static int irq_domain_alloc_irqs_recursive(struct irq_domain *domain,
-					   unsigned int irq_base,
-					   unsigned int nr_irqs, void *arg)
+int irq_domain_alloc_irqs_recursive(struct irq_domain *domain,
+				    unsigned int irq_base,
+				    unsigned int nr_irqs, void *arg)
 {
 	int ret = 0;
 	struct irq_domain *parent = domain->parent;

@@ -86,6 +86,12 @@ config DW_APB_ICTL
 	select GENERIC_IRQ_CHIP
 	select IRQ_DOMAIN
 
+config HISILICON_IRQ_MBIGEN
+	bool
+	select ARM_GIC_V3
+	select ARM_GIC_V3_ITS
+	select GENERIC_MSI_IRQ_DOMAIN
+
 config IMGPDC_IRQ
 	bool
 	select GENERIC_IRQ_CHIP

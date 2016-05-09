@@ -46,7 +46,7 @@ void gic_enable_quirks(u32 iidr, const struct gic_quirk *quirks,
 }
 
 int gic_configure_irq(unsigned int irq, unsigned int type,
-		       void __iomem *base, void (*sync_access)(void))
+		       void __iomem *base, void (*sync_access)(void __iomem *))
 {
 	u32 confmask = 0x2 << ((irq % 16) * 2);
 	u32 confoff = (irq / 16) * 4;
@@ -73,13 +73,13 @@ int gic_configure_irq(unsigned int irq, unsigned int type,
 		ret = -EINVAL;
 
 	if (sync_access)
-		sync_access();
+		sync_access(base);
 
 	return ret;
 }
 
 void __init gic_dist_config(void __iomem *base, int gic_irqs,
-			    void (*sync_access)(void))
+			    void (*sync_access)(void __iomem *))
 {
 	unsigned int i;
 
@@ -108,10 +108,10 @@ void __init gic_dist_config(void __iomem *base, int gic_irqs,
 	}
 
 	if (sync_access)
-		sync_access();
+		sync_access(base);
 }
 
-void gic_cpu_config(void __iomem *base, void (*sync_access)(void))
+void gic_cpu_config(void __iomem *base, void (*sync_access)(void __iomem *))
 {
 	int i;
 
@@ -132,5 +132,5 @@ void gic_cpu_config(void __iomem *base, void (*sync_access)(void))
 					base + GIC_DIST_PRI + i * 4 / 4);
 
 	if (sync_access)
-		sync_access();
+		sync_access(base);
 }

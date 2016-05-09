@@ -15,7 +15,9 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <linux/acpi.h>
 #include <linux/device.h>
+#include <linux/iort.h>
 #include <linux/msi.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
@@ -40,13 +42,18 @@ static int its_pmsi_prepare(struct irq_domain *domain, struct device *dev,
 		ret = of_parse_phandle_with_args(dev->of_node,
 						 "msi-parent", "#msi-cells",
 						 index, &args);
-		if (args.np == irq_domain_get_of_node(domain)) {
-			if (WARN_ON(args.args_count != 1))
-				return -EINVAL;
-			dev_id = args.args[0];
-			break;
+		if (!ret) {
+			if (args.np == irq_domain_get_of_node(domain)) {
+				if (WARN_ON(args.args_count != 1))
+					return -EINVAL;
+				dev_id = args.args[0];
+				break;
+			}
 		}
 	} while (!ret);
+
+	if (ret)
+		ret = iort_find_platform_dev_id(dev, &dev_id);
 
 	if (ret)
 		return ret;
@@ -73,34 +80,73 @@ static struct of_device_id its_device_id[] = {
 	{},
 };
 
+static int __init its_pmsi_init_one(struct fwnode_handle *fwnode)
+{
+	struct irq_domain *parent;
+	const char *name = irq_domain_get_irqchip_fwnode_name(fwnode);
+
+	parent = irq_find_matching_fwnode(fwnode, DOMAIN_BUS_NEXUS);
+	if (!parent || !msi_get_domain_info(parent)) {
+		pr_err("%s: unable to locate ITS domain\n", name);
+		return -ENXIO;
+	}
+
+	if (!platform_msi_create_irq_domain(fwnode, &its_pmsi_domain_info,
+					    parent)) {
+		pr_err("%s: unable to create platform domain\n", name);
+		return -ENXIO;
+	}
+
+	pr_info("Platform MSI: %s domain created\n", name);
+	return 0;
+}
+
+#ifdef CONFIG_ACPI
+static int __init
+its_pmsi_parse_madt(struct acpi_subtable_header *header,
+			const unsigned long end)
+{
+	struct acpi_madt_generic_translator *its_entry;
+	struct fwnode_handle *domain_handle;
+
+	its_entry = (struct acpi_madt_generic_translator *)header;
+	domain_handle = iort_find_its_domain_token(its_entry->translation_id);
+	if (!domain_handle) {
+		pr_err("ITS@0x%lx: Unable to locate ITS domain handle\n",
+			(long)its_entry->base_address);
+		return 0;
+	}
+
+	if (its_pmsi_init_one(domain_handle))
+		return 0;
+
+	platform_msi_register_fwnode_provider(&iort_find_platform_dev_domain_token);
+	return 0;
+}
+
+static void __init its_acpi_pmsi_init(void)
+{
+	acpi_table_parse_madt(ACPI_MADT_TYPE_GENERIC_TRANSLATOR,
+				its_pmsi_parse_madt, 0);
+}
+#else
+static inline void its_acpi_pmsi_init(void) { }
+#endif
+
 static int __init its_pmsi_init(void)
 {
 	struct device_node *np;
-	struct irq_domain *parent;
 
 	for (np = of_find_matching_node(NULL, its_device_id); np;
 	     np = of_find_matching_node(np, its_device_id)) {
 		if (!of_property_read_bool(np, "msi-controller"))
 			continue;
 
-		parent = irq_find_matching_host(np, DOMAIN_BUS_NEXUS);
-		if (!parent || !msi_get_domain_info(parent)) {
-			pr_err("%s: unable to locate ITS domain\n",
-			       np->full_name);
+		if (its_pmsi_init_one(of_node_to_fwnode(np)))
 			continue;
-		}
-
-		if (!platform_msi_create_irq_domain(of_node_to_fwnode(np),
-						    &its_pmsi_domain_info,
-						    parent)) {
-			pr_err("%s: unable to create platform domain\n",
-			       np->full_name);
-			continue;
-		}
-
-		pr_info("Platform MSI: %s domain created\n", np->full_name);
 	}
 
+	its_acpi_pmsi_init();
 	return 0;
 }
 early_initcall(its_pmsi_init);

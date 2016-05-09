@@ -227,6 +227,8 @@ static inline struct irq_domain *irq_find_host(struct device_node *node)
 	return irq_find_matching_host(node, DOMAIN_BUS_ANY);
 }
 
+extern const char *irq_domain_get_irqchip_fwnode_name(struct fwnode_handle *fwnode);
+
 /**
  * irq_domain_add_linear() - Allocate and register a linear revmap irq_domain.
  * @of_node: pointer to interrupt controller's device tree node.
@@ -372,6 +374,9 @@ static inline int irq_domain_alloc_irqs(struct irq_domain *domain,
 	return __irq_domain_alloc_irqs(domain, -1, nr_irqs, node, arg, false);
 }
 
+extern int irq_domain_alloc_irqs_recursive(struct irq_domain *domain,
+					   unsigned int irq_base,
+					   unsigned int nr_irqs, void *arg);
 extern int irq_domain_set_hwirq_and_chip(struct irq_domain *domain,
 					 unsigned int virq,
 					 irq_hw_number_t hwirq,
