@@ -13,6 +13,8 @@
 #include <linux/nls.h>
 #include <linux/dma-mapping.h>
 
+#include <acpi/apei.h> /* for acpi_hest_init() */
+
 #include <asm/pgtable.h>
 
 #include "internal.h"
@@ -1912,6 +1914,7 @@ int __init acpi_scan_init(void)
 {
 	int result;
 
+	acpi_hest_init();
 	acpi_pci_root_init();
 	acpi_pci_link_init();
 	acpi_processor_init();
@@ -1922,6 +1925,7 @@ int __init acpi_scan_init(void)
 	acpi_memory_hotplug_init();
 	acpi_pnp_init();
 	acpi_int340x_thermal_init();
+	acpi_amba_init();
 
 	acpi_scan_add_handler(&generic_device_handler);
 

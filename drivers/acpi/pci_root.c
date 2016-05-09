@@ -33,7 +33,6 @@
 #include <linux/acpi.h>
 #include <linux/slab.h>
 #include <linux/dmi.h>
-#include <acpi/apei.h>	/* for acpi_hest_init() */
 
 #include "internal.h"
 
@@ -419,6 +418,24 @@ out:
 }
 EXPORT_SYMBOL(acpi_pci_osc_control_set);
 
+int acpi_pci_bus_domain_nr(struct device *parent)
+{
+	struct acpi_device *acpi_dev = to_acpi_device(parent);
+	unsigned long long segment = 0;
+	acpi_status status;
+
+	/*
+	 * If _SEG method does not exist, following ACPI spec (6.5.6)
+	 * all PCI buses belong to domain 0.
+	 */
+	status = acpi_evaluate_integer(acpi_dev->handle, METHOD_NAME__SEG, NULL,
+				       &segment);
+	if (ACPI_FAILURE(status) && status != AE_NOT_FOUND)
+		dev_err(&acpi_dev->dev, "can't evaluate _SEG\n");
+
+	return segment;
+}
+
 static void negotiate_os_control(struct acpi_pci_root *root, int *no_aspm)
 {
 	u32 support, control, requested;
@@ -513,6 +530,134 @@ static void negotiate_os_control(struct acpi_pci_root *root, int *no_aspm)
 		*no_aspm = 1;
 	}
 }
+
+#ifdef CONFIG_ACPI_PCI_HOST_GENERIC
+static int pci_acpi_setup_mcfg_map(struct acpi_pci_root_info *ci)
+{
+	struct acpi_pci_root *root = ci->root;
+	int ret;
+
+	ret = pci_mmconfig_insert(&ci->bridge->dev, root->segment,
+				   root->secondary.start, root->secondary.end,
+				   root->mcfg_addr);
+	if (ret == -EEXIST)
+		ret = 0;
+
+	return ret;
+}
+
+static void pci_acpi_teardown_mcfg_map(struct acpi_pci_root_info *ci)
+{
+	struct acpi_pci_root *root = ci->root;
+
+	pci_mmconfig_delete(root->segment, root->secondary.start,
+			    root->secondary.end);
+	kfree(ci);
+}
+
+static int pci_acpi_root_prepare_resources(struct acpi_pci_root_info *ci)
+{
+	struct list_head *list = &ci->resources;
+	struct acpi_device *device = ci->bridge;
+	struct resource_entry *entry, *tmp;
+	unsigned long flags;
+	int ret;
+
+	flags = IORESOURCE_IO | IORESOURCE_MEM;
+	ret = acpi_dev_get_resources(device, list,
+				     acpi_dev_filter_resource_type_cb,
+				     (void *)flags);
+	if (ret < 0) {
+		dev_warn(&device->dev,
+			 "failed to parse _CRS method, error code %d\n", ret);
+		return ret;
+	} else if (ret == 0)
+		dev_dbg(&device->dev,
+			"no IO and memory resources present in _CRS\n");
+
+	resource_list_for_each_entry_safe(entry, tmp, &ci->resources) {
+		struct resource *res = entry->res;
+
+		if (entry->res->flags & IORESOURCE_DISABLED)
+			resource_list_destroy_entry(entry);
+		else
+			res->name = ci->name;
+
+		if (res->flags & IORESOURCE_IO) {
+			resource_size_t cpu_addr = res->start;
+			resource_size_t pci_addr = cpu_addr - entry->offset;
+			resource_size_t length = resource_size(res);
+			unsigned long port;
+
+			if (pci_register_io_range(cpu_addr, length)) {
+				resource_list_destroy_entry(entry);
+				continue;
+			}
+
+			port = pci_address_to_pio(cpu_addr);
+			if (port == (unsigned long)-1) {
+				resource_list_destroy_entry(entry);
+				continue;
+			}
+
+			res->start = port;
+			res->end = port + length - 1;
+			entry->offset = port - pci_addr;
+
+			if (pci_remap_iospace(res, cpu_addr) < 0)
+				resource_list_destroy_entry(entry);
+		}
+	}
+	return ret;
+}
+
+static struct acpi_pci_root_ops acpi_pci_root_ops = {
+	.init_info = pci_acpi_setup_mcfg_map,
+	.release_info = pci_acpi_teardown_mcfg_map,
+	.prepare_resources = pci_acpi_root_prepare_resources,
+};
+
+/* Root bridge scanning */
+struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
+{
+	int node = acpi_get_node(root->device->handle);
+	int domain = root->segment;
+	int busnum = root->secondary.start;
+	struct acpi_pci_root_info *info;
+	struct pci_bus *bus, *child;
+
+	if (domain && !pci_domains_supported) {
+		pr_warn("PCI %04x:%02x: multiple domains not supported.\n",
+			domain, busnum);
+		return NULL;
+	}
+
+	info = kzalloc_node(sizeof(*info), GFP_KERNEL, node);
+	if (!info) {
+		dev_err(&root->device->dev,
+			"pci_bus %04x:%02x: ignored (out of memory)\n",
+			domain, busnum);
+		return NULL;
+	}
+
+	acpi_pci_root_ops.pci_ops = pci_mcfg_get_ops(root);
+	bus = acpi_pci_root_create(root, &acpi_pci_root_ops, info, root);
+	if (!bus)
+		return NULL;
+
+	pci_bus_size_bridges(bus);
+	pci_bus_assign_resources(bus);
+
+	/*
+	 * After the PCI-E bus has been walked and all devices discovered,
+	 * configure any settings of the fabric that might be necessary.
+	 */
+	list_for_each_entry(child, &bus->children, node)
+		pcie_bus_configure_settings(child);
+
+	return bus;
+}
+#endif /* CONFIG_ACPI_PCI_HOST_GENERIC */
 
 static int acpi_pci_root_add(struct acpi_device *device,
 			     const struct acpi_device_id *not_used)
@@ -846,7 +991,13 @@ struct pci_bus *acpi_pci_root_create(struct acpi_pci_root *root,
 
 	pci_acpi_root_add_resources(info);
 	pci_add_resource(&info->resources, &root->secondary);
-	bus = pci_create_root_bus(NULL, busnum, ops->pci_ops,
+
+	/*
+	 * pci_create_root_bus() needs to detect the parent device type,
+	 * so initialize its companion data accordingly.
+	 */
+	ACPI_COMPANION_SET(&device->dev, device);
+	bus = pci_create_root_bus(&device->dev, busnum, ops->pci_ops,
 				  sysdata, &info->resources);
 	if (!bus)
 		goto out_release_info;
@@ -865,7 +1016,6 @@ out_release_info:
 
 void __init acpi_pci_root_init(void)
 {
-	acpi_hest_init();
 	if (acpi_pci_disabled)
 		return;
 

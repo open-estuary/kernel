@@ -1981,7 +1981,7 @@ sba_connect_bus(struct pci_bus *bus)
 	if (PCI_CONTROLLER(bus)->iommu)
 		return;
 
-	handle = acpi_device_handle(PCI_CONTROLLER(bus)->companion);
+	handle = acpi_device_handle(ACPI_COMPANION(bus->bridge));
 	if (!handle)
 		return;
 

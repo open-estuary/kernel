@@ -5,10 +5,10 @@
 menuconfig ACPI
 	bool "ACPI (Advanced Configuration and Power Interface) Support"
 	depends on !IA64_HP_SIM
-	depends on IA64 || X86 || (ARM64 && EXPERT)
+	depends on IA64 || X86 || ARM64
 	depends on PCI
 	select PNP
-	default y
+	default y if (IA64 || X86)
 	help
 	  Advanced Configuration and Power Interface (ACPI) support for 
 	  Linux requires an ACPI-compliant platform (hardware/firmware),
@@ -57,6 +57,12 @@ config ACPI_SYSTEM_POWER_STATES_SUPPORT
 config ACPI_CCA_REQUIRED
 	bool
 
+config IORT_TABLE
+	bool
+
+config ACPI_HAS_NUMA_ARCH_FIXUP
+	bool
+
 config ACPI_DEBUGGER
 	bool "AML debugger interface (EXPERIMENTAL)"
 	select ACPI_DEBUG
@@ -65,6 +71,9 @@ config ACPI_DEBUGGER
 	  object dump, single step control method execution.
 	  This is still under development, currently enabling this only
 	  results in the compilation of the ACPICA debugger files.
+
+config ACPI_SPCR_TABLE
+	bool
 
 config ACPI_SLEEP
 	bool
@@ -280,7 +289,7 @@ config ACPI_THERMAL
 config ACPI_NUMA
 	bool "NUMA support"
 	depends on NUMA
-	depends on (X86 || IA64)
+	depends on (X86 || IA64 || ARM64)
 	default y if IA64_GENERIC || IA64_SGI_SN2
 
 config ACPI_CUSTOM_DSDT_FILE
@@ -331,6 +340,13 @@ config ACPI_PCI_SLOT
 	  slots in the system.  This can help correlate PCI bus addresses,
 	  i.e., segment/bus/device/function tuples, with physical slots in
 	  the system.  If you are unsure, say N.
+
+config ACPI_PCI_HOST_GENERIC
+	bool
+	help
+	  Select this config option from the architecture Kconfig,
+	  if it is preferred to enable ACPI PCI host controller driver which
+	  has no arch-specific assumptions.
 
 config X86_PM_TIMER
 	bool "Power Management Timer Support" if EXPERT
@@ -509,5 +525,14 @@ config XPOWER_PMIC_OPREGION
 	  This config adds ACPI operation region support for XPower AXP288 PMIC.
 
 endif
+
+config ACPI_GTDT
+	bool "ACPI GTDT Support"
+	depends on ARM64
+	help
+	  GTDT (Generic Timer Description Table) provides information
+	  for per-processor timers and Platform (memory-mapped) timers
+	  for ARM platforms. Select this option to provide information
+	  needed for the timers init.
 
 endif	# ACPI

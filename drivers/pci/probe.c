@@ -12,6 +12,7 @@
 #include <linux/slab.h>
 #include <linux/module.h>
 #include <linux/cpumask.h>
+#include <linux/pci-acpi.h>
 #include <linux/pci-aspm.h>
 #include <linux/aer.h>
 #include <linux/acpi.h>
@@ -675,6 +676,8 @@ static struct irq_domain *pci_host_bridge_msi_domain(struct pci_bus *bus)
 	 * should be called from here.
 	 */
 	d = pci_host_bridge_of_msi_domain(bus);
+	if (!d)
+		d = pci_host_bridge_acpi_msi_domain(bus);
 
 	return d;
 }
@@ -2080,10 +2083,12 @@ int __weak pcibios_root_bridge_prepare(struct pci_host_bridge *bridge)
 
 void __weak pcibios_add_bus(struct pci_bus *bus)
 {
+	acpi_pci_add_bus(bus);
 }
 
 void __weak pcibios_remove_bus(struct pci_bus *bus)
 {
+	acpi_pci_remove_bus(bus);
 }
 
 struct pci_bus *pci_create_root_bus(struct device *parent, int bus,
@@ -2120,6 +2125,8 @@ struct pci_bus *pci_create_root_bus(struct device *parent, int bus,
 	bridge->dev.parent = parent;
 	bridge->dev.release = pci_release_host_bridge_dev;
 	dev_set_name(&bridge->dev, "pci%04x:%02x", pci_domain_nr(b), bus);
+	if (parent)
+		ACPI_COMPANION_SET(&bridge->dev, ACPI_COMPANION(parent));
 	error = pcibios_root_bridge_prepare(bridge);
 	if (error) {
 		kfree(bridge);

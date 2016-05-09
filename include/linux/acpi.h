@@ -168,12 +168,32 @@ int acpi_table_parse_madt(enum acpi_madt_type id,
 int acpi_parse_mcfg (struct acpi_table_header *header);
 void acpi_table_print_madt_entry (struct acpi_subtable_header *madt);
 
-/* the following four functions are architecture-dependent */
+/* the following numa functions are architecture-dependent */
 void acpi_numa_slit_init (struct acpi_table_slit *slit);
+
+#if defined(CONFIG_X86) || defined(CONFIG_IA64)
 void acpi_numa_processor_affinity_init (struct acpi_srat_cpu_affinity *pa);
+#else
+static inline void
+acpi_numa_processor_affinity_init(struct acpi_srat_cpu_affinity *pa) { }
+#endif
+
 void acpi_numa_x2apic_affinity_init(struct acpi_srat_x2apic_cpu_affinity *pa);
+
+#ifdef CONFIG_ARM64
+void acpi_numa_gicc_affinity_init(struct acpi_srat_gicc_affinity *pa);
+#else
+static inline void
+acpi_numa_gicc_affinity_init(struct acpi_srat_gicc_affinity *pa) { }
+#endif
+
 int acpi_numa_memory_affinity_init (struct acpi_srat_mem_affinity *ma);
+
+#ifdef CONFIG_ACPI_HAS_NUMA_ARCH_FIXUP
 void acpi_numa_arch_fixup(void);
+#else
+static inline void acpi_numa_arch_fixup(void) { }
+#endif
 
 #ifndef PHYS_CPUID_INVALID
 typedef u32 phys_cpuid_t;
@@ -467,6 +487,23 @@ void acpi_walk_dep_device_list(acpi_handle handle);
 
 struct platform_device *acpi_create_platform_device(struct acpi_device *);
 #define ACPI_PTR(_ptr)	(_ptr)
+
+#ifdef CONFIG_ACPI_GTDT
+bool __init gtdt_timer_is_available(int type);
+
+struct arch_timer_data;
+int __init gtdt_arch_timer_data_init(struct acpi_table_header *table,
+				     struct arch_timer_data *data);
+struct arch_timer_mem_data;
+void __init *gtdt_gt_block(struct acpi_table_header *table, int index);
+u32 __init gtdt_gt_timer_count(struct acpi_gtdt_timer_block *gt_block);
+void __init *gtdt_gt_cntctlbase(struct acpi_gtdt_timer_block *gt_block);
+u32 __init gtdt_gt_frame_number(struct acpi_gtdt_timer_block *gt_block,
+				int index);
+int __init gtdt_gt_timer_data(struct acpi_gtdt_timer_block *gt_block,
+			      int index, bool virt,
+			      struct arch_timer_mem_data *data);
+#endif
 
 #else	/* !CONFIG_ACPI */
 
@@ -930,6 +967,12 @@ static inline struct fwnode_handle *acpi_get_next_subnode(struct device *dev,
 		     (void *) data }
 
 #define acpi_probe_device_table(t)	({ int __r = 0; __r;})
+#endif
+
+#ifdef CONFIG_ACPI_SPCR_TABLE
+int parse_spcr(bool earlycon);
+#else
+static inline int parse_spcr(bool earlycon) { return 0; }
 #endif
 
 #endif	/*_LINUX_ACPI_H*/

@@ -105,6 +105,8 @@ static struct static_key supports_deactivate = STATIC_KEY_INIT_TRUE;
 
 static struct gic_chip_data gic_data[MAX_GIC_NR] __read_mostly;
 
+static struct gic_kvm_info gic_v2_kvm_info;
+
 #ifdef CONFIG_GIC_NON_BANKED
 static void __iomem *gic_get_percpu_base(union gic_base *base)
 {
@@ -972,7 +974,7 @@ static int gic_irq_domain_translate(struct irq_domain *d,
 		return 0;
 	}
 
-	if (fwspec->fwnode->type == FWNODE_IRQCHIP) {
+	if (is_fwnode_irqchip(fwspec->fwnode)) {
 		if(fwspec->param_count != 2)
 			return -EINVAL;
 
@@ -1196,6 +1198,35 @@ static bool gic_check_eoimode(struct device_node *node, void __iomem **base)
 	return true;
 }
 
+static void __init gic_of_setup_kvm_info(struct device_node *node)
+{
+	int ret;
+	struct resource r;
+
+	gic_v2_kvm_info.type = GIC_V2;
+
+	gic_v2_kvm_info.maint_irq = irq_of_parse_and_map(node, 0);
+
+	ret = of_address_to_resource(node, 2, &r);
+	if (!ret)
+		gic_v2_kvm_info.vctrl = r;
+
+	ret = of_address_to_resource(node, 3, &r);
+	if (!ret) {
+		if (!PAGE_ALIGNED(r.start))
+			pr_warn("GICV physical address 0x%llx not page aligned\n",
+				(unsigned long long)r.start);
+		else if (!PAGE_ALIGNED(resource_size(&r)))
+			pr_warn("GICV size 0x%llx not a multiple of page size 0x%lx\n",
+				(unsigned long long)resource_size(&r),
+				PAGE_SIZE);
+		else
+			gic_v2_kvm_info.vcpu = r;
+	}
+
+	gic_set_kvm_info(&gic_v2_kvm_info);
+}
+
 static int __init
 gic_of_init(struct device_node *node, struct device_node *parent)
 {
@@ -1225,8 +1256,10 @@ gic_of_init(struct device_node *node, struct device_node *parent)
 
 	__gic_init_bases(gic_cnt, -1, dist_base, cpu_base, percpu_offset,
 			 &node->fwnode);
-	if (!gic_cnt)
+	if (!gic_cnt) {
 		gic_init_physaddr(node);
+		gic_of_setup_kvm_info(node);
+	}
 
 	if (parent) {
 		irq = irq_of_parse_and_map(node, 0);
@@ -1234,7 +1267,7 @@ gic_of_init(struct device_node *node, struct device_node *parent)
 	}
 
 	if (IS_ENABLED(CONFIG_ARM_GIC_V2M))
-		gicv2m_of_init(node, gic_data[gic_cnt].domain);
+		gicv2m_init(&node->fwnode, gic_data[gic_cnt].domain);
 
 	gic_cnt++;
 	return 0;
@@ -1252,7 +1285,14 @@ IRQCHIP_DECLARE(pl390, "arm,pl390", gic_of_init);
 #endif
 
 #ifdef CONFIG_ACPI
-static phys_addr_t cpu_phy_base __initdata;
+static struct
+{
+	phys_addr_t cpu_phy_base;
+	u32 maint_irq;
+	int maint_irq_mode;
+	phys_addr_t vctrl_base;
+	phys_addr_t vcpu_base;
+} acpi_data __initdata;
 
 static int __init
 gic_acpi_parse_madt_cpu(struct acpi_subtable_header *header,
@@ -1272,10 +1312,16 @@ gic_acpi_parse_madt_cpu(struct acpi_subtable_header *header,
 	 * All CPU interface addresses have to be the same.
 	 */
 	gic_cpu_base = processor->base_address;
-	if (cpu_base_assigned && gic_cpu_base != cpu_phy_base)
+	if (cpu_base_assigned && gic_cpu_base != acpi_data.cpu_phy_base)
 		return -EINVAL;
 
-	cpu_phy_base = gic_cpu_base;
+	acpi_data.cpu_phy_base = gic_cpu_base;
+	acpi_data.maint_irq = processor->vgic_interrupt;
+	acpi_data.maint_irq_mode = (processor->flags & ACPI_MADT_VGIC_IRQ_MODE) ?
+				    ACPI_EDGE_SENSITIVE : ACPI_LEVEL_SENSITIVE;
+	acpi_data.vctrl_base = processor->gich_base_address;
+	acpi_data.vcpu_base = processor->gicv_base_address;
+
 	cpu_base_assigned = 1;
 	return 0;
 }
@@ -1306,6 +1352,39 @@ static bool __init gic_validate_dist(struct acpi_subtable_header *header,
 
 #define ACPI_GICV2_DIST_MEM_SIZE	(SZ_4K)
 #define ACPI_GIC_CPU_IF_MEM_SIZE	(SZ_8K)
+#define ACPI_GICV2_VCTRL_MEM_SIZE	(SZ_4K)
+#define ACPI_GICV2_VCPU_MEM_SIZE	(SZ_8K)
+
+static void __init gic_acpi_setup_kvm_info(void)
+{
+	int irq;
+
+	gic_v2_kvm_info.type = GIC_V2;
+
+	irq = acpi_register_gsi(NULL, acpi_data.maint_irq,
+				acpi_data.maint_irq_mode,
+				ACPI_ACTIVE_HIGH);
+	if (irq > 0)
+		gic_v2_kvm_info.maint_irq = irq;
+
+	if (acpi_data.vctrl_base) {
+		struct resource *vctrl = &gic_v2_kvm_info.vctrl;
+
+		vctrl->flags = IORESOURCE_MEM;
+		vctrl->start = acpi_data.vctrl_base;
+		vctrl->end = vctrl->start + ACPI_GICV2_VCTRL_MEM_SIZE - 1;
+	}
+
+	if (acpi_data.vcpu_base) {
+		struct resource *vcpu = &gic_v2_kvm_info.vcpu;
+
+		vcpu->flags = IORESOURCE_MEM;
+		vcpu->start = acpi_data.vcpu_base;
+		vcpu->end = vcpu->start + ACPI_GICV2_VCPU_MEM_SIZE - 1;
+	}
+
+	gic_set_kvm_info(&gic_v2_kvm_info);
+}
 
 static int __init gic_v2_acpi_init(struct acpi_subtable_header *header,
 				   const unsigned long end)
@@ -1323,7 +1402,7 @@ static int __init gic_v2_acpi_init(struct acpi_subtable_header *header,
 		return -EINVAL;
 	}
 
-	cpu_base = ioremap(cpu_phy_base, ACPI_GIC_CPU_IF_MEM_SIZE);
+	cpu_base = ioremap(acpi_data.cpu_phy_base, ACPI_GIC_CPU_IF_MEM_SIZE);
 	if (!cpu_base) {
 		pr_err("Unable to map GICC registers\n");
 		return -ENOMEM;
@@ -1359,6 +1438,12 @@ static int __init gic_v2_acpi_init(struct acpi_subtable_header *header,
 	__gic_init_bases(0, -1, dist_base, cpu_base, 0, domain_handle);
 
 	acpi_set_irq_model(ACPI_IRQ_MODEL_GIC, domain_handle);
+
+	if (IS_ENABLED(CONFIG_ARM_GIC_V2M))
+		gicv2m_init(NULL, gic_data[0].domain);
+
+	gic_acpi_setup_kvm_info();
+
 	return 0;
 }
 IRQCHIP_ACPI_DECLARE(gic_v2, ACPI_MADT_TYPE_GENERIC_DISTRIBUTOR,

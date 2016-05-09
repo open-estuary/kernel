@@ -11,11 +11,6 @@
 struct pci_root_info {
 	struct acpi_pci_root_info common;
 	struct pci_sysdata sd;
-#ifdef	CONFIG_PCI_MMCONFIG
-	bool mcfg_added;
-	u8 start_bus;
-	u8 end_bus;
-#endif
 };
 
 static bool pci_use_crs = true;
@@ -179,16 +174,13 @@ static int check_segment(u16 seg, struct device *dev, char *estr)
 
 static int setup_mcfg_map(struct acpi_pci_root_info *ci)
 {
-	int result, seg;
-	struct pci_root_info *info;
+	int result, seg, start, end;
 	struct acpi_pci_root *root = ci->root;
 	struct device *dev = &ci->bridge->dev;
 
-	info = container_of(ci, struct pci_root_info, common);
-	info->start_bus = (u8)root->secondary.start;
-	info->end_bus = (u8)root->secondary.end;
-	info->mcfg_added = false;
-	seg = info->sd.domain;
+	seg = root->segment;
+	start = root->secondary.start;
+	end = root->secondary.end;
 
 	/* return success if MMCFG is not in use */
 	if (raw_pci_ext_ops && raw_pci_ext_ops != &pci_mmcfg)
@@ -197,13 +189,11 @@ static int setup_mcfg_map(struct acpi_pci_root_info *ci)
 	if (!(pci_probe & PCI_PROBE_MMCONF))
 		return check_segment(seg, dev, "MMCONFIG is disabled,");
 
-	result = pci_mmconfig_insert(dev, seg, info->start_bus, info->end_bus,
-				     root->mcfg_addr);
+	result = pci_mmconfig_insert(dev, seg, start, end, root->mcfg_addr);
 	if (result == 0) {
 		/* enable MMCFG if it hasn't been enabled yet */
 		if (raw_pci_ext_ops == NULL)
 			raw_pci_ext_ops = &pci_mmcfg;
-		info->mcfg_added = true;
 	} else if (result != -EEXIST)
 		return check_segment(seg, dev,
 			 "fail to add MMCONFIG information,");
@@ -213,14 +203,10 @@ static int setup_mcfg_map(struct acpi_pci_root_info *ci)
 
 static void teardown_mcfg_map(struct acpi_pci_root_info *ci)
 {
-	struct pci_root_info *info;
+	struct acpi_pci_root *root = ci->root;
 
-	info = container_of(ci, struct pci_root_info, common);
-	if (info->mcfg_added) {
-		pci_mmconfig_delete(info->sd.domain,
-				    info->start_bus, info->end_bus);
-		info->mcfg_added = false;
-	}
+	pci_mmconfig_delete(root->segment, root->secondary.start,
+			    root->secondary.end);
 }
 #else
 static int setup_mcfg_map(struct acpi_pci_root_info *ci)
@@ -340,7 +326,6 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 		struct pci_sysdata sd = {
 			.domain = domain,
 			.node = node,
-			.companion = root->device
 		};
 
 		memcpy(bus->sysdata, &sd, sizeof(sd));
@@ -355,7 +340,6 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 		else {
 			info->sd.domain = domain;
 			info->sd.node = node;
-			info->sd.companion = root->device;
 			bus = acpi_pci_root_create(root, &acpi_pci_root_ops,
 						   &info->common, &info->sd);
 		}
@@ -371,21 +355,6 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 	}
 
 	return bus;
-}
-
-int pcibios_root_bridge_prepare(struct pci_host_bridge *bridge)
-{
-	/*
-	 * We pass NULL as parent to pci_create_root_bus(), so if it is not NULL
-	 * here, pci_create_root_bus() has been called by someone else and
-	 * sysdata is likely to be different from what we expect.  Let it go in
-	 * that case.
-	 */
-	if (!bridge->dev.parent) {
-		struct pci_sysdata *sd = bridge->bus->sysdata;
-		ACPI_COMPANION_SET(&bridge->dev, sd->companion);
-	}
-	return 0;
 }
 
 int __init pci_acpi_init(void)

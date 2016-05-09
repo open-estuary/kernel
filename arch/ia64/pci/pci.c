@@ -301,26 +301,10 @@ struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
 	}
 
 	info->controller.segment = root->segment;
-	info->controller.companion = device;
 	info->controller.node = acpi_get_node(device->handle);
 	INIT_LIST_HEAD(&info->io_resources);
 	return acpi_pci_root_create(root, &pci_acpi_root_ops,
 				    &info->common, &info->controller);
-}
-
-int pcibios_root_bridge_prepare(struct pci_host_bridge *bridge)
-{
-	/*
-	 * We pass NULL as parent to pci_create_root_bus(), so if it is not NULL
-	 * here, pci_create_root_bus() has been called by someone else and
-	 * sysdata is likely to be different from what we expect.  Let it go in
-	 * that case.
-	 */
-	if (!bridge->dev.parent) {
-		struct pci_controller *controller = bridge->bus->sysdata;
-		ACPI_COMPANION_SET(&bridge->dev, controller->companion);
-	}
-	return 0;
 }
 
 void pcibios_fixup_device_resources(struct pci_dev *dev)
@@ -372,16 +356,6 @@ void pcibios_fixup_bus(struct pci_bus *b)
 	list_for_each_entry(dev, &b->devices, bus_list)
 		pcibios_fixup_device_resources(dev);
 	platform_pci_fixup_bus(b);
-}
-
-void pcibios_add_bus(struct pci_bus *bus)
-{
-	acpi_pci_add_bus(bus);
-}
-
-void pcibios_remove_bus(struct pci_bus *bus)
-{
-	acpi_pci_remove_bus(bus);
 }
 
 void pcibios_set_master (struct pci_dev *dev)

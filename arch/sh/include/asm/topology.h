@@ -9,9 +9,6 @@
 #define cpumask_of_node(node)	((void)node, cpu_online_mask)
 
 #define pcibus_to_node(bus)	((void)(bus), -1)
-#define cpumask_of_pcibus(bus)	(pcibus_to_node(bus) == -1 ? \
-					cpu_all_mask : \
-					cpumask_of_node(pcibus_to_node(bus)))
 
 #endif
 
