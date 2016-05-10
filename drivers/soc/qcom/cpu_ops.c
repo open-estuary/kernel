@@ -333,11 +333,10 @@ void msm_cpu_postboot(void)
 	raw_spin_unlock(&boot_lock);
 }
 
-static const struct cpu_operations msm_cortex_a_ops = {
+const struct cpu_operations msm_cortex_a_ops = {
 	.name		= "qcom,arm-cortex-acc",
 	.cpu_init	= msm_cpu_init,
 	.cpu_prepare	= msm_cpu_prepare,
 	.cpu_boot	= msm_cpu_boot,
 	.cpu_postboot	= msm_cpu_postboot,
 };
-CPU_METHOD_OF_DECLARE(msm_cortex_a_ops, &msm_cortex_a_ops);
