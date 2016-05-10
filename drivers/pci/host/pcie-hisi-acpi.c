@@ -128,6 +128,9 @@ static int hisi_pcie_init(struct acpi_pci_root *root)
 	}
 	root->sysdata = reg_base;
 
+	if (!hisi_pcie_link_up_acpi(root))
+		dev_warn(&device->dev, "link status is down\n");
+
 	return 0;
 }
 
