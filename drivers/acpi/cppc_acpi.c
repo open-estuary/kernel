@@ -39,15 +39,38 @@
 
 #include <linux/cpufreq.h>
 #include <linux/delay.h>
+#include <linux/ktime.h>
 
 #include <acpi/cppc_acpi.h>
 /*
- * Lock to provide mutually exclusive access to the PCC
- * channel. e.g. When the remote updates the shared region
- * with new data, the reader needs to be protected from
- * other CPUs activity on the same channel.
+ * Lock to provide controlled access to the PCC channel.
+ *
+ * For performance critical usecases(currently cppc_set_perf)
+ *	We need to take read_lock and check if channel belongs to OSPM before
+ * reading or writing to PCC subspace
+ *	We need to take write_lock before transferring the channel ownership to
+ * the platform via a Doorbell
+ *
+ * For non-performance critical usecases(init)
+ *	Take write_lock for all purposes which gives exclusive access
+ *
+ * Why not use spin lock?
+ *	One of the advantages of CPPC is that we can batch/group a large number
+ * of requests from differnt CPUs and send one request to the platform. Using a
+ * read-write spinlock allows us to do this in a effecient manner.
+ *	On larger multicore systems, if we get a large group of cppc_set_perf
+ * calls they all serialize behind a spin lock, but using a rwlock we can
+ * execute the requests in a much more scalable manner.
+ *	See cppc_set_perf() for more details
  */
-static DEFINE_SPINLOCK(pcc_lock);
+static DEFINE_RWLOCK(pcc_lock);
+
+/*
+ * This bool is set to True when we have updated the CPC registers but hasn't
+ * triggered a doorbell yet.
+ * Once we trigger a doorbell for WRITE command we reset this to False
+ */
+static bool pending_pcc_write_cmd;
 
 /*
  * The cpc_desc structure contains the ACPI register details
@@ -63,53 +86,98 @@ static struct mbox_chan *pcc_channel;
 static void __iomem *pcc_comm_addr;
 static u64 comm_base_addr;
 static int pcc_subspace_idx = -1;
-static u16 pcc_cmd_delay;
 static bool pcc_channel_acquired;
+static ktime_t deadline;
+
+/* pcc mapped address + header size + offset within PCC subspace */
+#define GET_PCC_VADDR(offs) (pcc_comm_addr + 0x8 + (offs))
 
 /*
  * Arbitrary Retries in case the remote processor is slow to respond
- * to PCC commands.
+ * to PCC commands. Keeping it high enough to cover emulators where
+ * the processors run painfully slow.
  */
 #define NUM_RETRIES 500
 
-static int send_pcc_cmd(u16 cmd)
+static int check_pcc_chan(void)
 {
-	int retries, result = -EIO;
-	struct acpi_pcct_hw_reduced *pcct_ss = pcc_channel->con_priv;
+	int result = -EIO;
 	struct acpi_pcct_shared_memory *generic_comm_base =
 		(struct acpi_pcct_shared_memory *) pcc_comm_addr;
-	u32 cmd_latency = pcct_ss->latency;
-
-	/* Min time OS should wait before sending next command. */
-	udelay(pcc_cmd_delay);
-
-	/* Write to the shared comm region. */
-	writew(cmd, &generic_comm_base->command);
-
-	/* Flip CMD COMPLETE bit */
-	writew(0, &generic_comm_base->status);
-
-	/* Ring doorbell */
-	result = mbox_send_message(pcc_channel, &cmd);
-	if (result < 0) {
-		pr_err("Err sending PCC mbox message. cmd:%d, ret:%d\n",
-				cmd, result);
-		return result;
-	}
-
-	/* Wait for a nominal time to let platform process command. */
-	udelay(cmd_latency);
+	ktime_t next_deadline = ktime_add(ktime_get(), deadline);
+	int retries = 0;
 
 	/* Retry in case the remote processor was too slow to catch up. */
-	for (retries = NUM_RETRIES; retries > 0; retries--) {
+	while (!ktime_after(ktime_get(), next_deadline)) {
 		if (readw_relaxed(&generic_comm_base->status) & PCC_CMD_COMPLETE) {
 			result = 0;
 			break;
 		}
+		/*
+		 * Reducing the bus traffic in case this loop takes longer than
+		 * a few retries.
+		 */
+		udelay(3);
+		retries++;
 	}
 
-	mbox_client_txdone(pcc_channel, result);
 	return result;
+}
+
+/*
+ * This function transfers the ownership of the PCC to the platform
+ * So it must be called while holding write_lock(pcc_lock)
+ */
+static int send_pcc_cmd(u16 cmd)
+{
+	int ret = -EIO;
+	struct acpi_pcct_shared_memory *generic_comm_base =
+		(struct acpi_pcct_shared_memory *) pcc_comm_addr;
+
+	/* For CMD_WRITE we know for a fact the caller should have checked
+	   the channel before writing to PCC space*/
+	if (cmd == CMD_READ) {
+		/*
+		 * If there are pending cpc_writes, then we stole the channel
+		 * before write completion, so first send a WRITE command to
+		 * platform
+		 */
+		if (pending_pcc_write_cmd) {
+			pending_pcc_write_cmd = FALSE;
+			send_pcc_cmd(CMD_WRITE);
+		}
+
+		ret = check_pcc_chan();
+		if (ret)
+			return ret;
+	}
+
+	/* Write to the shared comm region. */
+	writew_relaxed(cmd, &generic_comm_base->command);
+
+	/* Flip CMD COMPLETE bit */
+	writew_relaxed(0, &generic_comm_base->status);
+
+	/* Ring doorbell */
+	ret = mbox_send_message(pcc_channel, &cmd);
+	if (ret < 0) {
+		pr_err("Err sending PCC mbox message. cmd:%d, ret:%d\n",
+				cmd, ret);
+		return ret;
+	}
+
+	/*
+	 * For READs we need to ensure the cmd completed to ensure
+	 * the ensuing read()s can proceed. For WRITEs we dont care
+	 * because the actual write()s are done before coming here
+	 * and the next READ or WRITE will check if the channel
+	 * is busy/free at the entry of this call.
+	 */
+	if (cmd == CMD_READ)
+		ret = check_pcc_chan();
+
+	mbox_client_txdone(pcc_channel, ret);
+	return ret;
 }
 
 static void cppc_chan_tx_done(struct mbox_client *cl, void *msg, int ret)
@@ -306,6 +374,7 @@ static int register_pcc_channel(int pcc_subspace_idx)
 {
 	struct acpi_pcct_hw_reduced *cppc_ss;
 	unsigned int len;
+	u64 usecs_lat;
 
 	if (pcc_subspace_idx >= 0) {
 		pcc_channel = pcc_mbox_request_channel(&cppc_mbox_cl,
@@ -335,7 +404,14 @@ static int register_pcc_channel(int pcc_subspace_idx)
 		 */
 		comm_base_addr = cppc_ss->base_address;
 		len = cppc_ss->length;
-		pcc_cmd_delay = cppc_ss->min_turnaround_time;
+
+		/*
+		 * cppc_ss->latency is just a Nominal value. In reality
+		 * the remote processor could be much slower to reply.
+		 * So add an arbitrary amount of wait on top of Nominal.
+		 */
+		usecs_lat = NUM_RETRIES * cppc_ss->latency;
+		deadline = ns_to_ktime(usecs_lat * NSEC_PER_USEC);
 
 		pcc_comm_addr = acpi_os_ioremap(comm_base_addr, len);
 		if (!pcc_comm_addr) {
@@ -546,29 +622,74 @@ void acpi_cppc_processor_exit(struct acpi_processor *pr)
 }
 EXPORT_SYMBOL_GPL(acpi_cppc_processor_exit);
 
-static u64 get_phys_addr(struct cpc_reg *reg)
+/*
+ * Since cpc_read and cpc_write are called while holding pcc_lock, it should be
+ * as fast as possible. We have already mapped the PCC subspace during init, so
+ * we can directly write to it.
+ */
+
+static int cpc_read(struct cpc_reg *reg, u64 *val)
 {
-	/* PCC communication addr space begins at byte offset 0x8. */
-	if (reg->space_id == ACPI_ADR_SPACE_PLATFORM_COMM)
-		return (u64)comm_base_addr + 0x8 + reg->address;
-	else
-		return reg->address;
+	int ret_val = 0;
+
+	*val = 0;
+	if (reg->space_id == ACPI_ADR_SPACE_PLATFORM_COMM) {
+		void *vaddr = GET_PCC_VADDR(reg->address);
+
+		switch (reg->bit_width) {
+		case 8:
+			*val = readb_relaxed(vaddr);
+			break;
+		case 16:
+			*val = readw_relaxed(vaddr);
+			break;
+		case 32:
+			*val = readl_relaxed(vaddr);
+			break;
+		case 64:
+			*val = readq_relaxed(vaddr);
+			break;
+		default:
+			pr_debug("Error: Cannot read %u bit width from PCC\n",
+				reg->bit_width);
+			ret_val = -EFAULT;
+		}
+	} else
+		ret_val = acpi_os_read_memory((acpi_physical_address)reg->address,
+					val, reg->bit_width);
+	return ret_val;
 }
 
-static void cpc_read(struct cpc_reg *reg, u64 *val)
+static int cpc_write(struct cpc_reg *reg, u64 val)
 {
-	u64 addr = get_phys_addr(reg);
+	int ret_val = 0;
 
-	acpi_os_read_memory((acpi_physical_address)addr,
-			val, reg->bit_width);
-}
+	if (reg->space_id == ACPI_ADR_SPACE_PLATFORM_COMM) {
+		void *vaddr = GET_PCC_VADDR(reg->address);
 
-static void cpc_write(struct cpc_reg *reg, u64 val)
-{
-	u64 addr = get_phys_addr(reg);
-
-	acpi_os_write_memory((acpi_physical_address)addr,
-			val, reg->bit_width);
+		switch (reg->bit_width) {
+		case 8:
+			writeb_relaxed(val, vaddr);
+			break;
+		case 16:
+			writew_relaxed(val, vaddr);
+			break;
+		case 32:
+			writel_relaxed(val, vaddr);
+			break;
+		case 64:
+			writeq_relaxed(val, vaddr);
+			break;
+		default:
+			pr_debug("Error: Cannot write %u bit width to PCC\n",
+				reg->bit_width);
+			ret_val = -EFAULT;
+			break;
+		}
+	} else
+		ret_val = acpi_os_write_memory((acpi_physical_address)reg->address,
+				val, reg->bit_width);
+	return ret_val;
 }
 
 /**
@@ -585,6 +706,7 @@ int cppc_get_perf_caps(int cpunum, struct cppc_perf_caps *perf_caps)
 								 *nom_perf;
 	u64 high, low, ref, nom;
 	int ret = 0;
+	bool caps_regs_in_pcc = FALSE;
 
 	if (!cpc_desc) {
 		pr_debug("No CPC descriptor for CPU:%d\n", cpunum);
@@ -596,15 +718,17 @@ int cppc_get_perf_caps(int cpunum, struct cppc_perf_caps *perf_caps)
 	ref_perf = &cpc_desc->cpc_regs[REFERENCE_PERF];
 	nom_perf = &cpc_desc->cpc_regs[NOMINAL_PERF];
 
-	spin_lock(&pcc_lock);
-
-	/* Are any of the regs PCC ?*/
+	/* Are any of the regs PCC ? */
 	if ((highest_reg->cpc_entry.reg.space_id == ACPI_ADR_SPACE_PLATFORM_COMM) ||
 			(lowest_reg->cpc_entry.reg.space_id == ACPI_ADR_SPACE_PLATFORM_COMM) ||
 			(ref_perf->cpc_entry.reg.space_id == ACPI_ADR_SPACE_PLATFORM_COMM) ||
 			(nom_perf->cpc_entry.reg.space_id == ACPI_ADR_SPACE_PLATFORM_COMM)) {
+
+		caps_regs_in_pcc = TRUE;
+		write_lock(&pcc_lock);
+
 		/* Ring doorbell once to update PCC subspace */
-		if (send_pcc_cmd(CMD_READ)) {
+		if (send_pcc_cmd(CMD_READ) < 0) {
 			ret = -EIO;
 			goto out_err;
 		}
@@ -629,7 +753,8 @@ int cppc_get_perf_caps(int cpunum, struct cppc_perf_caps *perf_caps)
 		ret = -EFAULT;
 
 out_err:
-	spin_unlock(&pcc_lock);
+	if (caps_regs_in_pcc)
+		write_unlock(&pcc_lock);
 	return ret;
 }
 EXPORT_SYMBOL_GPL(cppc_get_perf_caps);
@@ -647,6 +772,7 @@ int cppc_get_perf_ctrs(int cpunum, struct cppc_perf_fb_ctrs *perf_fb_ctrs)
 	struct cpc_register_resource *delivered_reg, *reference_reg;
 	u64 delivered, reference;
 	int ret = 0;
+	bool ctrs_regs_in_pcc = FALSE;
 
 	if (!cpc_desc) {
 		pr_debug("No CPC descriptor for CPU:%d\n", cpunum);
@@ -656,13 +782,14 @@ int cppc_get_perf_ctrs(int cpunum, struct cppc_perf_fb_ctrs *perf_fb_ctrs)
 	delivered_reg = &cpc_desc->cpc_regs[DELIVERED_CTR];
 	reference_reg = &cpc_desc->cpc_regs[REFERENCE_CTR];
 
-	spin_lock(&pcc_lock);
-
 	/* Are any of the regs PCC ?*/
 	if ((delivered_reg->cpc_entry.reg.space_id == ACPI_ADR_SPACE_PLATFORM_COMM) ||
 			(reference_reg->cpc_entry.reg.space_id == ACPI_ADR_SPACE_PLATFORM_COMM)) {
+		ctrs_regs_in_pcc = TRUE;
+		write_lock(&pcc_lock);
+
 		/* Ring doorbell once to update PCC subspace */
-		if (send_pcc_cmd(CMD_READ)) {
+		if (send_pcc_cmd(CMD_READ) < 0) {
 			ret = -EIO;
 			goto out_err;
 		}
@@ -686,7 +813,9 @@ int cppc_get_perf_ctrs(int cpunum, struct cppc_perf_fb_ctrs *perf_fb_ctrs)
 	perf_fb_ctrs->prev_reference = reference;
 
 out_err:
-	spin_unlock(&pcc_lock);
+	if (ctrs_regs_in_pcc)
+		write_unlock(&pcc_lock);
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(cppc_get_perf_ctrs);
@@ -711,7 +840,35 @@ int cppc_set_perf(int cpu, struct cppc_perf_ctrls *perf_ctrls)
 
 	desired_reg = &cpc_desc->cpc_regs[DESIRED_PERF];
 
-	spin_lock(&pcc_lock);
+	/*
+	 * This is Phase-I where we want to write to CPC registers
+	 * -> We want all CPUs to be able to execute this phase in parallel
+	 *
+	 * Since read_lock can be acquired by multiple CPUs simultaneously we
+	 * achieve that goal here
+	 */
+	if (desired_reg->cpc_entry.reg.space_id == ACPI_ADR_SPACE_PLATFORM_COMM) {
+		read_lock(&pcc_lock);	/* BEGIN Phase-I */
+		/*
+		 * If there are pending write commands i.e pending_pcc_write_cmd
+		 * is TRUE, then we know OSPM owns the channel as another CPU
+		 * has already checked for command completion bit and updated
+		 * the corresponding CPC registers
+		 */
+		if (!pending_pcc_write_cmd) {
+			ret = check_pcc_chan();
+			if (ret) {
+				read_unlock(&pcc_lock);
+				return ret;
+			}
+			/*
+			 * Update the pending_write to make sure a PCC CMD_READ
+			 * will not arrive and steal the channel during the
+			 * transition to write lock
+			 */
+			pending_pcc_write_cmd = TRUE;
+		}
+	}
 
 	/*
 	 * Skip writing MIN/MAX until Linux knows how to come up with
@@ -719,15 +876,66 @@ int cppc_set_perf(int cpu, struct cppc_perf_ctrls *perf_ctrls)
 	 */
 	cpc_write(&desired_reg->cpc_entry.reg, perf_ctrls->desired_perf);
 
-	/* Is this a PCC reg ?*/
+	if (desired_reg->cpc_entry.reg.space_id == ACPI_ADR_SPACE_PLATFORM_COMM)
+		read_unlock(&pcc_lock);	/* END Phase-I */
+
+	/*
+	 * This is Phase-II where we transfer the ownership of PCC to Platform
+	 *
+	 * Short Summary: Basically if we think of a group of cppc_set_perf
+	 * requests that happened in short overlapping interval. The last CPU to
+	 * come out of Phase-I will enter Phase-II and ring the doorbell.
+	 *
+	 * We have the following requirements for Phase-II:
+	 *     1. We want to execute Phase-II only when there are no CPUs
+	 * currently executing in Phase-I
+	 *     2. Once we start Phase-II we want to avoid all other CPUs from
+	 * entering Phase-I.
+	 *     3. We want only one CPU among all those who went through Phase-I
+	 * to run phase-II
+	 *
+	 * If write_trylock fails to get the lock and doesn't transfer the
+	 * PCC ownership to the platform, then one of the following will be TRUE
+	 *     1. There is at-least one CPU in Phase-I which will later execute
+	 * write_trylock, so the CPUs in Phase-I will be responsible for
+	 * executing the Phase-II.
+	 *     2. Some other CPU has beaten this CPU to successfully execute the
+	 * write_trylock and has already acquired the write_lock. We know for a
+	 * fact it(other CPU acquiring the write_lock) couldn’t have happened
+	 * before this CPU’s Phase-I as we held the read_lock.
+	 *     3. Some other CPU executing pcc CMD_READ has stolen the
+	 * write_lock, in which case, send_pcc_cmd will check for pending
+	 * CMD_WRITE commands by checking the pending_pcc_write_cmd.
+	 * So this CPU can be certain that its request will be delivered
+	 *    So in all cases, this CPU knows that its request will be delivered
+	 * by another CPU and can return
+	 *
+	 * After getting the write_lock we still need to check for
+	 * pending_pcc_write_cmd to take care of the following scenario
+	 *    The thread running this code could be scheduled out between
+	 * Phase-I and Phase-II. Before it is scheduled back on, another CPU
+	 * could have delivered the request to Platform by triggering the
+	 * doorbell and transferred the ownership of PCC to platform. So this
+	 * avoids triggering an unnecessary doorbell and more importantly before
+	 * triggering the doorbell it makes sure that the PCC channel ownership
+	 * is still with OSPM.
+	 *   pending_pcc_write_cmd can also be cleared by a different CPU, if
+	 * there was a pcc CMD_READ waiting on write_lock and it steals the lock
+	 * before the pcc CMD_WRITE is completed. pcc_send_cmd checks for this
+	 * case during a CMD_READ and if there are pending writes it delivers
+	 * the write command before servicing the read command
+	 */
 	if (desired_reg->cpc_entry.reg.space_id == ACPI_ADR_SPACE_PLATFORM_COMM) {
-		/* Ring doorbell so Remote can get our perf request. */
-		if (send_pcc_cmd(CMD_WRITE))
-			ret = -EIO;
+		if (write_trylock(&pcc_lock)) {		/* BEGIN Phase-II */
+			/* Update only if there are pending write commands */
+			if (pending_pcc_write_cmd) {
+				pending_pcc_write_cmd = FALSE;
+				if (send_pcc_cmd(CMD_WRITE) < 0)
+					ret = -EIO;
+			}
+			write_unlock(&pcc_lock);	 /* END Phase-II */
+		}
 	}
-
-	spin_unlock(&pcc_lock);
-
 	return ret;
 }
 EXPORT_SYMBOL_GPL(cppc_set_perf);

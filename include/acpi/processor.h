@@ -9,6 +9,7 @@
 #define ACPI_PROCESSOR_CLASS		"processor"
 #define ACPI_PROCESSOR_DEVICE_NAME	"Processor"
 #define ACPI_PROCESSOR_DEVICE_HID	"ACPI0007"
+#define ACPI_PROCESSOR_CONTAINER_HID	"ACPI0010"
 
 #define ACPI_PROCESSOR_BUSY_METRIC	10
 
@@ -66,9 +67,25 @@ struct acpi_processor_cx {
 	char desc[ACPI_CX_DESC_LEN];
 };
 
+struct acpi_processor_lpi {
+	u32 min_residency;
+	u32 wake_latency; /* worst case */
+	u32 flags;
+	u32 arch_flags;
+	u32 res_cnt_freq;
+	u32 enable_parent_state;
+	u64 address;
+	u8 index;
+	u8 entry_method;
+	char desc[ACPI_CX_DESC_LEN];
+};
+
 struct acpi_processor_power {
 	int count;
-	struct acpi_processor_cx states[ACPI_PROCESSOR_MAX_POWER];
+	union {
+		struct acpi_processor_cx states[ACPI_PROCESSOR_MAX_POWER];
+		struct acpi_processor_lpi lpi_states[ACPI_PROCESSOR_MAX_POWER];
+	};
 	int timer_broadcast_on_state;
 };
 
@@ -188,6 +205,7 @@ struct acpi_processor_flags {
 	u8 bm_control:1;
 	u8 bm_check:1;
 	u8 has_cst:1;
+	u8 has_lpi:1;
 	u8 power_setup_done:1;
 	u8 bm_rld_set:1;
 	u8 need_hotplug_init:1;
@@ -241,7 +259,8 @@ extern int acpi_processor_get_performance_info(struct acpi_processor *pr);
 DECLARE_PER_CPU(struct acpi_processor *, processors);
 extern struct acpi_processor_errata errata;
 
-#ifdef ARCH_HAS_POWER_INIT
+#if defined(ARCH_HAS_POWER_INIT) && \
+	defined(CONFIG_ARCH_SUPPORTS_ACPI_PROCESSOR_CSTATE)
 void acpi_processor_power_init_bm_check(struct acpi_processor_flags *flags,
 					unsigned int cpu);
 int acpi_processor_ffh_cstate_probe(unsigned int cpu,
@@ -268,6 +287,11 @@ static inline void acpi_processor_ffh_cstate_enter(struct acpi_processor_cx
 {
 	return;
 }
+#endif
+
+#ifdef CONFIG_ARCH_SUPPORTS_ACPI_PROCESSOR_LPI
+int acpi_processor_ffh_lpi_probe(unsigned int cpu);
+int acpi_processor_ffh_lpi_enter(struct acpi_processor_lpi *lpi, int idx);
 #endif
 
 /* in processor_perflib.c */
@@ -370,7 +394,7 @@ extern struct cpuidle_driver acpi_idle_driver;
 #ifdef CONFIG_ACPI_PROCESSOR_IDLE
 int acpi_processor_power_init(struct acpi_processor *pr);
 int acpi_processor_power_exit(struct acpi_processor *pr);
-int acpi_processor_cst_has_changed(struct acpi_processor *pr);
+int acpi_processor_power_state_has_changed(struct acpi_processor *pr);
 int acpi_processor_hotplug(struct acpi_processor *pr);
 #else
 static inline int acpi_processor_power_init(struct acpi_processor *pr)
@@ -383,7 +407,7 @@ static inline int acpi_processor_power_exit(struct acpi_processor *pr)
 	return -ENODEV;
 }
 
-static inline int acpi_processor_cst_has_changed(struct acpi_processor *pr)
+static inline int acpi_processor_power_state_has_changed(struct acpi_processor *pr)
 {
 	return -ENODEV;
 }
@@ -393,14 +417,6 @@ static inline int acpi_processor_hotplug(struct acpi_processor *pr)
 	return -ENODEV;
 }
 #endif /* CONFIG_ACPI_PROCESSOR_IDLE */
-
-#if defined(CONFIG_PM_SLEEP) & defined(CONFIG_ACPI_PROCESSOR_IDLE)
-void acpi_processor_syscore_init(void);
-void acpi_processor_syscore_exit(void);
-#else
-static inline void acpi_processor_syscore_init(void) {}
-static inline void acpi_processor_syscore_exit(void) {}
-#endif
 
 /* in processor_thermal.c */
 int acpi_processor_get_limit_info(struct acpi_processor *pr);
