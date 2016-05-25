@@ -437,6 +437,7 @@
 		#size-cells = <2>;
 		ranges;
 		interrupt-controller;
+		timer-irqmap-disabled;
 		#redistributor-regions = <2>;
 		redistributor-stride = <0x0 0x30000>;
 		reg = <0x0 0x4d000000 0 0x10000>,	/* GICD A*/
