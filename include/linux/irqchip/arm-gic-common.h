@@ -27,6 +27,8 @@ struct gic_kvm_info {
 	unsigned int	maint_irq;
 	/* Physical address & size of virtual control interface */
 	struct resource vctrl;
+	/* GIC supports timer irq map or not */
+	bool timer_irqmap_disabled;
 };
 
 const struct gic_kvm_info *gic_get_kvm_info(void);

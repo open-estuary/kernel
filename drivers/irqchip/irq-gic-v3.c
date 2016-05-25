@@ -974,6 +974,10 @@ static void __init gic_of_setup_kvm_info(struct device_node *node)
 
 	gic_v3_kvm_info.maint_irq = irq_of_parse_and_map(node, 0);
 
+	/* Check GIC supports kvm timer irqmap or not */
+	gic_v3_kvm_info.timer_irqmap_disabled = of_property_read_bool(node,
+							"timer-irqmap-disabled");
+
 	if (of_property_read_u32(node, "#redistributor-regions",
 				 &gicv_idx))
 		gicv_idx = 1;
