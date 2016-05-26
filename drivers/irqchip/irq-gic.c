@@ -1294,6 +1294,52 @@ static struct
 	phys_addr_t vcpu_base;
 } acpi_data __initdata;
 
+/*
+ * Adjust cpu_phy_base if it is on 64K boundary and has 4kB of
+ * GIC400 aliased over the first 64K.
+ */
+static bool acpi_check_eoimode(void)
+{
+	u32 val_low = 0, val_high = 0;
+	void __iomem *base;
+
+	if (!is_hyp_mode_available())
+		return false;
+
+	if (acpi_data.cpu_phy_base & 0xffff)
+		return true;
+
+	base = ioremap(acpi_data.cpu_phy_base, SZ_64K);
+	if (base) {
+		val_low = readl_relaxed(base + GIC_CPU_IDENT);
+		val_high = readl_relaxed(base + GIC_CPU_IDENT + 0xf000);
+		iounmap(base);
+	}
+
+	/*
+	 * If it isn't a GIC400, we can use EOI mode
+	 */
+	if ((val_low & 0xffff0fff) != 0x0202043B)
+		return true;
+
+	/*
+	 * If it is GIC400 and not aliased, we can't use EOI mode
+	 */
+	if (val_low != val_high)
+		return false;
+
+	/*
+	 * Move the base up by 60kB, so that we have a 8kB
+	 * contiguous region, which allows us to use GICC_DIR
+	 * at its normal offset. Please pass me that bucket.
+	 */
+	acpi_data.cpu_phy_base += 0xf000;
+	pr_warn("GIC: Adjusting CPU interface base to 0x%llx",
+		acpi_data.cpu_phy_base);
+
+	return true;
+}
+
 static int __init
 gic_acpi_parse_madt_cpu(struct acpi_subtable_header *header,
 			const unsigned long end)
@@ -1402,7 +1448,11 @@ static int __init gic_v2_acpi_init(struct acpi_subtable_header *header,
 		return -EINVAL;
 	}
 
+	if (!acpi_check_eoimode())
+		static_key_slow_dec(&supports_deactivate);
+
 	cpu_base = ioremap(acpi_data.cpu_phy_base, ACPI_GIC_CPU_IF_MEM_SIZE);
+
 	if (!cpu_base) {
 		pr_err("Unable to map GICC registers\n");
 		return -ENOMEM;
@@ -1415,14 +1465,6 @@ static int __init gic_v2_acpi_init(struct acpi_subtable_header *header,
 		iounmap(cpu_base);
 		return -ENOMEM;
 	}
-
-	/*
-	 * Disable split EOI/Deactivate if HYP is not available. ACPI
-	 * guarantees that we'll always have a GICv2, so the CPU
-	 * interface will always be the right size.
-	 */
-	if (!is_hyp_mode_available())
-		static_key_slow_dec(&supports_deactivate);
 
 	/*
 	 * Initialize GIC instance zero (no multi-GIC support).
