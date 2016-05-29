@@ -16,29 +16,14 @@
  *
  */
 
-#ifndef HIBMC_DRM_DRV_H
-#define HIBMC_DRM_DRV_H
+#ifndef HIBMC_DRM_DE_H
+#define HIBMC_DRM_DE_H
 
-#include <drm/drmP.h>
-#include <drm/drm_fb_helper.h>
-#include <drm/drm_gem_cma_helper.h>
-
-struct hibmc_drm_device {
-	/* hw */
-	void __iomem   *mmio;
-	void __iomem   *fb_map;
-	unsigned long  fb_base;
-	unsigned long  fb_size;
-
-	/* drm */
-	struct drm_device  *dev;
-	struct drm_plane plane;
-	struct drm_crtc crtc;
-	bool mode_config_initialized;
+struct panel_pll {
+	unsigned long M;
+	unsigned long N;
+	unsigned long OD;
+	unsigned long POD;
 };
-
-int hibmc_plane_init(struct hibmc_drm_device *hidev);
-int hibmc_crtc_init(struct hibmc_drm_device *hidev);
-
 
 #endif
