@@ -32,8 +32,11 @@ struct hibmc_drm_device {
 
 	/* drm */
 	struct drm_device  *dev;
+	struct drm_plane plane;
 	bool mode_config_initialized;
 };
+
+int hibmc_plane_init(struct hibmc_drm_device *hidev);
 
 
 #endif

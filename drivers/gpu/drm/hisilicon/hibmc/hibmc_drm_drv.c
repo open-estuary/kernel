@@ -51,7 +51,8 @@ static void hibmc_disable_vblank(struct drm_device *dev, unsigned int pipe)
 }
 
 static struct drm_driver hibmc_driver = {
-	.driver_features	= DRIVER_GEM | DRIVER_MODESET,
+	.driver_features	= DRIVER_GEM | DRIVER_MODESET |
+						DRIVER_ATOMIC,
 	.fops			= &hibmc_fops,
 	.name			= "hibmc",
 	.desc			= "hibmc drm driver",
@@ -98,6 +99,40 @@ static const struct drm_mode_config_funcs mode_config_funcs = {
 	.atomic_commit = drm_atomic_helper_commit,
 };
 
+static int hibmc_kms_init(struct hibmc_drm_device *hidev)
+{
+	int ret;
+
+	drm_mode_config_init(hidev->dev);
+	hidev->mode_config_initialized = true;
+
+	hidev->dev->mode_config.min_width = 0;
+	hidev->dev->mode_config.min_height = 0;
+	hidev->dev->mode_config.max_width = 1920;
+	hidev->dev->mode_config.max_height = 1440;
+
+	hidev->dev->mode_config.fb_base = hidev->fb_base;
+	hidev->dev->mode_config.preferred_depth = 24;
+	hidev->dev->mode_config.prefer_shadow = 0;
+
+	hidev->dev->mode_config.funcs = (void *)&mode_config_funcs;
+
+	ret = hibmc_plane_init(hidev);
+	if (ret) {
+		DRM_ERROR("fail to init plane!!!\n");
+		return ret;
+	}
+
+	return 0;
+}
+
+static void hibmc_kms_fini(struct hibmc_drm_device *hidev)
+{
+	if (hidev->mode_config_initialized) {
+		drm_mode_config_cleanup(hidev->dev);
+		hidev->mode_config_initialized = false;
+	}
+}
 
 static int hibmc_hw_config(struct hibmc_drm_device *hidev)
 {
@@ -190,6 +225,7 @@ static int hibmc_unload(struct drm_device *dev)
 {
 	struct hibmc_drm_device *hidev = dev->dev_private;
 
+	hibmc_kms_fini(hidev);
 	hibmc_hw_fini(hidev);
 	dev->dev_private = NULL;
 	return 0;
@@ -210,6 +246,9 @@ static int hibmc_load(struct drm_device *dev, unsigned long flags)
 	if (ret)
 		goto err;
 
+	ret = hibmc_kms_init(hidev);
+	if (ret)
+		goto err;
 
 	ret = drm_vblank_init(dev, dev->mode_config.num_crtc);
 	if (ret) {
