@@ -72,8 +72,15 @@ static int hibmc_pm_suspend(struct device *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct drm_device *drm_dev = pci_get_drvdata(pdev);
+	struct hibmc_drm_device *hidev = drm_dev->dev_private;
 
 	drm_kms_helper_poll_disable(drm_dev);
+
+	if (hidev->fbdev.initialized) {
+		console_lock();
+		drm_fb_helper_set_suspend(&hidev->fbdev.helper, 1);
+		console_unlock();
+	}
 
 	return 0;
 }
@@ -82,8 +89,16 @@ static int hibmc_pm_resume(struct device *dev)
 {
 	struct pci_dev *pdev = to_pci_dev(dev);
 	struct drm_device *drm_dev = pci_get_drvdata(pdev);
+	struct hibmc_drm_device *hidev = drm_dev->dev_private;
 
 	drm_helper_resume_force_mode(drm_dev);
+
+	if (hidev->fbdev.initialized) {
+		console_lock();
+		drm_fb_helper_set_suspend(&hidev->fbdev.helper, 0);
+		console_unlock();
+	}
+
 	drm_kms_helper_poll_enable(drm_dev);
 
 	return 0;
@@ -245,6 +260,7 @@ static int hibmc_unload(struct drm_device *dev)
 {
 	struct hibmc_drm_device *hidev = dev->dev_private;
 
+	hibmc_fbdev_fini(hidev);
 	hibmc_kms_fini(hidev);
 	hibmc_hw_fini(hidev);
 	dev->dev_private = NULL;
@@ -277,6 +293,10 @@ static int hibmc_load(struct drm_device *dev, unsigned long flags)
 	}
 	/* reset all the states of crtc/plane/encoder/connector */
 	drm_mode_config_reset(dev);
+
+	ret = hibmc_fbdev_init(hidev);
+	if (ret)
+		goto err;
 
 	return 0;
 
