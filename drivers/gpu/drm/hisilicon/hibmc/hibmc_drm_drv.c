@@ -129,6 +129,12 @@ static int hibmc_kms_init(struct hibmc_drm_device *hidev)
 		return ret;
 	}
 
+	ret = hibmc_encoder_init(hidev);
+	if (ret) {
+		DRM_ERROR("failed to init encoder\n");
+		return ret;
+	}
+
 	return 0;
 }
 

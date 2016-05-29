@@ -34,11 +34,13 @@ struct hibmc_drm_device {
 	struct drm_device  *dev;
 	struct drm_plane plane;
 	struct drm_crtc crtc;
+	struct drm_encoder encoder;
 	bool mode_config_initialized;
 };
 
 int hibmc_plane_init(struct hibmc_drm_device *hidev);
 int hibmc_crtc_init(struct hibmc_drm_device *hidev);
+int hibmc_encoder_init(struct hibmc_drm_device *hidev);
 
 
 #endif
