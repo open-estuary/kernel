@@ -24,6 +24,13 @@
 #include "hibmc_drm_drv.h"
 #include "hibmc_drm_regs.h"
 
+static int defx = 800;
+static int defy = 600;
+
+module_param(defx, int, 0444);
+module_param(defy, int, 0444);
+MODULE_PARM_DESC(defx, "default x resolution");
+MODULE_PARM_DESC(defy, "default y resolution");
 
 static void hibmc_encoder_disable(struct drm_encoder *encoder)
 {
@@ -80,6 +87,88 @@ int hibmc_encoder_init(struct hibmc_drm_device *hidev)
 	}
 
 	drm_encoder_helper_add(encoder, &hibmc_encoder_helper_funcs);
+	return 0;
+}
+
+static int hibmc_connector_get_modes(struct drm_connector *connector)
+{
+	int count;
+
+	count = drm_add_modes_noedid(connector, 800, 600);
+	drm_set_preferred_mode(connector, defx, defy);
+	return count;
+}
+
+static int hibmc_connector_mode_valid(struct drm_connector *connector,
+				      struct drm_display_mode *mode)
+{
+	struct hibmc_drm_device *hiprivate =
+	 container_of(connector, struct hibmc_drm_device, connector);
+	unsigned long size = mode->hdisplay * mode->vdisplay * 4;
+
+	/*
+	* Make sure we can fit two framebuffers into video memory.
+	* This allows up to 1600x1200 with 16 MB (default size).
+	* If you want more try this:
+	* 'qemu -vga std -global VGA.vgamem_mb=32 $otherargs'
+	*/
+	if (size * 2 > hiprivate->fb_size)
+		return MODE_BAD;
+
+	return MODE_OK;
+}
+
+static struct drm_encoder *
+hibmc_connector_best_encoder(struct drm_connector *connector)
+{
+	int enc_id = connector->encoder_ids[0];
+
+	/* pick the encoder ids */
+	if (enc_id)
+		return drm_encoder_find(connector->dev, enc_id);
+
+	return NULL;
+}
+
+static enum drm_connector_status hibmc_connector_detect(struct drm_connector
+						 *connector, bool force)
+{
+	return connector_status_connected;
+}
+
+static const struct drm_connector_helper_funcs
+	hibmc_connector_connector_helper_funcs = {
+	.get_modes = hibmc_connector_get_modes,
+	.mode_valid = hibmc_connector_mode_valid,
+	.best_encoder = hibmc_connector_best_encoder,
+};
+
+static const struct drm_connector_funcs hibmc_connector_connector_funcs = {
+	.dpms = drm_atomic_helper_connector_dpms,
+	.detect = hibmc_connector_detect,
+	.fill_modes = drm_helper_probe_single_connector_modes,
+	.destroy = drm_connector_cleanup,
+	.reset = drm_atomic_helper_connector_reset,
+	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
+	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
+};
+
+int hibmc_connector_init(struct hibmc_drm_device *hidev)
+{
+	struct drm_device *dev = hidev->dev;
+	struct drm_connector *connector = &hidev->connector;
+	int ret;
+
+	ret = drm_connector_init(dev, connector,
+				 &hibmc_connector_connector_funcs,
+				 DRM_MODE_CONNECTOR_VIRTUAL);
+	if (ret) {
+		DRM_ERROR("failed to init connector\n");
+		return ret;
+	}
+	drm_connector_helper_add(connector,
+				 &hibmc_connector_connector_helper_funcs);
+
 	return 0;
 }
 

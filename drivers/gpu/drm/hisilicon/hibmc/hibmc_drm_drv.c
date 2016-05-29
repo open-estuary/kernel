@@ -135,6 +135,14 @@ static int hibmc_kms_init(struct hibmc_drm_device *hidev)
 		return ret;
 	}
 
+	ret = hibmc_connector_init(hidev);
+	if (ret) {
+		DRM_ERROR("failed to init connector\n");
+		return ret;
+	}
+
+	drm_mode_connector_attach_encoder(&hidev->connector,
+					  &hidev->encoder);
 	return 0;
 }
 
@@ -278,6 +286,12 @@ err:
 	return ret;
 }
 
+static void hibmc_connector_unplug_all(struct drm_device *dev)
+{
+	mutex_lock(&dev->mode_config.mutex);
+	drm_connector_unregister_all(dev);
+	mutex_unlock(&dev->mode_config.mutex);
+}
 
 static int hibmc_pci_probe(struct pci_dev *pdev,
 			   const struct pci_device_id *ent)
@@ -304,8 +318,14 @@ static int hibmc_pci_probe(struct pci_dev *pdev,
 	if (ret)
 		goto err_unload;
 
+	ret = drm_connector_register_all(dev);
+	if (ret)
+		goto err_unregister;
+
 	return 0;
 
+err_unregister:
+	drm_dev_unregister(dev);
 err_unload:
 	hibmc_unload(dev);
 err_disable:
@@ -320,6 +340,7 @@ static void hibmc_pci_remove(struct pci_dev *pdev)
 {
 	struct drm_device *dev = pci_get_drvdata(pdev);
 
+	hibmc_connector_unplug_all(dev);
 	drm_dev_unregister(dev);
 	hibmc_unload(dev);
 	drm_dev_unref(dev);
