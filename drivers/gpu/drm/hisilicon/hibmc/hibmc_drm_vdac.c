@@ -80,7 +80,7 @@ int hibmc_encoder_init(struct hibmc_drm_device *hidev)
 
 	encoder->possible_crtcs = 0x1;
 	ret = drm_encoder_init(dev, encoder, &hibmc_encoder_encoder_funcs,
-			       DRM_MODE_ENCODER_DAC, NULL);
+			       DRM_MODE_ENCODER_DAC);
 	if (ret) {
 		DRM_ERROR("failed to init encoder\n");
 		return ret;

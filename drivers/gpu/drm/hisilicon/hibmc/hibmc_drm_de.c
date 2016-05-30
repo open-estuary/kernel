@@ -158,8 +158,7 @@ int hibmc_plane_init(struct hibmc_drm_device *hidev)
 	ret = drm_universal_plane_init(dev, plane, 1, &hibmc_plane_funcs,
 				       channel_formats1,
 				       ARRAY_SIZE(channel_formats1),
-				       DRM_PLANE_TYPE_PRIMARY,
-				       NULL);
+				       DRM_PLANE_TYPE_PRIMARY);
 	if (ret) {
 		DRM_ERROR("fail to init plane!!!\n");
 		return ret;
@@ -464,7 +463,7 @@ int hibmc_crtc_init(struct hibmc_drm_device *hidev)
 	int ret;
 
 	ret = drm_crtc_init_with_planes(dev, crtc, plane,
-					NULL, &hibmc_crtc_funcs, NULL);
+					NULL, &hibmc_crtc_funcs);
 	if (ret) {
 		DRM_ERROR("failed to init crtc.\n");
 		return ret;
