@@ -325,6 +325,9 @@ static void cpuinfo_detect_icache_policy(struct cpuinfo_arm64 *info)
 
 static void __cpuinfo_store_cpu(struct cpuinfo_arm64 *info)
 {
+	bool id_aa64_fix = read_cpuid_implementor() == ARM_CPU_IMP_QCOM &&
+				read_cpuid_part_number() == QCOM_CPU_PART_KRYO;
+
 	info->reg_cntfrq = arch_timer_get_cntfrq();
 	info->reg_ctr = read_cpuid_cachetype();
 	info->reg_dczid = read_cpuid(DCZID_EL0);
@@ -337,7 +340,7 @@ static void __cpuinfo_store_cpu(struct cpuinfo_arm64 *info)
 	info->reg_id_aa64isar1 = read_cpuid(ID_AA64ISAR1_EL1);
 	info->reg_id_aa64mmfr0 = read_cpuid(ID_AA64MMFR0_EL1);
 	info->reg_id_aa64mmfr1 = read_cpuid(ID_AA64MMFR1_EL1);
-	info->reg_id_aa64mmfr2 = read_cpuid(ID_AA64MMFR2_EL1);
+	info->reg_id_aa64mmfr2 = id_aa64_fix ? 0 : read_cpuid(ID_AA64MMFR2_EL1);
 	info->reg_id_aa64pfr0 = read_cpuid(ID_AA64PFR0_EL1);
 	info->reg_id_aa64pfr1 = read_cpuid(ID_AA64PFR1_EL1);
 
