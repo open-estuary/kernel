@@ -277,7 +277,7 @@
 			local-mac-address = [00 00 00 01 ff 00];
 			dma-coherent; 
 		};
-		eth1: ethernet5{
+		eth1: ethernet@5{
 			compatible = "hisilicon,hns-nic-v2";
 			ae-name = "dsaf0";
 			port-id = <7>;
