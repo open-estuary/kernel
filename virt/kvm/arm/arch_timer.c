@@ -168,11 +168,18 @@ static void kvm_timer_update_irq(struct kvm_vcpu *vcpu, bool new_level)
 	BUG_ON(!vgic_initialized(vcpu->kvm));
 
 	timer->irq.level = new_level;
-	trace_kvm_timer_update_irq(vcpu->vcpu_id, timer->map->virt_irq,
+	trace_kvm_timer_update_irq(vcpu->vcpu_id, timer->irq.irq,
 				   timer->irq.level);
-	ret = kvm_vgic_inject_mapped_irq(vcpu->kvm, vcpu->vcpu_id,
-					 timer->map,
-					 timer->irq.level);
+	if(timer->map) {
+		ret = kvm_vgic_inject_mapped_irq(vcpu->kvm, vcpu->vcpu_id,
+						timer->map,
+						timer->irq.level);
+	} else {
+		ret = kvm_vgic_inject_irq(vcpu->kvm, vcpu->vcpu_id,
+						timer->irq.irq,
+						timer->irq.level);
+	}
+
 	WARN_ON(ret);
 }
 
@@ -268,12 +275,12 @@ void kvm_timer_flush_hwstate(struct kvm_vcpu *vcpu)
 	* to ensure that hardware interrupts from the timer triggers a guest
 	* exit.
 	*/
-	if (timer->irq.level || kvm_vgic_map_is_active(vcpu, timer->map))
+	if (timer->irq.level || kvm_vgic_map_is_active(vcpu, timer->irq.irq))
 		phys_active = true;
 	else
 		phys_active = false;
 
-	ret = irq_set_irqchip_state(timer->map->irq,
+	ret = irq_set_irqchip_state(host_vtimer_irq,
 				    IRQCHIP_STATE_ACTIVE,
 				    phys_active);
 	WARN_ON(ret);
@@ -321,16 +328,19 @@ int kvm_timer_vcpu_reset(struct kvm_vcpu *vcpu,
 	 */
 	timer->cntv_ctl = 0;
 	kvm_timer_update_state(vcpu);
-
 	/*
-	 * Tell the VGIC that the virtual interrupt is tied to a
-	 * physical interrupt. We do that once per VCPU.
+	 * if GIC supports virt timer interrupt mapping, tell the VGIC that
+	 * the virtual interrupt is tied to a physical interrupt. We do that
+	 * once per VCPU.
 	 */
-	map = kvm_vgic_map_phys_irq(vcpu, irq->irq, host_vtimer_irq);
-	if (WARN_ON(IS_ERR(map)))
-		return PTR_ERR(map);
+	if(kvm_vgic_support_timer_irqmap()) {
+		map = kvm_vgic_map_phys_irq(vcpu, irq->irq, host_vtimer_irq);
+		if (WARN_ON(IS_ERR(map)))
+			return PTR_ERR(map);
 
-	timer->map = map;
+		timer->map = map;
+	}
+
 	return 0;
 }
 

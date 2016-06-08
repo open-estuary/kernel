@@ -242,6 +242,7 @@ int vgic_v3_probe(const struct gic_kvm_info *gic_kvm_info,
 		goto out;
 	}
 	vgic->maint_irq = gic_kvm_info->maint_irq;
+	vgic->timer_irqmap_disabled = gic_kvm_info->timer_irqmap_disabled;
 
 	ich_vtr_el2 = kvm_call_hyp(__vgic_v3_get_ich_vtr_el2);
 
