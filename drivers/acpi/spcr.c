@@ -99,8 +99,8 @@ int __init parse_spcr(bool earlycon)
 		goto done;
 	}
 
-	snprintf(opts, sizeof(opts), "%s,%s,0x%llx,%d", uart, iotype,
-		 table->serial_port.address, baud_rate);
+	snprintf(opts, sizeof(opts), "%s,%s,0x%llx", uart, iotype,
+		 table->serial_port.address);
 
 	pr_info("console: %s", opts);
 
