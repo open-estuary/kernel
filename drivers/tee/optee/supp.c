@@ -31,6 +31,15 @@ void optee_supp_uninit(struct optee_supp *supp)
 	mutex_destroy(&supp->supp_mutex);
 }
 
+/**
+ * optee_supp_thrd_req() - request service from supplicant
+ * @ctx:	context doing the request
+ * @func:	function requested
+ * @num_params:	number of elements in @param array
+ * @param:	parameters for function
+ *
+ * Returns result of operation to be passed to secure world
+ */
 u32 optee_supp_thrd_req(struct tee_context *ctx, u32 func, size_t num_params,
 			struct tee_param *param)
 {
@@ -77,8 +86,18 @@ u32 optee_supp_thrd_req(struct tee_context *ctx, u32 func, size_t num_params,
 	return ret;
 }
 
+/**
+ * optee_supp_recv() - receive request for supplicant
+ * @ctx:	context receiving the request
+ * @func:	requested function in supplicant
+ * @num_params:	number of elements allocated in @param, updated with number
+ *		used elements
+ * @param:	space for parameters for @func
+ *
+ * Returns 0 on success or <0 on failure
+ */
 int optee_supp_recv(struct tee_context *ctx, u32 *func, u32 *num_params,
-		struct tee_param *param)
+		    struct tee_param *param)
 {
 	struct tee_device *teedev = ctx->teedev;
 	struct optee *optee = tee_get_drvdata(teedev);
@@ -144,8 +163,17 @@ out:
 	return rc;
 }
 
+/**
+ * optee_supp_send() - send result of request from supplicant
+ * @ctx:	context sending result
+ * @ret:	return value of request
+ * @num_params:	number of parameters returned
+ * @param:	returned parameters
+ *
+ * Returns 0 on success or <0 on failure.
+ */
 int optee_supp_send(struct tee_context *ctx, u32 ret, u32 num_params,
-			struct tee_param *param)
+		    struct tee_param *param)
 {
 	struct tee_device *teedev = ctx->teedev;
 	struct optee *optee = tee_get_drvdata(teedev);
