@@ -973,6 +973,8 @@ static void __init gic_of_setup_kvm_info(struct device_node *node)
 	gic_v3_kvm_info.type = GIC_V3;
 
 	gic_v3_kvm_info.maint_irq = irq_of_parse_and_map(node, 0);
+	if (!gic_v3_kvm_info.maint_irq)
+		return;
 
 	/* Check GIC supports kvm timer irqmap or not */
 	gic_v3_kvm_info.timer_irqmap_disabled = of_property_read_bool(node,
@@ -984,17 +986,8 @@ static void __init gic_of_setup_kvm_info(struct device_node *node)
 
 	gicv_idx += 3;	/* Also skip GICD, GICC, GICH */
 	ret = of_address_to_resource(node, gicv_idx, &r);
-	if (!ret) {
-		if (!PAGE_ALIGNED(r.start))
-			pr_warn("GICV physical address 0x%llx not page aligned\n",
-				(unsigned long long)r.start);
-		else if (!PAGE_ALIGNED(resource_size(&r)))
-			pr_warn("GICV size 0x%llx not a multiple of page size 0x%lx\n",
-				(unsigned long long)resource_size(&r),
-				PAGE_SIZE);
-		else
-			gic_v3_kvm_info.vcpu = r;
-	}
+	if (!ret)
+		gic_v3_kvm_info.vcpu = r;
 
 	gic_set_kvm_info(&gic_v3_kvm_info);
 }
@@ -1131,7 +1124,6 @@ static struct
 	bool single_redist;
 	u32 maint_irq;
 	int maint_irq_mode;
-	phys_addr_t vctrl_base;
 	phys_addr_t vcpu_base;
 } acpi_data __initdata;
 
@@ -1179,13 +1171,6 @@ gic_acpi_parse_madt_gicc(struct acpi_subtable_header *header,
 		return -ENOMEM;
 
 	gic_acpi_register_redist(gicc->gicr_base_address, redist_base);
-
-	acpi_data.maint_irq = gicc->vgic_interrupt;
-	acpi_data.maint_irq_mode = (gicc->flags & ACPI_MADT_VGIC_IRQ_MODE) ?
-				    ACPI_EDGE_SENSITIVE : ACPI_LEVEL_SENSITIVE;
-	acpi_data.vctrl_base = gicc->gich_base_address;
-	acpi_data.vcpu_base = gicc->gicv_base_address;
-
 	return 0;
 }
 
@@ -1276,6 +1261,52 @@ static bool __init acpi_validate_gic_table(struct acpi_subtable_header *header,
 	return true;
 }
 
+static int __init gic_acpi_parse_virt_madt_gicc(struct acpi_subtable_header *header,
+						const unsigned long end)
+{
+	struct acpi_madt_generic_interrupt *gicc =
+		(struct acpi_madt_generic_interrupt *)header;
+	int maint_irq_mode;
+	static int first_madt = true;
+
+	/* Skip unusable CPUs */
+	if (!(gicc->flags & ACPI_MADT_ENABLED))
+		return 0;
+
+	maint_irq_mode = (gicc->flags & ACPI_MADT_VGIC_IRQ_MODE) ?
+		ACPI_EDGE_SENSITIVE : ACPI_LEVEL_SENSITIVE;
+
+	if (first_madt) {
+		first_madt = false;
+
+		acpi_data.maint_irq = gicc->vgic_interrupt;
+		acpi_data.maint_irq_mode = maint_irq_mode;
+		acpi_data.vcpu_base = gicc->gicv_base_address;
+
+		return 0;
+	}
+
+	/*
+	 * The maintenance interrupt and GICV should be the same for every CPU
+	 */
+	if ((acpi_data.maint_irq != gicc->vgic_interrupt) ||
+	    (acpi_data.maint_irq_mode != maint_irq_mode) ||
+	    (acpi_data.vcpu_base != gicc->gicv_base_address))
+		return -EINVAL;
+
+	return 0;
+}
+
+static bool __init gic_acpi_collect_virt_info(void)
+{
+	int count;
+
+	count = acpi_table_parse_madt(ACPI_MADT_TYPE_GENERIC_INTERRUPT,
+				      gic_acpi_parse_virt_madt_gicc, 0);
+
+	return (count > 0);
+}
+
 #define ACPI_GICV3_DIST_MEM_SIZE (SZ_64K)
 #define ACPI_GICV2_VCTRL_MEM_SIZE	(SZ_4K)
 #define ACPI_GICV2_VCPU_MEM_SIZE	(SZ_8K)
@@ -1308,22 +1339,20 @@ static void __init gic_acpi_setup_kvm_info(void)
 	int irq;
 
 	acpi_table_parse(ACPI_SIG_MADT, acpi_parse_madt);
+	if (!gic_acpi_collect_virt_info()) {
+		pr_warn("Unable to get hardware information used for virtualization\n");
+		return;
+	}
 
 	gic_v3_kvm_info.type = GIC_V3;
 
 	irq = acpi_register_gsi(NULL, acpi_data.maint_irq,
 				acpi_data.maint_irq_mode,
 				ACPI_ACTIVE_HIGH);
-	if (irq > 0)
-		gic_v3_kvm_info.maint_irq = irq;
+	if (irq <= 0)
+		return;
 
-	if (acpi_data.vctrl_base) {
-		struct resource *vctrl = &gic_v3_kvm_info.vctrl;
-
-		vctrl->flags = IORESOURCE_MEM;
-		vctrl->start = acpi_data.vctrl_base;
-		vctrl->end = vctrl->start + ACPI_GICV2_VCTRL_MEM_SIZE - 1;
-	}
+	gic_v3_kvm_info.maint_irq = irq;
 
 	if (acpi_data.vcpu_base) {
 		struct resource *vcpu = &gic_v3_kvm_info.vcpu;
@@ -1335,7 +1364,6 @@ static void __init gic_acpi_setup_kvm_info(void)
 
 	gic_set_kvm_info(&gic_v3_kvm_info);
 }
-
 
 static int __init
 gic_acpi_init(struct acpi_subtable_header *header, const unsigned long end)
