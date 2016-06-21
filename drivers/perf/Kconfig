@@ -16,6 +16,14 @@ config ARM_PMU_ACPI
 	depends on ARM_PMU && ACPI
 	def_bool y
 
+config HISI_PMU
+	bool "HiSilicon SoC PMU"
+	depends on PERF_EVENTS && ARM64
+	help
+	  Enable hardware event counter support for hardware event counters
+	  in Hisilicon HiP05/06/07 SoC. The hardware modules like L3 Cache
+	  and MN have hardware events and counters.
+
 config QCOM_L2_PMU
 	bool "Qualcomm Technologies L2-cache PMU"
 	depends on ARCH_QCOM && ARM64 && PERF_EVENTS && ACPI
