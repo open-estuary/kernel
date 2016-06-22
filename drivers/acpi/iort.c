@@ -185,7 +185,7 @@ iort_pci_find_its_id(struct device *dev, unsigned int idx, int *its_id)
 	node = iort_scan_node(ACPI_IORT_NODE_PCI_ROOT_COMPLEX,
 			      iort_find_dev_callback, dev);
 	if (!node) {
-		pr_err("can't find node related to %s device\n", dev_name(dev));
+		pr_debug("can't find node related to %s device\n", dev_name(dev));
 		return -ENXIO;
 	}
 
