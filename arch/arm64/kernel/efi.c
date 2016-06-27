@@ -228,9 +228,26 @@ void __init efi_init(void)
 
 	reserve_regions();
 	early_memunmap(memmap.map, params.mmap_size);
-	memblock_mark_nomap(params.mmap & PAGE_MASK,
-			    PAGE_ALIGN(params.mmap_size +
-				       (params.mmap & ~PAGE_MASK)));
+
+	/*
+	 * On 64k pages kernels, marking the memory map as MEMBLOCK_NOMAP may
+	 * cause adjacent allocations sharing the same 64k page frame to be
+	 * removed from the linear mapping as well. If this happens to cover
+	 * the initrd allocation performed by GRUB (which, unlike the stub, does
+	 * not align its EFI_LOADER_DATA allocations to 64k), we will run into
+	 * trouble later on, since the generic initrd code expects the initrd
+	 * to be covered by the linear mapping.
+	 */
+	if (PAGE_SIZE > SZ_4K) {
+	  memblock_reserve(params.mmap & PAGE_MASK,
+			   PAGE_ALIGN(params.mmap_size +
+				      (params.mmap & ~PAGE_MASK)));
+	} else {
+	  memblock_mark_nomap(params.mmap & PAGE_MASK,
+			      PAGE_ALIGN(params.mmap_size +
+					 (params.mmap & ~PAGE_MASK)));
+	}
+
 }
 
 static bool __init efi_virtmap_init(void)
