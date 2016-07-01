@@ -10,6 +10,7 @@
  */
 
 #include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/interrupt-controller/mbigen-v1.h>
 
 / {
 	compatible = "hisilicon,hip05-d02";
@@ -90,6 +91,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20000>;
 			enable-method = "psci";
+			next-level-cache = <&cluster0_l2>;
 		};
 
 		cpu1: cpu@20001 {
@@ -97,6 +99,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20001>;
 			enable-method = "psci";
+			next-level-cache = <&cluster0_l2>;
 		};
 
 		cpu2: cpu@20002 {
@@ -104,6 +107,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20002>;
 			enable-method = "psci";
+			next-level-cache = <&cluster0_l2>;
 		};
 
 		cpu3: cpu@20003 {
@@ -111,6 +115,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20003>;
 			enable-method = "psci";
+			next-level-cache = <&cluster0_l2>;
 		};
 
 		cpu4: cpu@20100 {
@@ -118,6 +123,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20100>;
 			enable-method = "psci";
+			next-level-cache = <&cluster1_l2>;
 		};
 
 		cpu5: cpu@20101 {
@@ -125,6 +131,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20101>;
 			enable-method = "psci";
+			next-level-cache = <&cluster1_l2>;
 		};
 
 		cpu6: cpu@20102 {
@@ -132,6 +139,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20102>;
 			enable-method = "psci";
+			next-level-cache = <&cluster1_l2>;
 		};
 
 		cpu7: cpu@20103 {
@@ -139,6 +147,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20103>;
 			enable-method = "psci";
+			next-level-cache = <&cluster1_l2>;
 		};
 
 		cpu8: cpu@20200 {
@@ -146,6 +155,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20200>;
 			enable-method = "psci";
+			next-level-cache = <&cluster2_l2>;
 		};
 
 		cpu9: cpu@20201 {
@@ -153,6 +163,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20201>;
 			enable-method = "psci";
+			next-level-cache = <&cluster2_l2>;
 		};
 
 		cpu10: cpu@20202 {
@@ -160,6 +171,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20202>;
 			enable-method = "psci";
+			next-level-cache = <&cluster2_l2>;
 		};
 
 		cpu11: cpu@20203 {
@@ -167,6 +179,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20203>;
 			enable-method = "psci";
+			next-level-cache = <&cluster2_l2>;
 		};
 
 		cpu12: cpu@20300 {
@@ -174,6 +187,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20300>;
 			enable-method = "psci";
+			next-level-cache = <&cluster3_l2>;
 		};
 
 		cpu13: cpu@20301 {
@@ -181,6 +195,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20301>;
 			enable-method = "psci";
+			next-level-cache = <&cluster3_l2>;
 		};
 
 		cpu14: cpu@20302 {
@@ -188,6 +203,7 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20302>;
 			enable-method = "psci";
+			next-level-cache = <&cluster3_l2>;
 		};
 
 		cpu15: cpu@20303 {
@@ -195,6 +211,23 @@
 			compatible = "arm,cortex-a57", "arm,armv8";
 			reg = <0x20303>;
 			enable-method = "psci";
+			next-level-cache = <&cluster3_l2>;
+		};
+
+		cluster0_l2: l2-cache0 {
+			compatible = "cache";
+		};
+
+		cluster1_l2: l2-cache1 {
+			compatible = "cache";
+		};
+
+		cluster2_l2: l2-cache2 {
+			compatible = "cache";
+		};
+
+		cluster3_l2: l2-cache3 {
+			compatible = "cache";
 		};
 	};
 
@@ -205,6 +238,7 @@
                 #size-cells = <2>;
                 ranges;
                 interrupt-controller;
+                timer-irqmap-disabled;
                 #redistributor-regions = <1>;
                 redistributor-stride = <0x0 0x30000>;
 		reg = <0x0 0x8d000000 0 0x10000>,	/* GICD */
@@ -214,11 +248,69 @@
 		      <0x0 0xfe020000 0 0x10000>;       /* GICV */
 		interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
 
-		its_totems: interrupt-controller@8c000000 {
+		its_peri: interrupt-controller@8c000000 {
 			compatible = "arm,gic-v3-its";
 			msi-controller;
+			#msi-cells = <1>;
 			reg = <0x0 0x8c000000 0x0 0x40000>;
 		};
+
+		its_m3: interrupt-controller@a3000000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			#msi-cells = <1>;
+			reg = <0x0 0xa3000000 0x0 0x40000>;
+		};
+
+		its_pcie: interrupt-controller@b7000000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			#msi-cells = <1>;
+			reg = <0x0 0xb7000000 0x0 0x40000>;
+		};
+
+		its_dsa: interrupt-controller@c6000000 {
+			compatible = "arm,gic-v3-its";
+			msi-controller;
+			#msi-cells = <1>;
+			reg = <0x0 0xc6000000 0x0 0x40000>;
+		};
+	};
+
+	mbigen_pc: mbigen_pc_intc {
+		compatible = "hisilicon,mbigen-v1";
+		msi-parent = <&its_peri MBIGEN_V1_DEVID>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		reg = <0x0 0x8c030000 0x0 0x10000>;
+		num-pins = <256>;
+	};
+
+	mbigen_pcie: mbigen_pcie_intc {
+		compatible = "hisilicon,mbigen-v1";
+		msi-parent = <&its_pcie MBIGEN_V1_DEVID>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		reg = <0x0 0xb7030000 0x0 0x10000>;
+		num-pins = <640>;
+	};
+
+	mbigen_dsa: mbigen_dsa_intc{
+		compatible = "hisilicon,mbigen-v1";
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		reg = <0x0 0xc6030000 0x0 0x10000>;
+		msi-parent = <&its_dsa MBIGEN_V1_DEVID>;
+		num-pins = <640>;
+	};
+
+	mbigen_m3: mbigen_m3_intc {
+		compatible = "hisilicon,mbigen-v1";
+		msi-parent = <&its_m3 MBIGEN_V1_DEVID>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		reg = <0x0 0xa3030000 0x0 0x10000>;
+		num-pins = <256>;
 	};
 
 	timer {
@@ -230,7 +322,7 @@
 	};
 
 	pmu {
-		compatible = "arm,armv8-pmuv3";
+		compatible = "arm,cortex-a57-pmu";
 		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_HIGH>;
 	};
 
@@ -240,10 +332,41 @@
 		#size-cells = <2>;
 		ranges;
 
+		refclk175mhz: refclk175mhz {
+			compatible = "fixed-clock";
+			#clock-cells = <0>;
+			clock-frequency = <175000000>;
+		};
+
 		refclk200mhz: refclk200mhz {
 			compatible = "fixed-clock";
 			#clock-cells = <0>;
 			clock-frequency = <200000000>;
+		};
+
+		peri_c_subctrl: syscon@80000000 {
+			compatible = "hisilicon,hip05-perisubc", "syscon";
+			reg = < 0x0 0x80000000 0x0 0x10000>;
+		};
+
+		dsaf_subctrl: dsaf_subctrl@c0000000 {
+			compatible = "hisilicon,dsaf-ctrl", "syscon";
+			reg = <0x0 0xc0000000 0x0 0x10000>;
+		};
+
+		pcie_subctl: pcie_subctl@b0000000 {
+			compatible = "hisilicon,pcie-sas-subctrl", "syscon";
+			reg = <0x0 0xb0000000 0x0 0x10000>;
+		};
+
+		serdes_ctrl0: sds_ctrl0@c2200000 {
+			compatible = "hisilicon,serdes-syscon","syscon";
+			reg = <0 0xc2200000 0x0 0x80000>;
+		};
+
+		serdes_ctrl1: sds_ctrl0@c2280000 {
+			compatible = "hisilicon,serdes-syscon","syscon";
+			reg = <0 0xc2280000 0x0 0x80000>;
 		};
 
 		uart0: uart@80300000 {
@@ -265,6 +388,392 @@
 			clock-names = "apb_pclk";
 			reg-shift = <2>;
 			reg-io-width = <4>;
+			status = "disabled";
+		};
+
+		m3_i2c0: i2c@a00e0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,designware-i2c";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa00e0000 0x0 0x10000>;
+			interrupts = <8 4>;
+			clocks = <&refclk175mhz>;
+			status = "disabled";
+		};
+
+		m3_i2c1: i2c@a00f0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,designware-i2c";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa00f0000 0x0 0x10000>;
+			interrupts = <9 4>;
+			clocks = <&refclk175mhz>;
+			status = "disabled";
+		};
+
+		m3_i2c2: i2c@a0100000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,designware-i2c";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa0100000 0x0 0x10000>;
+			interrupts = <10 4>;
+			clocks = <&refclk175mhz>;
+			status = "disabled";
+		};
+
+		usb0: ehci@a1000000 {
+			compatible = "generic-ehci";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa1000000 0x0 0x10000>;
+			interrupts = <20 4>;
+			dma-coherent;
+			status = "disabled";
+		};
+
+		usb1: ohci@a1010000 {
+			compatible = "generic-ohci";
+			interrupt-parent = <&mbigen_m3>;
+			reg = <0x0 0xa1010000 0x0 0x10000>;
+			interrupts = <19 4>;
+			dma-coherent;
+			status = "disabled";
+		};
+
+		ahci0: sata@b1002800 {
+			compatible = "hisilicon,hip05-ahci";
+			interrupt-parent = <&mbigen_pcie>;
+			reg = <0x0 0xb1002800 0x0 0x10000>,
+			      <0x0 0xb1000000 0x0 0x10000>;
+			interrupts = <382 4>;
+			dma-coherent;
+			status = "disabled";
+		};
+
+		peri_gpio0: gpio@802e0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,dw-apb-gpio";
+			reg = <0x0 0x802e0000 0x0 0x10000>;
+			status = "disabled";
+
+			porta: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				gpio-controller;
+				#gpio-cells = <2>;
+				snps,nr-gpios = <32>;
+				reg = <0>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupts = <GIC_SPI 312 IRQ_TYPE_LEVEL_HIGH>;
+			};
+		};
+
+		peri_gpio1: gpio@802f0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "snps,dw-apb-gpio";
+			reg = <0x0 0x802f0000 0x0 0x10000>;
+			status = "disabled";
+
+			portb: gpio-controller@0 {
+				compatible = "snps,dw-apb-gpio-port";
+				gpio-controller;
+				#gpio-cells = <2>;
+				snps,nr-gpios = <32>;
+				reg = <0>;
+				interrupt-controller;
+				#interrupt-cells = <2>;
+				interrupts = <GIC_SPI 313 IRQ_TYPE_LEVEL_HIGH>;
+			};
+		};
+
+		mdio@803c0000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "hisilicon,hns-mdio";
+			reg = <0x0 0x803c0000 0x0 0x10000>;
+			subctrl-vbase = <&peri_c_subctrl>;
+
+			soc0_phy0: ethernet-phy@0 {
+				reg = <0x0>;
+				compatible = "ethernet-phy-ieee802.3-c22";
+			};
+			soc0_phy1: ethernet-phy@1 {
+				reg = <0x1>;
+				compatible = "ethernet-phy-ieee802.3-c22";
+			};
+		};
+
+		dsaf0: dsa@c7000000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "hisilicon,hns-dsaf-v1";
+			mode = "6port-16rss";
+			interrupt-parent = <&mbigen_dsa>;
+
+			reg = <0x0 0xc5000000 0x0 0x890000
+			       0x0 0xc7000000 0x0 0x600000>;
+			reg-names = "ppe-base","dsaf-base";
+			subctrl-syscon = <&dsaf_subctrl>;
+			reset-field-offset = <0>;
+
+			interrupts = <
+				/* [14] ge fifo err 8 / xge 6**/
+				149 0x4 150 0x4 151 0x4 152 0x4
+				153 0x4 154 0x4  26 0x4 27 0x4
+				155 0x4 156 0x4 157 0x4 158 0x4 159 0x4 160 0x4
+				/* [12] rcb com 4*3**/
+				0x6 0x4 0x7 0x4 0x8 0x4 0x9 0x4
+				 16 0x4  17 0x4  18 0x4  19 0x4
+				 22 0x4  23 0x4  24 0x4  25 0x4
+				/* [8] ppe tnl 0-7***/
+				0x0 0x4 0x1 0x4 0x2 0x4 0x3 0x4
+				0x4 0x4 0x5 0x4 12 0x4 13 0x4
+				/* [21] dsaf event int 3+18**/
+				 128 0x4  129 0x4  130 0x4
+				0x83 0x4 0x84 0x4 0x85 0x4 0x86 0x4 0x87 0x4 0x88 0x4
+				0x89 0x4 0x8a 0x4 0x8b 0x4 0x8c 0x4 0x8d 0x4 0x8e 0x4
+				0x8f 0x4 0x90 0x4 0x91 0x4 0x92 0x4 0x93 0x4 0x94 0x4
+					/* reservd interrupt */
+					0xa1 0x1 0xa2 0x1 0xa3 0x1 0xa4 0x1
+				/* [256] sevice rcb 2*128*/
+				0x180 0x1 0x181 0x1 0x182 0x1 0x183 0x1
+				0x184 0x1 0x185 0x1 0x186 0x1 0x187 0x1
+				0x188 0x1 0x189 0x1 0x18a 0x1 0x18b 0x1
+				0x18c 0x1 0x18d 0x1 0x18e 0x1 0x18f 0x1
+				0x190 0x1 0x191 0x1 0x192 0x1 0x193 0x1
+				0x194 0x1 0x195 0x1 0x196 0x1 0x197 0x1
+				0x198 0x1 0x199 0x1 0x19a 0x1 0x19b 0x1
+				0x19c 0x1 0x19d 0x1 0x19e 0x1 0x19f 0x1
+				0x1a0 0x1 0x1a1 0x1 0x1a2 0x1 0x1a3 0x1
+				0x1a4 0x1 0x1a5 0x1 0x1a6 0x1 0x1a7 0x1
+				0x1a8 0x1 0x1a9 0x1 0x1aa 0x1 0x1ab 0x1
+				0x1ac 0x1 0x1ad 0x1 0x1ae 0x1 0x1af 0x1
+				0x1b0 0x1 0x1b1 0x1 0x1b2 0x1 0x1b3 0x1
+				0x1b4 0x1 0x1b5 0x1 0x1b6 0x1 0x1b7 0x1
+				0x1b8 0x1 0x1b9 0x1 0x1ba 0x1 0x1bb 0x1
+				0x1bc 0x1 0x1bd 0x1 0x1be 0x1 0x1bf 0x1
+				0x1c0 0x1 0x1c1 0x1 0x1c2 0x1 0x1c3 0x1
+				0x1c4 0x1 0x1c5 0x1 0x1c6 0x1 0x1c7 0x1
+				0x1c8 0x1 0x1c9 0x1 0x1ca 0x1 0x1cb 0x1
+				0x1cc 0x1 0x1cd 0x1 0x1ce 0x1 0x1cf 0x1
+				0x1d0 0x1 0x1d1 0x1 0x1d2 0x1 0x1d3 0x1
+				0x1d4 0x1 0x1d5 0x1 0x1d6 0x1 0x1d7 0x1
+				0x1d8 0x1 0x1d9 0x1 0x1da 0x1 0x1db 0x1
+				0x1dc 0x1 0x1dd 0x1 0x1de 0x1 0x1df 0x1
+				0x1e0 0x1 0x1e1 0x1 0x1e2 0x1 0x1e3 0x1
+				0x1e4 0x1 0x1e5 0x1 0x1e6 0x1 0x1e7 0x1
+				0x1e8 0x1 0x1e9 0x1 0x1ea 0x1 0x1eb 0x1
+				0x1ec 0x1 0x1ed 0x1 0x1ee 0x1 0x1ef 0x1
+				0x1f0 0x1 0x1f1 0x1 0x1f2 0x1 0x1f3 0x1
+				0x1f4 0x1 0x1f5 0x1 0x1f6 0x1 0x1f7 0x1
+				0x1f8 0x1 0x1f9 0x1 0x1fa 0x1 0x1fb 0x1
+				0x1fc 0x1 0x1fd 0x1 0x1fe 0x1 0x1ff 0x1
+				0x200 0x1 0x201 0x1 0x202 0x1 0x203 0x1
+				0x204 0x1 0x205 0x1 0x206 0x1 0x207 0x1
+				0x208 0x1 0x209 0x1 0x20a 0x1 0x20b 0x1
+				0x20c 0x1 0x20d 0x1 0x20e 0x1 0x20f 0x1
+				0x210 0x1 0x211 0x1 0x212 0x1 0x213 0x1
+				0x214 0x1 0x215 0x1 0x216 0x1 0x217 0x1
+				0x218 0x1 0x219 0x1 0x21a 0x1 0x21b 0x1
+				0x21c 0x1 0x21d 0x1 0x21e 0x1 0x21f 0x1
+				0x220 0x1 0x221 0x1 0x222 0x1 0x223 0x1
+				0x224 0x1 0x225 0x1 0x226 0x1 0x227 0x1
+				0x228 0x1 0x229 0x1 0x22a 0x1 0x22b 0x1
+				0x22c 0x1 0x22d 0x1 0x22e 0x1 0x22f 0x1
+				0x230 0x1 0x231 0x1 0x232 0x1 0x233 0x1
+				0x234 0x1 0x235 0x1 0x236 0x1 0x237 0x1
+				0x238 0x1 0x239 0x1 0x23a 0x1 0x23b 0x1
+				0x23c 0x1 0x23d 0x1 0x23e 0x1 0x23f 0x1
+				0x240 0x1 0x241 0x1 0x242 0x1 0x243 0x1
+				0x244 0x1 0x245 0x1 0x246 0x1 0x247 0x1
+				0x248 0x1 0x249 0x1 0x24a 0x1 0x24b 0x1
+				0x24c 0x1 0x24d 0x1 0x24e 0x1 0x24f 0x1
+				0x250 0x1 0x251 0x1 0x252 0x1 0x253 0x1
+				0x254 0x1 0x255 0x1 0x256 0x1 0x257 0x1
+				0x258 0x1 0x259 0x1 0x25a 0x1 0x25b 0x1
+				0x25c 0x1 0x25d 0x1 0x25e 0x1 0x25f 0x1
+				0x260 0x1 0x261 0x1 0x262 0x1 0x263 0x1
+				0x264 0x1 0x265 0x1 0x266 0x1 0x267 0x1
+				0x268 0x1 0x269 0x1 0x26a 0x1 0x26b 0x1
+				0x26c 0x1 0x26d 0x1 0x26e 0x1 0x26f 0x1
+				0x270 0x1 0x271 0x1 0x272 0x1 0x273 0x1
+				0x274 0x1 0x275 0x1 0x276 0x1 0x277 0x1
+				0x278 0x1 0x279 0x1 0x27a 0x1 0x27b 0x1
+				0x27c 0x1 0x27d 0x1 0x27e 0x1 0x27f 0x1>;
+			buf-size = <4096>;
+			desc-num = <1024>;
+			dma-coherent;
+
+			port@0 {
+				reg = <0>;
+				serdes-syscon = <&serdes_ctrl0>;
+				port-rst-offset = <0>;
+				port-mode-offset = <0>;
+			};
+
+			port@1 {
+				reg = <1>;
+				serdes-syscon = <&serdes_ctrl0>;
+				port-rst-offset = <1>;
+				port-mode-offset = <0>;
+			};
+
+			port@4 {
+				reg = <4>;
+				phy-handle = <&soc0_phy0>;
+				serdes-syscon = <&serdes_ctrl1>;
+				port-rst-offset = <4>;
+				port-mode-offset = <0>;
+			};
+
+			port@5 {
+				reg = <5>;
+				phy-handle = <&soc0_phy1>;
+				serdes-syscon = <&serdes_ctrl1>;
+				port-rst-offset = <5>;
+				port-mode-offset = <0>;
+			};
+		};
+
+		eth0: ethernet@5{
+			compatible = "hisilicon,hns-nic-v1";
+			ae-handle = <&dsaf0>;
+			port-idx-in-ae = <5>;
+			local-mac-address = [00 00 00 02 00 58];
+			status = "disabled";
+			dma-coherent;
+		};
+
+		eth1: ethernet@4{
+			compatible = "hisilicon,hns-nic-v1";
+			ae-handle = <&dsaf0>;
+			port-idx-in-ae = <4>;
+			local-mac-address = [00 00 00 02 00 57];
+			status = "disabled";
+			dma-coherent;
+		};
+
+		eth2: ethernet@0{
+			compatible = "hisilicon,hns-nic-v1";
+			ae-handle = <&dsaf0>;
+			port-idx-in-ae = <0>;
+			local-mac-address = [00 00 00 02 00 5a];
+			status = "disabled";
+			dma-coherent;
+		};
+
+		eth3: ethernet@1{
+			compatible = "hisilicon,hns-nic-v1";
+			ae-handle = <&dsaf0>;
+			port-idx-in-ae = <1>;
+			local-mac-address = [00 00 00 02 00 5b];
+			status = "disabled";
+			dma-coherent;
+		};
+
+		sas0: sas@c1000000 {
+			compatible = "hisilicon,hip05-sas-v1";
+			sas-addr = [50 01 88 20 16 00 00 0a];
+			reg = <0x0 0xc1000000 0x0 0x10000>;
+			hisilicon,sas-syscon = <&dsaf_subctrl>;
+			ctrl-reset-reg = <0xa60>;
+			ctrl-reset-sts-reg = <0x5a30>;
+			ctrl-clock-ena-reg = <0x338>;
+			queue-count = <32>;
+			phy-count = <8>;
+			dma-coherent;
+			interrupt-parent = <&mbigen_dsa>;
+			interrupts = <259 4>, <263 4>,<264 4>,/* phy irq(0~79) */
+					<269 4>,<273 4>,<274 4>,/* phy irq(0~79) */
+					<279 4>,<283 4>,<284 4>,/* phy irq(0~79) */
+					<289 4>,<293 4>,<294 4>,/* phy irq(0~79) */
+					<299 4>,<303 4>,<304 4>,/* phy irq(0~79) */
+					<309 4>,<313 4>,<314 4>,/* phy irq(0~79) */
+					<319 4>,<323 4>,<324 4>,/* phy irq(0~79) */
+					<329 4>,<333 4>,<334 4>,/* phy irq(0~79) */
+					<336 1>,<337 1>,<338 1>,<339 1>,<340 1>,
+					<341 1>,<342 1>,<343 1>,/* cq irq (80~111) */
+					<344 1>,<345 1>,<346 1>,<347 1>,<348 1>,
+					<349 1>,<350 1>,<351 1>,/* cq irq (80~111) */
+					<352 1>,<353 1>,<354 1>,<355 1>,<356 1>,
+					<357 1>,<358 1>,<359 1>,/* cq irq (80~111) */
+					<360 1>,<361 1>,<362 1>,<363 1>,<364 1>,
+					<365 1>,<366 1>,<367 1>,/* cq irq (80~111) */
+					<376 4>,/* chip fatal error irq(120) */
+					<381 4>;/* chip fatal error irq(125) */
+			status = "disabled";
+		};
+
+		sas1: sas@b1000000 {
+			compatible = "hisilicon,hip05-sas-v1";
+			sas-addr = [50 01 88 20 16 00 00 00];
+			reg = <0x0 0xb1000000 0x0 0x10000>;
+			hisilicon,sas-syscon = <&pcie_subctl>;
+			ctrl-reset-reg = <0xa18>;
+			ctrl-reset-sts-reg = <0x5a0c>;
+			ctrl-clock-ena-reg = <0x318>;
+			queue-count = <32>;
+			phy-count = <8>;
+			dma-coherent;
+			interrupt-parent = <&mbigen_pcie>;
+			interrupts = <259 4>,<263 4>,<264 4>,/* phy irq(0~79) */
+					<269 4>,<273 4>,<274 4>,/* phy irq(0~79) */
+					<279 4>,<283 4>,<284 4>,/* phy irq(0~79) */
+					<289 4>,<293 4>,<294 4>,/* phy irq(0~79) */
+					<299 4>,<303 4>,<304 4>,/* phy irq(0~79) */
+					<309 4>,<313 4>,<314 4>,/* phy irq(0~79) */
+					<319 4>,<323 4>,<324 4>,/* phy irq(0~79) */
+					<329 4>,<333 4>,<334 4>,/* phy irq(0~79) */
+					<336 1>,<337 1>,<338 1>,<339 1>,<340 1>,
+					<341 1>,<342 1>,<343 1>,/* cq irq (80~111) */
+					<344 1>,<345 1>,<346 1>,<347 1>,<348 1>,
+					<349 1>,<350 1>,<351 1>,/* cq irq (80~111) */
+					<352 1>,<353 1>,<354 1>,<355 1>,<356 1>,
+					<357 1>,<358 1>,<359 1>,/* cq irq (80~111) */
+					<360 1>,<361 1>,<362 1>,<363 1>,<364 1>,
+					<365 1>,<366 1>,<367 1>,/* cq irq (80~111) */
+					<376 4>,/* chip fatal error irq(120) */
+					<381 4>;/* chip fatal error irq(125) */
+			status = "disabled";
+		};
+
+		pcie0: pcie@b0080000 {
+			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+			reg = <0 0xb0080000 0 0x10000>, <0x220 0x04000000 0 0x04000000>;
+			reg-names = "rc_dbi",  "ecam-cfg";
+			bus-range = <64  127>;
+			msi-map = <0x4000 &its_pcie 0x4000 0x4000>;
+			msi-map-mask = <0xffff>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			ranges = <0x02000000 0 0xb0000000 0x220 0x08000000 0 0x7ff0000>,
+					 <0x01000000 0 0x0 0x220 0x0fff0000 0 0x10000>;
+			num-lanes = <8>;
+			port-id = <1>;
+			status = "disabled";
+		};
+
+		pcie1: pcie@b0090000 {
+			compatible = "hisilicon,hip05-pcie", "snps,dw-pcie";
+			reg = <0 0xb0090000 0 0x10000>, <0x240 0x08000000 0 0x04000000>;
+			reg-names = "rc_dbi", "ecam-cfg";
+			bus-range = <128 191>;
+			msi-map = <0x8000 &its_pcie 0x8000 0x4000>;
+			msi-map-mask = <0xffff>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			device_type = "pci";
+			dma-coherent;
+			ranges = <0x02000000 0 0xc0000000 0x240 0x0c000000 0 0x3ff0000>,
+					 <0x01000000 0 0x0 0x240 0x0fff0000 0 0x10000>;
+			num-lanes = <8>;
+			port-id = <2>;
 			status = "disabled";
 		};
 	};
