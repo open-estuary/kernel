@@ -261,6 +261,20 @@ static bool dw8250_idma_filter(struct dma_chan *chan, void *param)
 	return param == chan->device->dev->parent;
 }
 
+static const struct acpi_device_id dw8250_acpi_match[] = {
+	{ "INT33C4", 0 },
+	{ "INT33C5", 0 },
+	{ "INT3434", 0 },
+	{ "INT3435", 0 },
+	{ "80860F0A", 0 },
+	{ "8086228A", 0 },
+	{ "APMC0D08", 0},
+	{ "AMD0020", 0 },
+	{ "HISI0031", 0 },
+	{ },
+};
+MODULE_DEVICE_TABLE(acpi, dw8250_acpi_match);
+
 static void dw8250_quirks(struct uart_port *p, struct dw8250_data *data)
 {
 	if (p->dev->of_node) {
@@ -282,12 +296,17 @@ static void dw8250_quirks(struct uart_port *p, struct dw8250_data *data)
 		}
 #endif
 	} else if (has_acpi_companion(p->dev)) {
+		struct acpi_device *adev = to_acpi_device_node(p->dev->fwnode);
+
 		p->iotype = UPIO_MEM32;
 		p->regshift = 2;
 		p->serial_in = dw8250_serial_in32;
 		p->set_termios = dw8250_set_termios;
-		/* So far none of there implement the Busy Functionality */
-		data->uart_16550_compatible = true;
+		if (!acpi_match_device_ids(adev, &dw8250_acpi_match[8]))
+			p->serial_out = dw8250_serial_out32;
+		else
+			/* So far none of there implement the Busy Functionality */
+			data->uart_16550_compatible = true;
 	}
 
 	/* Platforms with iDMA */
@@ -588,19 +607,6 @@ static const struct of_device_id dw8250_of_match[] = {
 	{ /* Sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, dw8250_of_match);
-
-static const struct acpi_device_id dw8250_acpi_match[] = {
-	{ "INT33C4", 0 },
-	{ "INT33C5", 0 },
-	{ "INT3434", 0 },
-	{ "INT3435", 0 },
-	{ "80860F0A", 0 },
-	{ "8086228A", 0 },
-	{ "APMC0D08", 0},
-	{ "AMD0020", 0 },
-	{ },
-};
-MODULE_DEVICE_TABLE(acpi, dw8250_acpi_match);
 
 static struct platform_driver dw8250_platform_driver = {
 	.driver = {
