@@ -40,8 +40,9 @@
 #define ARM64_HAS_32BIT_EL0			13
 #define ARM64_HYP_OFFSET_LOW			14
 #define ARM64_MISMATCHED_CACHE_LINE_SIZE	15
+#define ARM64_WORKAROUND_KRYO_XXX               16
 
-#define ARM64_NCAPS				16
+#define ARM64_NCAPS				17
 
 #ifndef __ASSEMBLY__
 
