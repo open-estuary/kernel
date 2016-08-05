@@ -477,6 +477,7 @@ static int hisi_pmu_l3c_dev_probe(struct platform_device *pdev)
 	struct hisi_hwmod_unit *punit;
 	int unit_id;
 
+	pr_info("--------------- l3c probe called...! ------------");
 	/* Allocate and Register PMU for the first time */
 	if (!hisi_uncore_l3c) {
 		pl3c_pmu = hisi_pmu_alloc(pdev);
@@ -542,6 +543,7 @@ static int hisi_pmu_l3c_dev_remove(struct platform_device *pdev)
 
 static const struct of_device_id l3c_of_match[] = {
 	{ .compatible = "hisilicon,hip05-l3c", },
+	{ .compatible = "hisilicon,hip06-l3c", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, l3c_of_match);
