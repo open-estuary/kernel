@@ -1318,8 +1318,8 @@ static void __init acpi_madt_oem_check(char *oem_id, char *oem_table_id)
      * because GIC on D02 and D03 don't support that
      */
     if (!strncmp(oem_id, "HISI", 4)
-        && (!strncmp(oem_table_id, "HISI-D02", 8)
-        || !strncmp(oem_table_id, "HISI-D03", 8)))
+        && (!strncmp(oem_table_id, "HISI0660", 8)
+        || !strncmp(oem_table_id, "HISI1610", 8)))
         gic_v3_kvm_info.timer_irqmap_disabled = true;
 }
 
