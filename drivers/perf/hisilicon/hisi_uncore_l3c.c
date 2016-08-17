@@ -477,7 +477,6 @@ static int hisi_pmu_l3c_dev_probe(struct platform_device *pdev)
 	struct hisi_hwmod_unit *punit;
 	int unit_id;
 
-	pr_info("--------------- l3c probe called...! ------------");
 	/* Allocate and Register PMU for the first time */
 	if (!hisi_uncore_l3c) {
 		pl3c_pmu = hisi_pmu_alloc(pdev);
