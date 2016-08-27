@@ -41,6 +41,9 @@
 #define DSAF_SW_PORT_NUM	8
 #define DSAF_TOTAL_QUEUE_NUM	129
 
+/* reserved a tcam entry for each port to support promisc by fuzzy match */
+#define DSAFV2_MAC_FUZZY_TCAM_NUM    DSAF_MAX_PORT_NUM
+
 #define DSAF_TCAM_SUM		512
 #define DSAF_LINE_SUM		(2048 * 14)
 
@@ -297,6 +300,8 @@
 #define DSAF_TBL_LKUP_NUM_I_0_REG		0x50C0
 #define DSAF_TBL_LKUP_NUM_O_0_REG		0x50E0
 #define DSAF_TBL_UCAST_BCAST_MIS_INFO_0_0_REG	0x510C
+#define DSAF_TBL_TCAM_MATCH_CFG_H_REG		0x5130
+#define DSAF_TBL_TCAM_MATCH_CFG_L_REG		0x5134
 
 #define DSAF_INODE_FIFO_WL_0_REG		0x6000
 #define DSAF_ONODE_FIFO_WL_0_REG		0x6020
