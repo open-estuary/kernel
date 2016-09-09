@@ -51,6 +51,33 @@ struct mcfg_fixup {
 
 static struct mcfg_fixup mcfg_quirks[] = {
 /*	{ OEM_ID, OEM_TABLE_ID, REV, DOMAIN, BUS_RANGE, cfgres, ops }, */
+#ifdef CONFIG_PCI_HOST_THUNDER_PEM
+	/* SoC pass2.x */
+	{ "CAVIUM", "THUNDERX", 1, 4, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x88001f000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 5, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x884057000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 6, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x88808f000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 7, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x89001f000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 8, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x894057000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 9, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x89808f000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 14, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x98001f000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 15, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x984057000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 16, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x98808f000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 17, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x99001f000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 18, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x994057000000UL, 0x39 * SZ_16M) },
+	{ "CAVIUM", "THUNDERX", 1, 19, MCFG_BUS_ANY, &pci_thunder_pem_ops,
+	  DEFINE_RES_MEM(0x99808f000000UL, 0x39 * SZ_16M) },
+#endif
 };
 
 static char mcfg_oem_id[ACPI_OEM_ID_SIZE];
