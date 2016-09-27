@@ -488,6 +488,13 @@
 			num-pins = <409>;
 		};
 
+		mbigen_dsa_roce: intc-roce {
+			msi-parent = <&its_dsa 0x40B1E>;
+			interrupt-controller;
+			#interrupt-cells = <2>;
+			num-pins = <34>;
+		};
+
 		mbigen_dsa_sas0: intc-sas0 {
 			msi-parent = <&its_dsa 0x40900>;
 			interrupt-controller;
@@ -529,6 +536,12 @@
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
+
+		refclk: refclk {
+			compatible = "fixed-clock";
+			clock-frequency = <50000000>;
+			#clock-cells = <0>;
+		};
 
 		lpc@a01b0000 {
 			compatible = "hisilicon,low-pin-count";
@@ -774,6 +787,86 @@
 			dma-coherent;
 		};
 
+		infiniband@c4000000 {
+			compatible = "hisilicon,hns-roce-v1";
+			reg = <0x0 0xc4000000 0x0 0x100000>;
+			dma-coherent;
+			eth-handle = <&eth2 &eth3 0 0 &eth0 &eth1>;
+			dsaf-handle = <&dsaf0>;
+			#address-cells = <2>;
+			#size-cells = <2>;
+			interrupt-parent = <&mbigen_dsa_roce>;
+			interrupts = <722 1>,
+					<723 1>,
+					<724 1>,
+					<725 1>,
+					<726 1>,
+					<727 1>,
+					<728 1>,
+					<729 1>,
+					<730 1>,
+					<731 1>,
+					<732 1>,
+					<733 1>,
+					<734 1>,
+					<735 1>,
+					<736 1>,
+					<737 1>,
+					<738 1>,
+					<739 1>,
+					<740 1>,
+					<741 1>,
+					<742 1>,
+					<743 1>,
+					<744 1>,
+					<745 1>,
+					<746 1>,
+					<747 1>,
+					<748 1>,
+					<749 1>,
+					<750 1>,
+					<751 1>,
+					<752 1>,
+					<753 1>,
+					<785 1>,
+					<754 4>;
+
+			interrupt-names = "hns-roce-comp-0",
+					"hns-roce-comp-1",
+					"hns-roce-comp-2",
+					"hns-roce-comp-3",
+					"hns-roce-comp-4",
+					"hns-roce-comp-5",
+					"hns-roce-comp-6",
+					"hns-roce-comp-7",
+					"hns-roce-comp-8",
+					"hns-roce-comp-9",
+					"hns-roce-comp-10",
+					"hns-roce-comp-11",
+					"hns-roce-comp-12",
+					"hns-roce-comp-13",
+					"hns-roce-comp-14",
+					"hns-roce-comp-15",
+					"hns-roce-comp-16",
+					"hns-roce-comp-17",
+					"hns-roce-comp-18",
+					"hns-roce-comp-19",
+					"hns-roce-comp-20",
+					"hns-roce-comp-21",
+					"hns-roce-comp-22",
+					"hns-roce-comp-23",
+					"hns-roce-comp-24",
+					"hns-roce-comp-25",
+					"hns-roce-comp-26",
+					"hns-roce-comp-27",
+					"hns-roce-comp-28",
+					"hns-roce-comp-29",
+					"hns-roce-comp-30",
+					"hns-roce-comp-31",
+					"hns-roce-async",
+					"hns-roce-common";
+		};
+
 		sas0: sas@c3000000 {
 			compatible = "hisilicon,hip06-sas-v2";
 			reg = <0 0xc3000000 0 0x10000>;
@@ -782,6 +875,7 @@
 			ctrl-reset-reg = <0xa60>;
 			ctrl-reset-sts-reg = <0x5a30>;
 			ctrl-clock-ena-reg = <0x338>;
+			clocks = <&refclk 0>;
 			queue-count = <16>;
 			phy-count = <8>;
 			dma-coherent;
@@ -824,6 +918,7 @@
 			ctrl-reset-reg = <0xa18>;
 			ctrl-reset-sts-reg = <0x5a0c>;
 			ctrl-clock-ena-reg = <0x318>;
+			clocks = <&refclk 0>;
 			queue-count = <16>;
 			phy-count = <8>;
 			dma-coherent;
@@ -865,6 +960,7 @@
 			ctrl-reset-reg = <0xae0>;
 			ctrl-reset-sts-reg = <0x5a70>;
 			ctrl-clock-ena-reg = <0x3a8>;
+			clocks = <&refclk 0>;
 			queue-count = <16>;
 			phy-count = <8>;
 			dma-coherent;

@@ -53,7 +53,7 @@ static int hns_roce_sw2hw_mpt(struct hns_roce_dev *hr_dev,
 {
 	return hns_roce_cmd_mbox(hr_dev, mailbox->dma, 0, mpt_index, 0,
 				 HNS_ROCE_CMD_SW2HW_MPT,
-				 HNS_ROCE_CMD_TIME_CLASS_B);
+				 HNS_ROCE_CMD_TIMEOUT_MSECS);
 }
 
 static int hns_roce_hw2sw_mpt(struct hns_roce_dev *hr_dev,
@@ -62,7 +62,7 @@ static int hns_roce_hw2sw_mpt(struct hns_roce_dev *hr_dev,
 {
 	return hns_roce_cmd_mbox(hr_dev, 0, mailbox ? mailbox->dma : 0,
 				 mpt_index, !mailbox, HNS_ROCE_CMD_HW2SW_MPT,
-				 HNS_ROCE_CMD_TIME_CLASS_B);
+				 HNS_ROCE_CMD_TIMEOUT_MSECS);
 }
 
 static int hns_roce_buddy_alloc(struct hns_roce_buddy *buddy, int order,
@@ -137,11 +137,12 @@ static int hns_roce_buddy_init(struct hns_roce_buddy *buddy, int max_order)
 
 	for (i = 0; i <= buddy->max_order; ++i) {
 		s = BITS_TO_LONGS(1 << (buddy->max_order - i));
-		buddy->bits[i] = kmalloc_array(s, sizeof(long), GFP_KERNEL);
-		if (!buddy->bits[i])
-			goto err_out_free;
-
-		bitmap_zero(buddy->bits[i], 1 << (buddy->max_order - i));
+		buddy->bits[i] = kcalloc(s, sizeof(long), GFP_KERNEL);
+		if (!buddy->bits[i]) {
+			buddy->bits[i] = vzalloc(s * sizeof(long));
+			if (!buddy->bits[i])
+				goto err_out_free;
+		}
 	}
 
 	set_bit(0, buddy->bits[buddy->max_order]);
@@ -151,7 +152,7 @@ static int hns_roce_buddy_init(struct hns_roce_buddy *buddy, int max_order)
 
 err_out_free:
 	for (i = 0; i <= buddy->max_order; ++i)
-		kfree(buddy->bits[i]);
+		kvfree(buddy->bits[i]);
 
 err_out:
 	kfree(buddy->bits);
@@ -164,7 +165,7 @@ static void hns_roce_buddy_cleanup(struct hns_roce_buddy *buddy)
 	int i;
 
 	for (i = 0; i <= buddy->max_order; ++i)
-		kfree(buddy->bits[i]);
+		kvfree(buddy->bits[i]);
 
 	kfree(buddy->bits);
 	kfree(buddy->num_free);
@@ -287,7 +288,7 @@ static void hns_roce_mr_free(struct hns_roce_dev *hr_dev,
 	}
 
 	hns_roce_bitmap_free(&hr_dev->mr_table.mtpt_bitmap,
-			     key_to_hw_index(mr->key));
+			     key_to_hw_index(mr->key), BITMAP_NO_RR);
 }
 
 static int hns_roce_mr_enable(struct hns_roce_dev *hr_dev,
@@ -564,11 +565,14 @@ struct ib_mr *hns_roce_reg_user_mr(struct ib_pd *pd, u64 start, u64 length,
 	if (mr->umem->page_size != HNS_ROCE_HEM_PAGE_SIZE) {
 		dev_err(dev, "Just support 4K page size but is 0x%x now!\n",
 			mr->umem->page_size);
+		ret = -EINVAL;
+		goto err_umem;
 	}
 
 	if (n > HNS_ROCE_MAX_MTPT_PBL_NUM) {
 		dev_err(dev, " MR len %lld err. MR is limited to 4G at most!\n",
 			length);
+		ret = -EINVAL;
 		goto err_umem;
 	}
 

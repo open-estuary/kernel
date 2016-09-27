@@ -102,6 +102,12 @@
 #define HNS_ROCE_V1_EXT_ODB_ALFUL	\
 	(HNS_ROCE_V1_EXT_ODB_DEPTH - HNS_ROCE_V1_DB_RSVD)
 
+#define HNS_ROCE_BT_RSV_BUF_SIZE			(1 << 17)
+
+#define HNS_ROCE_V1_TPTR_ENTRY_SIZE			2
+#define HNS_ROCE_V1_TPTR_BUF_SIZE	\
+	(HNS_ROCE_V1_TPTR_ENTRY_SIZE * HNS_ROCE_V1_MAX_CQ_NUM)
+
 #define HNS_ROCE_ODB_POLL_MODE				0
 
 #define HNS_ROCE_SDB_NORMAL_MODE			0
@@ -434,6 +440,8 @@ struct hns_roce_ud_send_wqe {
 #define UD_SEND_WQE_U32_8_DMAC_5_M   \
 	(((1UL << 8) - 1) << UD_SEND_WQE_U32_8_DMAC_5_S)
 
+#define UD_SEND_WQE_U32_8_LOOPBACK_INDICATOR_S 22
+
 #define UD_SEND_WQE_U32_8_OPERATION_TYPE_S 16
 #define UD_SEND_WQE_U32_8_OPERATION_TYPE_M   \
 	(((1UL << 4) - 1) << UD_SEND_WQE_U32_8_OPERATION_TYPE_S)
@@ -478,12 +486,16 @@ struct hns_roce_sqp_context {
 	u32 qp1c_bytes_12;
 	u32 qp1c_bytes_16;
 	u32 qp1c_bytes_20;
-	u32 qp1c_bytes_28;
 	u32 cur_rq_wqe_ba_l;
+	u32 qp1c_bytes_28;
 	u32 qp1c_bytes_32;
 	u32 cur_sq_wqe_ba_l;
 	u32 qp1c_bytes_40;
 };
+
+#define QP1C_BYTES_4_QP_STATE_S 0
+#define QP1C_BYTES_4_QP_STATE_M   \
+	(((1UL << 3) - 1) << QP1C_BYTES_4_QP_STATE_S)
 
 #define QP1C_BYTES_4_SQ_WQE_SHIFT_S 8
 #define QP1C_BYTES_4_SQ_WQE_SHIFT_M   \
@@ -971,11 +983,23 @@ struct hns_roce_db_table {
 	struct hns_roce_ext_db *ext_db;
 };
 
+struct hns_roce_bt_table {
+	struct hns_roce_buf_list qpc_buf;
+	struct hns_roce_buf_list mtpt_buf;
+	struct hns_roce_buf_list cqc_buf;
+};
+
+struct hns_roce_tptr_table {
+	struct hns_roce_buf_list tptr_buf;
+};
+
 struct hns_roce_v1_priv {
 	struct hns_roce_db_table  db_table;
 	struct hns_roce_raq_table raq_table;
+	struct hns_roce_bt_table  bt_table;
+	struct hns_roce_tptr_table tptr_table;
 };
 
-int hns_dsaf_roce_reset(struct fwnode_handle *dsaf_fwnode, bool enable);
+int hns_dsaf_roce_reset(struct fwnode_handle *dsaf_fwnode, bool dereset);
 
 #endif

@@ -574,7 +574,6 @@ static int hns_nic_poll_rx_skb(struct hns_nic_ring_data *ring_data,
 	struct sk_buff *skb;
 	struct hnae_desc *desc;
 	struct hnae_desc_cb *desc_cb;
-	struct ethhdr *eh;
 	unsigned char *va;
 	int bnum, length, i;
 	int pull_len;
@@ -600,7 +599,6 @@ static int hns_nic_poll_rx_skb(struct hns_nic_ring_data *ring_data,
 		ring->stats.sw_err_cnt++;
 		return -ENOMEM;
 	}
-	skb_reset_mac_header(skb);
 
 	prefetchw(skb->data);
 	length = le16_to_cpu(desc->rx.pkt_len);
@@ -678,14 +676,6 @@ out_bnum_err:
 
 	if (unlikely(hnae_get_bit(bnum_flag, HNS_RXD_L2E_B))) {
 		ring->stats.l2_err++;
-		dev_kfree_skb_any(skb);
-		return -EFAULT;
-	}
-
-	/* filter out multicast pkt with the same src mac as this port */
-	eh = eth_hdr(skb);
-	if (unlikely(is_multicast_ether_addr(eh->h_dest) &&
-		     ether_addr_equal(ndev->dev_addr, eh->h_source))) {
 		dev_kfree_skb_any(skb);
 		return -EFAULT;
 	}
@@ -1597,6 +1587,20 @@ struct rtnl_link_stats64 *hns_nic_get_stats64(struct net_device *ndev,
 	return stats;
 }
 
+static u16
+hns_nic_select_queue(struct net_device *ndev, struct sk_buff *skb,
+		     void *accel_priv, select_queue_fallback_t fallback)
+{
+	struct hns_nic_priv *priv = netdev_priv(ndev);
+	struct ethhdr *eth_hdr = (struct ethhdr *)skb->data;
+
+	/*fix hardware broadcast/multicast packets queue loopback */
+	if (!AE_IS_VER1(priv->enet_ver) &&
+	    is_multicast_ether_addr(eth_hdr->h_dest))
+		return 0;
+	else
+		return fallback(ndev, skb);
+}
 static const struct net_device_ops hns_nic_netdev_ops = {
 	.ndo_open = hns_nic_net_open,
 	.ndo_stop = hns_nic_net_stop,
@@ -1612,6 +1616,7 @@ static const struct net_device_ops hns_nic_netdev_ops = {
 	.ndo_poll_controller = hns_nic_poll_controller,
 #endif
 	.ndo_set_rx_mode = hns_nic_set_rx_mode,
+	.ndo_select_queue = hns_nic_select_queue,
 };
 
 static void hns_nic_update_link_status(struct net_device *netdev)

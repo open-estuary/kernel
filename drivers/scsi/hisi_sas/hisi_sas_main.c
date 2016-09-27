@@ -615,7 +615,7 @@ static void hisi_sas_port_notify_formed(struct asd_sas_phy *sas_phy)
 	struct hisi_hba *hisi_hba = sas_ha->lldd_ha;
 	struct hisi_sas_phy *phy = sas_phy->lldd_phy;
 	struct asd_sas_port *sas_port = sas_phy->port;
-	struct hisi_sas_port *port = &hisi_hba->port[sas_phy->id];
+	struct hisi_sas_port *port = &hisi_hba->port[phy->port_id];
 	unsigned long flags;
 
 	if (!sas_port)
@@ -846,7 +846,8 @@ static int hisi_sas_exec_internal_tmf_task(struct domain_device *device,
 		task = NULL;
 	}
 ex_err:
-	WARN_ON(retry == TASK_RETRY);
+	if (retry == TASK_RETRY)
+		dev_warn(dev, "abort tmf: executing internal task failed!\n");
 	sas_free_task(task);
 	return res;
 }
@@ -1091,6 +1092,9 @@ static int hisi_sas_query_task(struct sas_task *task)
 		/* The task is not in Lun or failed, reset the phy */
 		case TMF_RESP_FUNC_FAILED:
 		case TMF_RESP_FUNC_COMPLETE:
+			break;
+		default:
+			rc = TMF_RESP_FUNC_FAILED;
 			break;
 		}
 	}
@@ -1557,6 +1561,7 @@ static struct Scsi_Host *hisi_sas_shost_alloc(struct platform_device *pdev,
 	struct hisi_hba *hisi_hba;
 	struct device *dev = &pdev->dev;
 	struct device_node *np = pdev->dev.of_node;
+	struct clk *refclk;
 
 	shost = scsi_host_alloc(&hisi_sas_sht, sizeof(*hisi_hba));
 	if (!shost)
@@ -1592,6 +1597,12 @@ static struct Scsi_Host *hisi_sas_shost_alloc(struct platform_device *pdev,
 					     &hisi_hba->ctrl_clock_ena_reg))
 			goto err_out;
 	}
+
+	refclk = devm_clk_get(&pdev->dev, NULL);
+	if (IS_ERR(refclk))
+		dev_warn(dev, "no ref clk property");
+	else
+		hisi_hba->refclk_frequency_mhz = clk_get_rate(refclk) / 1000000;
 
 	if (device_property_read_u32(dev, "phy-count", &hisi_hba->n_phy))
 		goto err_out;

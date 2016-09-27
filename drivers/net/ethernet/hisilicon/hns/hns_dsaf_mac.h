@@ -31,7 +31,7 @@ struct dsaf_device;
 #define MAC_MIN_MTU		68
 #define MAC_MAX_MTU_DBG		MAC_DEFAULT_MTU
 
-#define MAC_DEFAULT_PAUSE_TIME 0xff
+#define MAC_DEFAULT_PAUSE_TIME 0xffff
 
 #define MAC_GMAC_IDX 0
 #define MAC_XGMAC_IDX 1
@@ -407,7 +407,7 @@ struct mac_driver {
 };
 
 struct mac_stats_string {
-	char desc[64];
+	char desc[ETH_GSTRING_LEN];
 	unsigned long offset;
 };
 
@@ -459,5 +459,7 @@ void hns_set_led_opt(struct hns_mac_cb *mac_cb);
 int hns_cpld_led_set_id(struct hns_mac_cb *mac_cb,
 			enum hnae_led_state status);
 void hns_mac_set_promisc(struct hns_mac_cb *mac_cb, u8 en);
+int hns_mac_get_inner_port_num(struct hns_mac_cb *mac_cb,
+			       u8 vmid, u8 *port_num);
 
 #endif /* _HNS_DSAF_MAC_H */

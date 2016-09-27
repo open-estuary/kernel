@@ -77,14 +77,13 @@ static int hns_roce_sw2hw_cq(struct hns_roce_dev *dev,
 			     unsigned long cq_num)
 {
 	return hns_roce_cmd_mbox(dev, mailbox->dma, 0, cq_num, 0,
-			    HNS_ROCE_CMD_SW2HW_CQ, HNS_ROCE_CMD_TIME_CLASS_A);
+			    HNS_ROCE_CMD_SW2HW_CQ, HNS_ROCE_CMD_TIMEOUT_MSECS);
 }
 
 static int hns_roce_cq_alloc(struct hns_roce_dev *hr_dev, int nent,
 			     struct hns_roce_mtt *hr_mtt,
 			     struct hns_roce_uar *hr_uar,
-			     struct hns_roce_cq *hr_cq, int vector,
-			     int collapsed)
+			     struct hns_roce_cq *hr_cq, int vector)
 {
 	struct hns_roce_cmd_mailbox *mailbox = NULL;
 	struct hns_roce_cq_table *cq_table = NULL;
@@ -153,6 +152,9 @@ static int hns_roce_cq_alloc(struct hns_roce_dev *hr_dev, int nent,
 	hr_cq->cons_index = 0;
 	hr_cq->uar = hr_uar;
 
+	atomic_set(&hr_cq->refcount, 1);
+	init_completion(&hr_cq->free);
+
 	return 0;
 
 err_radix:
@@ -164,7 +166,7 @@ err_put:
 	hns_roce_table_put(hr_dev, &cq_table->table, hr_cq->cqn);
 
 err_out:
-	hns_roce_bitmap_free(&cq_table->bitmap, hr_cq->cqn);
+	hns_roce_bitmap_free(&cq_table->bitmap, hr_cq->cqn, BITMAP_NO_RR);
 	return ret;
 }
 
@@ -174,7 +176,7 @@ static int hns_roce_hw2sw_cq(struct hns_roce_dev *dev,
 {
 	return hns_roce_cmd_mbox(dev, 0, mailbox ? mailbox->dma : 0, cq_num,
 				 mailbox ? 0 : 1, HNS_ROCE_CMD_HW2SW_CQ,
-				 HNS_ROCE_CMD_TIME_CLASS_A);
+				 HNS_ROCE_CMD_TIMEOUT_MSECS);
 }
 
 static void hns_roce_free_cq(struct hns_roce_dev *hr_dev,
@@ -192,12 +194,17 @@ static void hns_roce_free_cq(struct hns_roce_dev *hr_dev,
 	/* Waiting interrupt process procedure carried out */
 	synchronize_irq(hr_dev->eq_table.eq[hr_cq->vector].irq);
 
+	/* wait for all interrupt processed */
+	if (atomic_dec_and_test(&hr_cq->refcount))
+		complete(&hr_cq->free);
+	wait_for_completion(&hr_cq->free);
+
 	spin_lock_irq(&cq_table->lock);
 	radix_tree_delete(&cq_table->tree, hr_cq->cqn);
 	spin_unlock_irq(&cq_table->lock);
 
 	hns_roce_table_put(hr_dev, &cq_table->table, hr_cq->cqn);
-	hns_roce_bitmap_free(&cq_table->bitmap, hr_cq->cqn);
+	hns_roce_bitmap_free(&cq_table->bitmap, hr_cq->cqn, BITMAP_NO_RR);
 }
 
 static int hns_roce_ib_get_cq_umem(struct hns_roce_dev *hr_dev,
@@ -300,10 +307,7 @@ struct ib_cq *hns_roce_ib_create_cq(struct ib_device *ib_dev,
 
 	cq_entries = roundup_pow_of_two((unsigned int)cq_entries);
 	hr_cq->ib_cq.cqe = cq_entries - 1;
-	mutex_init(&hr_cq->resize_mutex);
 	spin_lock_init(&hr_cq->lock);
-	hr_cq->hr_resize_buf = NULL;
-	hr_cq->resize_umem = NULL;
 
 	if (context) {
 		if (ib_copy_from_udata(&ucmd, udata, sizeof(ucmd))) {
@@ -338,12 +342,21 @@ struct ib_cq *hns_roce_ib_create_cq(struct ib_device *ib_dev,
 	}
 
 	/* Allocate cq index, fill cq_context */
-	ret = hns_roce_cq_alloc(hr_dev, cq_entries, &hr_cq->hr_buf.hr_mtt,
-				uar, hr_cq, vector, 0);
+	ret = hns_roce_cq_alloc(hr_dev, cq_entries, &hr_cq->hr_buf.hr_mtt, uar,
+				hr_cq, vector);
 	if (ret) {
 		dev_err(dev, "Creat CQ .Failed to cq_alloc.\n");
 		goto err_mtt;
 	}
+
+	/*
+	 * For the QP created by kernel space, tptr value should be initialized
+	 * to zero; For the QP created by user space, it will cause synchronous
+	 * problems if tptr is set to zero here, so we initialze it in user
+	 * space.
+	 */
+	if (!context)
+		*hr_cq->tptr_addr = 0;
 
 	/* Get created cq handler and carry out event */
 	hr_cq->comp = hns_roce_ib_cq_comp;
@@ -353,11 +366,14 @@ struct ib_cq *hns_roce_ib_create_cq(struct ib_device *ib_dev,
 	if (context) {
 		if (ib_copy_to_udata(udata, &hr_cq->cqn, sizeof(u64))) {
 			ret = -EFAULT;
-			goto err_mtt;
+			goto err_cqc;
 		}
 	}
 
 	return &hr_cq->ib_cq;
+
+err_cqc:
+	hns_roce_free_cq(hr_dev, hr_cq);
 
 err_mtt:
 	hns_roce_mtt_cleanup(hr_dev, &hr_cq->hr_buf.hr_mtt);
