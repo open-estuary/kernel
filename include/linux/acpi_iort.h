@@ -37,6 +37,7 @@ int iort_pmsi_get_dev_id(struct device *dev, u32 *dev_id);
 struct irq_domain *iort_get_device_domain(struct device *dev, u32 req_id);
 /* IOMMU interface */
 const struct iommu_ops *iort_iommu_configure(struct device *dev);
+void acpi_configure_pmsi_domain(struct device *dev);
 #else
 static inline void acpi_iort_init(void) { }
 static inline bool iort_node_match(u8 type) { return false; }
@@ -56,6 +57,8 @@ static inline int iort_pmsi_get_dev_id(struct device *dev, u32 *dev_id)
 static inline
 const struct iommu_ops *iort_iommu_configure(struct device *dev)
 { return NULL; }
+
+static inline void acpi_configure_pmsi_domain(struct device *dev) { }
 #endif
 
 #define IORT_ACPI_DECLARE(name, table_id, fn)		\
