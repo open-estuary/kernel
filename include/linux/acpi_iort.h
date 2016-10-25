@@ -33,6 +33,7 @@ struct fwnode_handle *iort_find_domain_token(int trans_id);
 void acpi_iort_init(void);
 bool iort_node_match(u8 type);
 u32 iort_msi_map_rid(struct device *dev, u32 req_id);
+int iort_pmsi_get_dev_id(struct device *dev, u32 *dev_id);
 struct irq_domain *iort_get_device_domain(struct device *dev, u32 req_id);
 /* IOMMU interface */
 const struct iommu_ops *iort_iommu_configure(struct device *dev);
@@ -41,9 +42,16 @@ static inline void acpi_iort_init(void) { }
 static inline bool iort_node_match(u8 type) { return false; }
 static inline u32 iort_msi_map_rid(struct device *dev, u32 req_id)
 { return req_id; }
+
 static inline struct irq_domain *iort_get_device_domain(struct device *dev,
 							u32 req_id)
 { return NULL; }
+
+static inline int iort_pmsi_get_dev_id(struct device *dev, u32 *dev_id)
+{
+	return -ENODEV;
+}
+
 /* IOMMU interface */
 static inline
 const struct iommu_ops *iort_iommu_configure(struct device *dev)
