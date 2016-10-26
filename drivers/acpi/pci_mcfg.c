@@ -144,6 +144,36 @@ static struct mcfg_fixup mcfg_quirks[] = {
 	PCI_ACPI_QUIRK_QUAD_DOM("HIP07   ", 8, &hisi_pcie_ops),
 	PCI_ACPI_QUIRK_QUAD_DOM("HIP07   ", 12, &hisi_pcie_ops),
 #endif
+#ifdef CONFIG_PCI_XGENE
+#define XGENE_V1_ECAM_MCFG(rev, seg) \
+	{"APM   ", "XGENE   ", rev, seg, MCFG_BUS_ANY, \
+		&xgene_v1_pcie_ecam_ops }
+#define XGENE_V2_1_ECAM_MCFG(rev, seg) \
+	{"APM   ", "XGENE   ", rev, seg, MCFG_BUS_ANY, \
+		&xgene_v2_1_pcie_ecam_ops }
+#define XGENE_V2_2_ECAM_MCFG(rev, seg) \
+	{"APM   ", "XGENE   ", rev, seg, MCFG_BUS_ANY, \
+		&xgene_v2_2_pcie_ecam_ops }
+
+	/* X-Gene SoC with v1 PCIe controller */
+	XGENE_V1_ECAM_MCFG(1, 0),
+	XGENE_V1_ECAM_MCFG(1, 1),
+	XGENE_V1_ECAM_MCFG(1, 2),
+	XGENE_V1_ECAM_MCFG(1, 3),
+	XGENE_V1_ECAM_MCFG(1, 4),
+	XGENE_V1_ECAM_MCFG(2, 0),
+	XGENE_V1_ECAM_MCFG(2, 1),
+	XGENE_V1_ECAM_MCFG(2, 2),
+	XGENE_V1_ECAM_MCFG(2, 3),
+	XGENE_V1_ECAM_MCFG(2, 4),
+	/* X-Gene SoC with v2.1 PCIe controller */
+	XGENE_V2_1_ECAM_MCFG(3, 0),
+	XGENE_V2_1_ECAM_MCFG(3, 1),
+	/* X-Gene SoC with v2.2 PCIe controller */
+	XGENE_V2_2_ECAM_MCFG(4, 0),
+	XGENE_V2_2_ECAM_MCFG(4, 1),
+	XGENE_V2_2_ECAM_MCFG(4, 2),
+#endif
 };
 
 static char mcfg_oem_id[ACPI_OEM_ID_SIZE];
