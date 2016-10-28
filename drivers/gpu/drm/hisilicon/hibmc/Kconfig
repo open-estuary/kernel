@@ -1,6 +1,7 @@
 config DRM_HISI_HIBMC
 	tristate "DRM Support for Hisilicon Hibmc"
 	depends on DRM && PCI
+	select DRM_TTM
 
 	help
 	  Choose this option if you have a Hisilicon Hibmc soc chipset.
