@@ -20,8 +20,21 @@
 #define HIBMC_DRM_DRV_H
 
 #include <drm/drmP.h>
+#include <drm/drm_fb_helper.h>
 #include <drm/ttm/ttm_bo_driver.h>
 #include <drm/drm_gem.h>
+
+struct hibmc_framebuffer {
+	struct drm_framebuffer fb;
+	struct drm_gem_object *obj;
+	bool is_fbdev_fb;
+};
+
+struct hibmc_fbdev {
+	struct drm_fb_helper helper;
+	struct hibmc_framebuffer *fb;
+	int size;
+};
 
 struct hibmc_drm_device {
 	/* hw */
@@ -41,8 +54,12 @@ struct hibmc_drm_device {
 		bool initialized;
 	} ttm;
 
+	/* fbdev */
+	struct hibmc_fbdev *fbdev;
 	bool mm_inited;
 };
+
+#define to_hibmc_framebuffer(x) container_of(x, struct hibmc_framebuffer, fb)
 
 struct hibmc_bo {
 	struct ttm_buffer_object bo;
@@ -65,8 +82,15 @@ static inline struct hibmc_bo *gem_to_hibmc_bo(struct drm_gem_object *gem)
 
 #define DRM_FILE_PAGE_OFFSET (0x100000000ULL >> PAGE_SHIFT)
 
+int hibmc_fbdev_init(struct hibmc_drm_device *hidev);
+void hibmc_fbdev_fini(struct hibmc_drm_device *hidev);
+
 int hibmc_gem_create(struct drm_device *dev, u32 size, bool iskernel,
 		     struct drm_gem_object **obj);
+struct hibmc_framebuffer *
+hibmc_framebuffer_init(struct drm_device *dev,
+		       const struct drm_mode_fb_cmd2 *mode_cmd,
+		       struct drm_gem_object *obj);
 
 int hibmc_mm_init(struct hibmc_drm_device *hibmc);
 void hibmc_mm_fini(struct hibmc_drm_device *hibmc);

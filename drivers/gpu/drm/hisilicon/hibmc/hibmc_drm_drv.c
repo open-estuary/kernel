@@ -66,11 +66,23 @@ static struct drm_driver hibmc_driver = {
 
 static int hibmc_pm_suspend(struct device *dev)
 {
+	struct pci_dev *pdev = to_pci_dev(dev);
+	struct drm_device *drm_dev = pci_get_drvdata(pdev);
+	struct hibmc_drm_device *hidev = drm_dev->dev_private;
+
+	drm_fb_helper_set_suspend_unlocked(&hidev->fbdev->helper, 1);
+
 	return 0;
 }
 
 static int hibmc_pm_resume(struct device *dev)
 {
+	struct pci_dev *pdev = to_pci_dev(dev);
+	struct drm_device *drm_dev = pci_get_drvdata(pdev);
+	struct hibmc_drm_device *hidev = drm_dev->dev_private;
+
+	drm_fb_helper_set_suspend_unlocked(&hidev->fbdev->helper, 0);
+
 	return 0;
 }
 
@@ -170,6 +182,7 @@ static int hibmc_unload(struct drm_device *dev)
 {
 	struct hibmc_drm_device *hidev = dev->dev_private;
 
+	hibmc_fbdev_fini(hidev);
 	hibmc_mm_fini(hidev);
 	hibmc_hw_fini(hidev);
 	dev->dev_private = NULL;
@@ -192,6 +205,10 @@ static int hibmc_load(struct drm_device *dev, unsigned long flags)
 		goto err;
 
 	ret = hibmc_mm_init(hidev);
+	if (ret)
+		goto err;
+
+	ret = hibmc_fbdev_init(hidev);
 	if (ret)
 		goto err;
 
