@@ -45,6 +45,8 @@ struct hibmc_drm_device {
 
 	/* drm */
 	struct drm_device  *dev;
+	struct drm_plane plane;
+	bool mode_config_initialized;
 
 	/* ttm */
 	struct {
@@ -82,6 +84,7 @@ static inline struct hibmc_bo *gem_to_hibmc_bo(struct drm_gem_object *gem)
 
 #define DRM_FILE_PAGE_OFFSET (0x100000000ULL >> PAGE_SHIFT)
 
+int hibmc_plane_init(struct hibmc_drm_device *hidev);
 int hibmc_fbdev_init(struct hibmc_drm_device *hidev);
 void hibmc_fbdev_fini(struct hibmc_drm_device *hidev);
 
@@ -101,5 +104,7 @@ int hibmc_dumb_create(struct drm_file *file, struct drm_device *dev,
 int hibmc_dumb_mmap_offset(struct drm_file *file, struct drm_device *dev,
 			   u32 handle, u64 *offset);
 int hibmc_mmap(struct file *filp, struct vm_area_struct *vma);
+
+extern const struct drm_mode_config_funcs hibmc_mode_funcs;
 
 #endif
