@@ -131,6 +131,14 @@ static int hibmc_kms_init(struct hibmc_drm_device *hidev)
 		return ret;
 	}
 
+	ret = hibmc_connector_init(hidev);
+	if (ret) {
+		DRM_ERROR("failed to init connector\n");
+		return ret;
+	}
+
+	drm_mode_connector_attach_encoder(&hidev->connector,
+					  &hidev->encoder);
 	return 0;
 }
 
