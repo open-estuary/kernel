@@ -42,6 +42,7 @@ struct hibmc_drm_device {
 	void __iomem   *fb_map;
 	unsigned long  fb_base;
 	unsigned long  fb_size;
+	int msi_enabled;
 
 	/* drm */
 	struct drm_device  *dev;
