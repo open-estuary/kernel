@@ -204,9 +204,7 @@ void __init acpi_boot_table_init(void)
 	 *   and a /hypervisor node when running on Xen)
 	 *   and ACPI has not been [force] enabled (acpi=on|force)
 	 */
-	if (param_acpi_off ||
-	    (!param_acpi_on && !param_acpi_force &&
-	     of_scan_flat_dt(dt_scan_depth1_nodes, NULL)))
+	if (param_acpi_off)
 		goto done;
 
 	/*
