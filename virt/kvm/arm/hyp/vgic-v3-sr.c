@@ -24,6 +24,27 @@
 #define vtr_to_max_lr_idx(v)		((v) & 0xf)
 #define vtr_to_nr_pri_bits(v)		(((u32)(v) >> 29) + 1)
 
+#define read_gicreg(r)							\
+	({								\
+		u64 reg;						\
+		asm volatile("mrs_s %0, " __stringify(r) : "=r" (reg));	\
+		reg;							\
+	})
+
+#define write_gicreg(v,r)						\
+	do {								\
+		u64 __val = (v);					\
+		asm volatile("msr_s " __stringify(r) ", %0" : : "r" (__val));\
+	} while (0)
+
+#define write_gicreg_kryo(v,r) {					\
+	u64 __val = (v);						\
+	asm volatile(ALTERNATIVE("msr_s " __stringify(r) ", %x0",	\
+				 "nop ",				\
+				 ARM64_WORKAROUND_KRYO_XXX)		\
+				 : : "r" (__val));			\
+} while (0)
+
 static u64 __hyp_text __gic_v3_get_lr(unsigned int lr)
 {
 	switch (lr & 0xf) {
@@ -309,8 +330,8 @@ void __hyp_text __vgic_v3_restore_state(struct kvm_vcpu *vcpu)
 	 * Prevent the guest from touching the GIC system registers if
 	 * SRE isn't enabled for GICv3 emulation.
 	 */
-	write_gicreg(read_gicreg(ICC_SRE_EL2) & ~ICC_SRE_EL2_ENABLE,
-		     ICC_SRE_EL2);
+	write_gicreg_kryo(read_gicreg(ICC_SRE_EL2) & ~ICC_SRE_EL2_ENABLE,
+			  ICC_SRE_EL2);
 }
 
 void __hyp_text __vgic_v3_init_lrs(void)
