@@ -73,6 +73,8 @@
 #define UART_DR_ERROR		(UART011_DR_OE|UART011_DR_BE|UART011_DR_PE|UART011_DR_FE)
 #define UART_DUMMY_DR_RX	(1 << 16)
 
+static bool pl011_workaround_busy;
+
 static u16 pl011_std_offsets[REG_ARRAY_SIZE] = {
 	[REG_DR] = UART01x_DR,
 	[REG_FR] = UART01x_FR,
@@ -1519,8 +1521,13 @@ static unsigned int pl011_tx_empty(struct uart_port *port)
 	struct uart_amba_port *uap =
 	    container_of(port, struct uart_amba_port, port);
 	unsigned int status = pl011_read(uap, REG_FR);
-	return status & (uap->vendor->fr_busy | UART01x_FR_TXFF) ?
-							0 : TIOCSER_TEMT;
+
+	if (unlikely(pl011_workaround_busy))
+		return status & UART011_FR_TXFE ? TIOCSER_TEMT : 0;
+	else
+		return status & (uap->vendor->fr_busy | UART01x_FR_TXFF) ?
+							0 :
+			 TIOCSER_TEMT;
 }
 
 static unsigned int pl011_get_mctrl(struct uart_port *port)
@@ -2218,8 +2225,14 @@ pl011_console_write(struct console *co, const char *s, unsigned int count)
 	 *	Finally, wait for transmitter to become empty
 	 *	and restore the TCR
 	 */
-	while (pl011_read(uap, REG_FR) & uap->vendor->fr_busy)
-		cpu_relax();
+
+	if (unlikely(pl011_workaround_busy)) {
+		while (!(pl011_read(uap, REG_FR) & UART011_FR_TXFE))
+			cpu_relax();
+	} else {
+		while (pl011_read(uap, REG_FR) & uap->vendor->fr_busy)
+			cpu_relax();
+	}
 	if (!uap->vendor->always_enabled)
 		pl011_write(old_cr, uap, REG_CR);
 
@@ -2391,8 +2404,13 @@ static void pl011_putc(struct uart_port *port, int c)
 		writel(c, port->membase + UART01x_DR);
 	else
 		writeb(c, port->membase + UART01x_DR);
-	while (readl(port->membase + UART01x_FR) & UART01x_FR_BUSY)
-		cpu_relax();
+	if (unlikely(pl011_workaround_busy)) {
+		while (!(readl(port->membase + UART01x_FR) & UART011_FR_TXFE))
+			cpu_relax();
+	} else {
+		while (readl(port->membase + UART01x_FR) & UART01x_FR_BUSY)
+			cpu_relax();
+	}
 }
 
 static void pl011_early_write(struct console *con, const char *s, unsigned n)
@@ -2407,6 +2425,10 @@ static int __init pl011_early_console_setup(struct earlycon_device *device,
 {
 	if (!device->port.membase)
 		return -ENODEV;
+
+	if (read_cpuid_implementor() == ARM_CPU_IMP_QCOM &&
+	    read_cpuid_part_number() == QCOM_CPU_PART_KRYO)
+		pl011_workaround_busy = true;
 
 	device->con->write = pl011_early_write;
 	return 0;
@@ -2657,6 +2679,10 @@ static int sbsa_uart_probe(struct platform_device *pdev)
 	ret = pl011_setup_port(&pdev->dev, uap, r, portnr);
 	if (ret)
 		return ret;
+
+	if (read_cpuid_implementor() == ARM_CPU_IMP_QCOM &&
+	    read_cpuid_part_number() == QCOM_CPU_PART_KRYO)
+		pl011_workaround_busy = true;
 
 	platform_set_drvdata(pdev, uap);
 
