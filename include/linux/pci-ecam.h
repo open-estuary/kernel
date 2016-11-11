@@ -58,6 +58,13 @@ void __iomem *pci_ecam_map_bus(struct pci_bus *bus, unsigned int devfn,
 			       int where);
 /* default ECAM ops */
 extern struct pci_ecam_ops pci_generic_ecam_ops;
+/* ECAM ops for known quirks */
+#ifdef CONFIG_PCI_HOST_THUNDER_PEM
+extern struct pci_ecam_ops pci_thunder_pem_ops;
+#endif
+#ifdef CONFIG_PCI_HOST_THUNDER_ECAM
+extern struct pci_ecam_ops pci_thunder_ecam_ops;
+#endif
 
 #ifdef CONFIG_PCI_HOST_GENERIC
 /* for DT-based PCI controllers that support ECAM */
