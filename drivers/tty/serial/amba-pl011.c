@@ -304,6 +304,18 @@ static void pl011_write(unsigned int val, const struct uart_amba_port *uap,
 		writew_relaxed(val, addr);
 }
 
+#ifdef CONFIG_ARM64
+static void pl011_check_busy_workaround(void)
+{
+
+	if (read_cpuid_implementor() == ARM_CPU_IMP_QCOM &&
+	    read_cpuid_part_number() == QCOM_CPU_PART_KRYO)
+		pl011_workaround_busy = true;
+}
+#else
+static void pl011_check_busy_workaround(void) {}
+#endif
+
 /*
  * Reads up to 256 characters from the FIFO or until it's empty and
  * inserts them into the TTY layer. Returns the number of characters
@@ -2371,9 +2383,7 @@ static int __init pl011_early_console_setup(struct earlycon_device *device,
 	if (!device->port.membase)
 		return -ENODEV;
 
-	if (read_cpuid_implementor() == ARM_CPU_IMP_QCOM &&
-	    read_cpuid_part_number() == QCOM_CPU_PART_KRYO)
-		pl011_workaround_busy = true;
+	pl011_check_busy_workaround();
 
 	device->con->write = pl011_early_write;
 	return 0;
@@ -2625,9 +2635,7 @@ static int sbsa_uart_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	if (read_cpuid_implementor() == ARM_CPU_IMP_QCOM &&
-	    read_cpuid_part_number() == QCOM_CPU_PART_KRYO)
-		pl011_workaround_busy = true;
+	pl011_check_busy_workaround();
 
 	platform_set_drvdata(pdev, uap);
 
