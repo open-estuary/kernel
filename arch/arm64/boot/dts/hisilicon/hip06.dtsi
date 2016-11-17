@@ -245,6 +245,7 @@
 		      <0x0 0xfe010000 0 0x10000>,       /* GICH */
 		      <0x0 0xfe020000 0 0x10000>;       /* GICV */
 		interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
+		hisi-timer-irqmap-disabled;
 
 		its_dsa: interrupt-controller@c6000000 {
 			compatible = "arm,gic-v3-its";
