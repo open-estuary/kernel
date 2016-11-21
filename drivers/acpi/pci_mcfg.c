@@ -260,7 +260,7 @@ static __init int pci_mcfg_parse(struct acpi_table_header *header)
 	/* Save MCFG IDs and revision for quirks matching */
 	memcpy(mcfg_oem_id, header->oem_id, ACPI_OEM_ID_SIZE);
 	memcpy(mcfg_oem_table_id, header->oem_table_id, ACPI_OEM_TABLE_ID_SIZE);
-	mcfg_oem_revision = header->revision;
+	mcfg_oem_revision = header->oem_revision;
 
 	pr_info("MCFG table detected, %d entries\n", n);
 	return 0;
