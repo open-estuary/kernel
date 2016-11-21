@@ -35,7 +35,7 @@
 #include "hns_roce_device.h"
 #include "hns_roce_cmd.h"
 #include "hns_roce_hem.h"
-#include "hns_roce_user.h"
+#include <rdma/hns-abi.h>
 #include "hns_roce_common.h"
 
 static void hns_roce_ib_cq_comp(struct hns_roce_cq *hr_cq)
@@ -77,7 +77,7 @@ static int hns_roce_sw2hw_cq(struct hns_roce_dev *dev,
 			     unsigned long cq_num)
 {
 	return hns_roce_cmd_mbox(dev, mailbox->dma, 0, cq_num, 0,
-			    HNS_ROCE_CMD_SW2HW_CQ, HNS_ROCE_CMD_TIME_CLASS_A);
+			    HNS_ROCE_CMD_SW2HW_CQ, HNS_ROCE_CMD_TIMEOUT_MSECS);
 }
 
 static int hns_roce_cq_alloc(struct hns_roce_dev *hr_dev, int nent,
@@ -166,7 +166,7 @@ err_put:
 	hns_roce_table_put(hr_dev, &cq_table->table, hr_cq->cqn);
 
 err_out:
-	hns_roce_bitmap_free(&cq_table->bitmap, hr_cq->cqn);
+	hns_roce_bitmap_free(&cq_table->bitmap, hr_cq->cqn, BITMAP_NO_RR);
 	return ret;
 }
 
@@ -176,7 +176,7 @@ static int hns_roce_hw2sw_cq(struct hns_roce_dev *dev,
 {
 	return hns_roce_cmd_mbox(dev, 0, mailbox ? mailbox->dma : 0, cq_num,
 				 mailbox ? 0 : 1, HNS_ROCE_CMD_HW2SW_CQ,
-				 HNS_ROCE_CMD_TIME_CLASS_A);
+				 HNS_ROCE_CMD_TIMEOUT_MSECS);
 }
 
 static void hns_roce_free_cq(struct hns_roce_dev *hr_dev,
@@ -204,7 +204,7 @@ static void hns_roce_free_cq(struct hns_roce_dev *hr_dev,
 	spin_unlock_irq(&cq_table->lock);
 
 	hns_roce_table_put(hr_dev, &cq_table->table, hr_cq->cqn);
-	hns_roce_bitmap_free(&cq_table->bitmap, hr_cq->cqn);
+	hns_roce_bitmap_free(&cq_table->bitmap, hr_cq->cqn, BITMAP_NO_RR);
 }
 
 static int hns_roce_ib_get_cq_umem(struct hns_roce_dev *hr_dev,
@@ -348,6 +348,15 @@ struct ib_cq *hns_roce_ib_create_cq(struct ib_device *ib_dev,
 		dev_err(dev, "Creat CQ .Failed to cq_alloc.\n");
 		goto err_mtt;
 	}
+
+	/*
+	 * For the QP created by kernel space, tptr value should be initialized
+	 * to zero; For the QP created by user space, it will cause synchronous
+	 * problems if tptr is set to zero here, so we initialze it in user
+	 * space.
+	 */
+	if (!context)
+		*hr_cq->tptr_addr = 0;
 
 	/* Get created cq handler and carry out event */
 	hr_cq->comp = hns_roce_ib_cq_comp;

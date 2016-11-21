@@ -37,6 +37,8 @@
 
 #define DRV_NAME "hns_roce"
 
+#define HNS_ROCE_HW_VER1	('h' << 24 | 'i' << 16 | '0' << 8 | '6')
+
 #define MAC_ADDR_OCTET_NUM			6
 #define HNS_ROCE_MAX_MSG_LEN			0x80000000
 
@@ -69,6 +71,9 @@
 #define HNS_ROCE_MAX_PORTS			6
 #define HNS_ROCE_MAX_GID_NUM			16
 #define HNS_ROCE_GID_SIZE			16
+
+#define BITMAP_NO_RR				0
+#define BITMAP_RR				1
 
 #define MR_TYPE_MR				0x00
 #define MR_TYPE_DMA				0x03
@@ -296,7 +301,7 @@ struct hns_roce_cq {
 	u32				cq_depth;
 	u32				cons_index;
 	void __iomem			*cq_db_l;
-	void __iomem			*tptr_addr;
+	u16				*tptr_addr;
 	unsigned long			cqn;
 	u32				vector;
 	atomic_t			refcount;
@@ -424,8 +429,6 @@ struct hns_roce_ib_iboe {
 	struct net_device      *netdevs[HNS_ROCE_MAX_PORTS];
 	struct notifier_block	nb;
 	struct notifier_block	nb_inet;
-	/* 16 GID is shared by 6 port in v1 engine. */
-	union ib_gid		gid_table[HNS_ROCE_MAX_GID_NUM];
 	u8			phy_port[HNS_ROCE_MAX_PORTS];
 };
 
@@ -553,6 +556,8 @@ struct hns_roce_dev {
 
 	int			cmd_mod;
 	int			loop_idc;
+	dma_addr_t		tptr_dma_addr; /*only for hw v1*/
+	u32			tptr_size; /*only for hw v1*/
 	struct hns_roce_hw	*hw;
 };
 
@@ -657,7 +662,8 @@ void hns_roce_cleanup_cq_table(struct hns_roce_dev *hr_dev);
 void hns_roce_cleanup_qp_table(struct hns_roce_dev *hr_dev);
 
 int hns_roce_bitmap_alloc(struct hns_roce_bitmap *bitmap, unsigned long *obj);
-void hns_roce_bitmap_free(struct hns_roce_bitmap *bitmap, unsigned long obj);
+void hns_roce_bitmap_free(struct hns_roce_bitmap *bitmap, unsigned long obj,
+			  int rr);
 int hns_roce_bitmap_init(struct hns_roce_bitmap *bitmap, u32 num, u32 mask,
 			 u32 reserved_bot, u32 resetrved_top);
 void hns_roce_bitmap_cleanup(struct hns_roce_bitmap *bitmap);
@@ -665,7 +671,8 @@ void hns_roce_cleanup_bitmap(struct hns_roce_dev *hr_dev);
 int hns_roce_bitmap_alloc_range(struct hns_roce_bitmap *bitmap, int cnt,
 				int align, unsigned long *obj);
 void hns_roce_bitmap_free_range(struct hns_roce_bitmap *bitmap,
-				unsigned long obj, int cnt);
+				unsigned long obj, int cnt,
+				int rr);
 
 struct ib_ah *hns_roce_create_ah(struct ib_pd *pd, struct ib_ah_attr *ah_attr);
 int hns_roce_query_ah(struct ib_ah *ibah, struct ib_ah_attr *ah_attr);
