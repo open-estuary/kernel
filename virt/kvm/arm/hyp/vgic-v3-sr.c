@@ -24,6 +24,7 @@
 #define vtr_to_max_lr_idx(v)		((v) & 0xf)
 #define vtr_to_nr_pri_bits(v)		(((u32)(v) >> 29) + 1)
 
+#ifdef CONFIG_ARM64
 #define read_gicreg(r)							\
 	({								\
 		u64 reg;						\
@@ -44,6 +45,9 @@
 				 ARM64_WORKAROUND_KRYO_XXX)		\
 				 : : "r" (__val));			\
 } while (0)
+#else
+#define write_gicreg_kryo(v,r) write_gicreg(v,r)
+#endif
 
 static u64 __hyp_text __gic_v3_get_lr(unsigned int lr)
 {
