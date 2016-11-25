@@ -56,7 +56,6 @@ int __init parse_spcr(bool earlycon)
 	acpi_status status;
 	char *uart;
 	char *iotype;
-	int baud_rate;
 	int err;
 
 	if (acpi_disabled)
@@ -95,29 +94,11 @@ int __init parse_spcr(bool earlycon)
 		goto done;
 	}
 
-	switch (table->baud_rate) {
-	case 3:
-		baud_rate = 9600;
-		break;
-	case 4:
-		baud_rate = 19200;
-		break;
-	case 6:
-		baud_rate = 57600;
-		break;
-	case 7:
-		baud_rate = 115200;
-		break;
-	default:
-		err = -ENOENT;
-		goto done;
-	}
-
 	if (qdf2400_erratum_44_present(&table->header))
 		uart = "qdf2400_e44";
 
-	snprintf(opts, sizeof(opts), "%s,%s,0x%llx,%d", uart, iotype,
-		 table->serial_port.address, baud_rate);
+	snprintf(opts, sizeof(opts), "%s,%s,0x%llx", uart, iotype,
+		 table->serial_port.address);
 
 	pr_info("console: %s\n", opts);
 
