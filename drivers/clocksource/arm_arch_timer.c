@@ -87,15 +87,18 @@ early_param("clocksource.arm_arch_timer.evtstrm", early_evtstrm_cfg);
  * Architected system timer support.
  */
 
-#ifdef CONFIG_FSL_ERRATUM_A008585
+#if CONFIG_FSL_ERRATUM_A008585 || IS_ENABLED(CONFIG_HISILICON_ERRATUM_161601)
 struct arch_timer_erratum_workaround *timer_unstable_counter_workaround = NULL;
 EXPORT_SYMBOL_GPL(timer_unstable_counter_workaround);
 
 #define        FSL_A008585	0x0001
+#define        HISILICON_161601	0x0002
 
 DEFINE_STATIC_KEY_FALSE(arch_timer_read_ool_enabled);
 EXPORT_SYMBOL_GPL(arch_timer_read_ool_enabled);
+#endif
 
+#ifdef CONFIG_FSL_ERRATUM_A008585
 /*
  * The number of retries is an arbitrary value well beyond the highest number
  * of iterations the loop has been observed to take.
@@ -136,6 +139,51 @@ static struct arch_timer_erratum_workaround arch_timer_fsl_a008585 = {
 	.read_cntvct_el0 = fsl_a008585_read_cntvct_el0,
 };
 #endif /* CONFIG_FSL_ERRATUM_A008585 */
+
+#ifdef CONFIG_HISILICON_ERRATUM_161601
+/*
+ * Theoretically the erratum should not occur more than twice in succession,
+ * so set the retry count to 2 is sufficient here.
+ * Verify whether the value of the second read is larger than the first by
+ * less than 32 is the only way to confirm the value is correct, so clear the
+ * lower 5 bits to check whether the difference is greater than 32 or not.
+ */
+#define __hisi_161601_read_reg(reg) ({				\
+	u64 _old, _new;						\
+	int _retries = 2;					\
+								\
+	do {							\
+		_old = read_sysreg(reg);			\
+		_new = read_sysreg(reg);			\
+		_retries--;					\
+	} while (unlikely((_new - _old) >> 5) && _retries);	\
+								\
+	WARN_ON_ONCE(!_retries);				\
+	_new;							\
+})
+
+static u32 hisi_161601_read_cntp_tval_el0(void)
+{
+	return __hisi_161601_read_reg(cntp_tval_el0);
+}
+
+static  u32 hisi_161601_read_cntv_tval_el0(void)
+{
+	return __hisi_161601_read_reg(cntv_tval_el0);
+}
+
+static u64 hisi_161601_read_cntvct_el0(void)
+{
+	return __hisi_161601_read_reg(cntvct_el0);
+}
+
+static struct arch_timer_erratum_workaround arch_timer_hisi_161601 = {
+	.erratum = HISILICON_161601,
+	.read_cntp_tval_el0 = hisi_161601_read_cntp_tval_el0,
+	.read_cntv_tval_el0 = hisi_161601_read_cntv_tval_el0,
+	.read_cntvct_el0 = hisi_161601_read_cntvct_el0,
+};
+#endif /* CONFIG_HISILICON_ERRATUM_161601 */
 
 static __always_inline
 void arch_timer_reg_write(int access, enum arch_timer_reg reg, u32 val,
@@ -286,7 +334,7 @@ static __always_inline void set_next_event(const int access, unsigned long evt,
 	arch_timer_reg_write(access, ARCH_TIMER_REG_CTRL, ctrl, clk);
 }
 
-#ifdef CONFIG_FSL_ERRATUM_A008585
+#if IS_ENABLED(CONFIG_FSL_ERRATUM_A008585) || IS_ENABLED(CONFIG_HISILICON_ERRATUM_161601)
 static __always_inline void erratum_set_next_event_generic(const int access,
 		unsigned long evt, struct clock_event_device *clk)
 {
@@ -350,7 +398,7 @@ static int arch_timer_set_next_event_phys_mem(unsigned long evt,
 
 static void erratum_workaround_set_sne(struct clock_event_device *clk)
 {
-#ifdef CONFIG_FSL_ERRATUM_A008585
+#if IS_ENABLED(CONFIG_FSL_ERRATUM_A008585) || IS_ENABLED(CONFIG_HISILICON_ERRATUM_161601)
 	if (!static_branch_unlikely(&arch_timer_read_ool_enabled))
 		return;
 
@@ -610,7 +658,7 @@ static void __init arch_counter_register(unsigned type)
 
 		clocksource_counter.archdata.vdso_direct = true;
 
-#ifdef CONFIG_FSL_ERRATUM_A008585
+#if IS_ENABLED(CONFIG_FSL_ERRATUM_A008585) || IS_ENABLED(CONFIG_HISILICON_ERRATUM_161601)
 		/*
 		 * Don't use the vdso fastpath if errata require using
 		 * the out-of-line counter accessor.
@@ -943,10 +991,19 @@ static int __init arch_timer_of_init(struct device_node *np)
 #ifdef CONFIG_FSL_ERRATUM_A008585
 	if (!timer_unstable_counter_workaround && of_property_read_bool(np, "fsl,erratum-a008585"))
 		timer_unstable_counter_workaround = &arch_timer_fsl_a008585;
+#endif
 
+#ifdef CONFIG_HISILICON_ERRATUM_161601
+	if (!timer_unstable_counter_workaround && of_property_read_bool(np, "hisilicon,erratum-161601"))
+		timer_unstable_counter_workaround = &arch_timer_hisi_161601;
+#endif
+
+#if IS_ENABLED(CONFIG_FSL_ERRATUM_A008585) || IS_ENABLED(CONFIG_HISILICON_ERRATUM_161601)
 	if (timer_unstable_counter_workaround) {
 		static_branch_enable(&arch_timer_read_ool_enabled);
-		pr_info("Enabling workaround for FSL erratum A-008585\n");
+		pr_info("Enabling workaround for %s\n",
+			timer_unstable_counter_workaround->erratum == FSL_A008585 ?
+			"FSL ERRATUM A-008585" : "HISILICON ERRATUM 161601");
 	}
 #endif
 
