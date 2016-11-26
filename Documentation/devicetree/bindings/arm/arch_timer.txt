@@ -31,6 +31,14 @@ to deliver its interrupts via SPIs.
   This also affects writes to the tval register, due to the implicit
   counter read.
 
+- hisilicon,erratum-161601 : A boolean property. Indicates the presence of
+  erratum 161601, which says that reading the counter is unreliable unless
+  reading twice on the register and the value of the second read is larger
+  than the first by less than 32. If the verification is unsuccessful, then
+  discard the value of this read and repeat this procedure until the verification
+  is successful.  This also affects writes to the tval register, due to the
+  implicit counter read.
+
 ** Optional properties:
 
 - arm,cpu-registers-not-fw-configured : Firmware does not initialize
