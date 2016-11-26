@@ -1114,10 +1114,28 @@ struct gtdt_arch_timer_fixup {
 	void *context;
 };
 
+#ifdef CONFIG_HISILICON_ERRATUM_161601
+static void __init erratum_workaround_enable(void *context)
+{
+	u64 erratum = (u64) context;
+
+	if (erratum & HISILICON_161601) {
+		timer_unstable_counter_workaround = &arch_timer_hisi_161601;
+		static_branch_enable(&arch_timer_read_ool_enabled);
+		pr_info_once("Enabling workaround for HISILICON ERRATUM 161601\n");
+	}
+}
+#endif
+
 /* note: this needs to be updated according to the doc of OEM ID
  * and TABLE ID for different board.
  */
 struct gtdt_arch_timer_fixup arch_timer_quirks[] __initdata = {
+#ifdef CONFIG_HISILICON_ERRATUM_161601
+	{"HISI  ", "HIP05   ", 0, &erratum_workaround_enable, (void *) HISILICON_161601},
+	{"HISI  ", "HIP06   ", 0, &erratum_workaround_enable, (void *) HISILICON_161601},
+	{"HISI  ", "HIP07   ", 0, &erratum_workaround_enable, (void *) HISILICON_161601},
+#endif
 };
 
 void __init arch_timer_acpi_quirks_handler(char *oem_id,
