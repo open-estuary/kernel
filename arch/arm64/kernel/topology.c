@@ -23,6 +23,8 @@
 #include <asm/cputype.h>
 #include <asm/topology.h>
 
+#define CPU_TOPOLOGY_HACK	(1)
+
 static int __init get_cpu_for_node(struct device_node *node)
 {
 	struct device_node *cpu_node;
@@ -292,10 +294,34 @@ static void __init reset_cpu_topology(void)
 	}
 }
 
+#ifdef CPU_TOPOLOGY_HACK
+
+#define CPU_CLUSTERS	(4)
+#define NO_CORES_PER_CLUSTERS	(16)
+static void hack_cpu_topology(void)
+{
+	int i;
+	static int fixed_cpu_topo[CPU_CLUSTERS] __initdata = { 0, 1, 2, 3 };
+
+	printk("CPU topology: Hacking with fixed value\n");
+
+	for (i = 0; i < CPU_CLUSTERS * NO_CORES_PER_CLUSTERS; i++) {
+		cpu_topology[i].cluster_id = fixed_cpu_topo[i / NO_CORES_PER_CLUSTERS];
+		cpu_topology[i].core_id = i % NO_CORES_PER_CLUSTERS;
+		cpu_topology[i].thread_id = -1;
+	}
+}
+#endif
+
 void __init init_cpu_topology(void)
 {
 	reset_cpu_topology();
 
+#ifdef CPU_TOPOLOGY_HACK
+	hack_cpu_topology();
+
+	return ;
+#endif
 	/*
 	 * Discard anything that was parsed if we hit an error so we
 	 * don't use partial information.
