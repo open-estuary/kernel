@@ -21,10 +21,14 @@
 
 #include "vgic.h"
 
+DEFINE_STATIC_KEY_FALSE(hisi_vtimer_quirk_enabled);
+EXPORT_SYMBOL_GPL(hisi_vtimer_quirk_enabled);
+
 void vgic_v3_process_maintenance(struct kvm_vcpu *vcpu)
 {
 	struct vgic_v3_cpu_if *cpuif = &vcpu->arch.vgic_cpu.vgic_v3;
 	u32 model = vcpu->kvm->arch.vgic.vgic_model;
+	struct arch_timer_cpu *timer = &vcpu->arch.timer_cpu;
 
 	if (cpuif->vgic_misr & ICH_MISR_EOI) {
 		unsigned long eisr_bmap = cpuif->vgic_eisr;
@@ -41,8 +45,21 @@ void vgic_v3_process_maintenance(struct kvm_vcpu *vcpu)
 
 			WARN_ON(cpuif->vgic_lr[lr] & ICH_LR_STATE);
 
-			kvm_notify_acked_irq(vcpu->kvm, 0,
+			/*
+			 * HiSilicon quirk: For  vtimer irq on D02/D03,
+			 * maintenance EOI is generated on Guest timer
+			 * deactivation. If thats the case no need to call
+			 * acked_irq() as there is no routing info for
+			 * the timer irq. Also looks like the timer is
+			 * deactivated on the phys distributor directly
+			 * in  arch_timer code. ToDo: Check explicit
+			 * decativation of timer is required here or not!.
+			 */
+			if ((intid != timer->irq.irq) &&
+						!needs_hisi_vtimer_quirk()) {
+				kvm_notify_acked_irq(vcpu->kvm, 0,
 					     intid - VGIC_NR_PRIVATE_IRQS);
+			}
 		}
 
 		/*
@@ -322,6 +339,12 @@ int vgic_v3_probe(const struct gic_kvm_info *info)
 	 */
 	kvm_vgic_global_state.nr_lr = (ich_vtr_el2 & 0xf) + 1;
 	kvm_vgic_global_state.can_emulate_gicv2 = false;
+
+	/* HiSilicon Quirk: virt timer irqmap not supported */
+	if (info->hisi_vtimer_quirk) {
+		static_branch_enable(&hisi_vtimer_quirk_enabled);
+		pr_info("kvm: Enabling HiSilicon GIC virt timer quirk\n");
+	}
 
 	if (!info->vcpu.start) {
 		kvm_info("GICv3: no GICV resource entry\n");

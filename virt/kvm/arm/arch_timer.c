@@ -177,9 +177,17 @@ static void kvm_timer_update_irq(struct kvm_vcpu *vcpu, bool new_level)
 	timer->irq.level = new_level;
 	trace_kvm_timer_update_irq(vcpu->vcpu_id, timer->irq.irq,
 				   timer->irq.level);
-	ret = kvm_vgic_inject_mapped_irq(vcpu->kvm, vcpu->vcpu_id,
+	/* HiSilicon quirk: virtual timer irq map not supported */
+	if (needs_hisi_vtimer_quirk()) {
+		ret = kvm_vgic_inject_irq(vcpu->kvm, vcpu->vcpu_id,
+						 timer->irq.irq,
+						 timer->irq.level);
+	} else {
+		ret = kvm_vgic_inject_mapped_irq(vcpu->kvm, vcpu->vcpu_id,
 					 timer->irq.irq,
 					 timer->irq.level);
+	}
+
 	WARN_ON(ret);
 }
 
@@ -493,10 +501,13 @@ int kvm_timer_enable(struct kvm_vcpu *vcpu)
 	/*
 	 * Tell the VGIC that the virtual interrupt is tied to a
 	 * physical interrupt. We do that once per VCPU.
+	 * HiSilicon quirk: virtual timer irq map not supported.
 	 */
-	ret = kvm_vgic_map_phys_irq(vcpu, timer->irq.irq, phys_irq);
-	if (ret)
-		return ret;
+	if (!needs_hisi_vtimer_quirk()) {
+		ret = kvm_vgic_map_phys_irq(vcpu, timer->irq.irq, phys_irq);
+		if (ret)
+			return ret;
+	}
 
 
 	/*
