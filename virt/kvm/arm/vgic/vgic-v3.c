@@ -40,11 +40,9 @@ void vgic_v3_process_maintenance(struct kvm_vcpu *vcpu)
 				intid = val & GICH_LR_VIRTUALID;
 
 			WARN_ON(cpuif->vgic_lr[lr] & ICH_LR_STATE);
-			/* HiSi virtual timer irq quirk. */
-			if (intid != HISI_VIRT_TIMER_IRQID) {
-				kvm_notify_acked_irq(vcpu->kvm, 0,
+
+			kvm_notify_acked_irq(vcpu->kvm, 0,
 					     intid - VGIC_NR_PRIVATE_IRQS);
-			}
 		}
 
 		/*
@@ -324,8 +322,6 @@ int vgic_v3_probe(const struct gic_kvm_info *info)
 	 */
 	kvm_vgic_global_state.nr_lr = (ich_vtr_el2 & 0xf) + 1;
 	kvm_vgic_global_state.can_emulate_gicv2 = false;
-	kvm_vgic_global_state.timer_irqmap_disabled =
-					info->timer_irqmap_disabled;
 
 	if (!info->vcpu.start) {
 		kvm_info("GICv3: no GICV resource entry\n");
