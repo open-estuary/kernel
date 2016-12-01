@@ -38,8 +38,6 @@
 #define VGIC_MIN_LPI		8192
 #define KVM_IRQCHIP_NUM_PINS	(1020 - 32)
 
-#define HISI_VIRT_TIMER_IRQID	27 /*HiSi virt timer irq id- for GIC Quirk*/
-
 enum vgic_type {
 	VGIC_V2,		/* Good ol' GICv2 */
 	VGIC_V3,		/* New fancy GICv3 */
@@ -73,12 +71,14 @@ struct vgic_global {
 
 	/* GIC system register CPU interface */
 	struct static_key_false gicv3_cpuif;
-
-	/*HiSilicon GIC quirk: support timer irq map or not */
-	bool            timer_irqmap_disabled;
 };
 
 extern struct vgic_global kvm_vgic_global_state;
+
+/*HiSilicon quirk: vtimer irqmap not supported*/
+extern struct static_key_false hisi_vtimer_quirk_enabled;
+#define needs_hisi_vtimer_quirk() \
+	static_branch_unlikely(&hisi_vtimer_quirk_enabled)
 
 #define VGIC_V2_MAX_LRS		(1 << 6)
 #define VGIC_V3_MAX_LRS		16
@@ -291,7 +291,6 @@ int kvm_vgic_inject_irq(struct kvm *kvm, int cpuid, unsigned int intid,
 			bool level);
 int kvm_vgic_inject_mapped_irq(struct kvm *kvm, int cpuid, unsigned int intid,
 			       bool level);
-bool kvm_vgic_support_timer_irqmap(void);
 int kvm_vgic_map_phys_irq(struct kvm_vcpu *vcpu, u32 virt_irq, u32 phys_irq);
 int kvm_vgic_unmap_phys_irq(struct kvm_vcpu *vcpu, unsigned int virt_irq);
 bool kvm_vgic_map_is_active(struct kvm_vcpu *vcpu, unsigned int virt_irq);

@@ -55,9 +55,6 @@ struct arch_timer_cpu {
 
 	/* Is the timer enabled */
 	bool			enabled;
-
-	/* HiSilicon GIC quirk: Is the timer irq mapped */
-	bool			irq_mapped;
 };
 
 int kvm_timer_hyp_init(void);
