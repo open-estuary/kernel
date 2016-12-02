@@ -66,11 +66,6 @@ extern struct pci_ecam_ops pci_thunder_pem_ops;
 extern struct pci_ecam_ops pci_thunder_ecam_ops;
 #endif
 extern struct pci_ecam_ops pci_32b_ops;
-#ifdef CONFIG_PCI_XGENE
-extern struct pci_ecam_ops xgene_v1_pcie_ecam_ops;
-extern struct pci_ecam_ops xgene_v2_1_pcie_ecam_ops;
-extern struct pci_ecam_ops xgene_v2_2_pcie_ecam_ops;
-#endif
 
 #ifdef CONFIG_PCI_HOST_GENERIC
 /* for DT-based PCI controllers that support ECAM */
