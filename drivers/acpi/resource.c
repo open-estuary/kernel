@@ -386,6 +386,7 @@ static void acpi_dev_get_irqresource(struct acpi_device *adev, struct resource *
 				     bool legacy)
 {
 	int irq, p, t;
+	struct device *dev = adev ? &adev->dev : NULL;
 
 	if (!valid_IRQ(gsi)) {
 		acpi_dev_irqresource_disabled(res, gsi);
@@ -415,7 +416,7 @@ static void acpi_dev_get_irqresource(struct acpi_device *adev, struct resource *
 	}
 
 	res->flags = acpi_dev_irq_flags(triggering, polarity, shareable);
-	irq = acpi_register_gsi(&adev->dev, gsi, triggering, polarity);
+	irq = acpi_register_gsi(dev, gsi, triggering, polarity);
 	if (irq >= 0) {
 		res->start = irq;
 		res->end = irq;
