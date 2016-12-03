@@ -57,7 +57,8 @@ int acpi_register_gsi(struct device *dev, u32 gsi, int trigger,
 	struct irq_fwspec fwspec;
 	struct acpi_device *adev = dev ? to_acpi_device(dev) : NULL;
 
-	if (adev && &adev->fwnode && adev->interrupt_producer)
+	if (adev && is_acpi_device_node(&adev->fwnode) &&
+	    adev->interrupt_producer)
 		/* devices in DSDT connecting to spefic interrupt producer */
 		fwspec.fwnode = adev->interrupt_producer;
 	else if (acpi_gsi_domain_id)
