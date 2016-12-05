@@ -68,6 +68,7 @@
 #define XGENE_PCIE_IP_VER_1		1
 #define XGENE_PCIE_IP_VER_2		2
 
+#if defined(CONFIG_PCI_XGENE) || (defined(CONFIG_ACPI) && defined(CONFIG_PCI_QUIRKS))
 struct xgene_pcie_port {
 	struct device_node	*node;
 	struct device		*dev;
@@ -94,21 +95,24 @@ static inline u32 pcie_bar_low_val(u32 addr, u32 flags)
 	return (addr & PCI_BASE_ADDRESS_MEM_MASK) | flags;
 }
 
+static inline struct xgene_pcie_port *pcie_bus_to_port(struct pci_bus *bus)
+{
+	struct pci_config_window *cfg;
+
+	if (acpi_disabled)
+		return (struct xgene_pcie_port *)(bus->sysdata);
+
+	cfg = bus->sysdata;
+	return (struct xgene_pcie_port *)(cfg->priv);
+}
+
 /*
  * When the address bit [17:16] is 2'b01, the Configuration access will be
  * treated as Type 1 and it will be forwarded to external PCIe device.
  */
 static void __iomem *xgene_pcie_get_cfg_base(struct pci_bus *bus)
 {
-	struct pci_config_window *cfg;
-	struct xgene_pcie_port *port;
-
-	if (acpi_disabled)
-		port = bus->sysdata;
-	else {
-		cfg = bus->sysdata;
-		port = cfg->priv;
-	}
+	struct xgene_pcie_port *port = pcie_bus_to_port(bus);
 
 	if (bus->number >= (bus->primary + 1))
 		return port->cfg_base + AXI_EP_CFG_ACCESS;
@@ -122,17 +126,9 @@ static void __iomem *xgene_pcie_get_cfg_base(struct pci_bus *bus)
  */
 static void xgene_pcie_set_rtdid_reg(struct pci_bus *bus, uint devfn)
 {
-	struct pci_config_window *cfg;
-	struct xgene_pcie_port *port;
+	struct xgene_pcie_port *port = pcie_bus_to_port(bus);
 	unsigned int b, d, f;
 	u32 rtdid_val = 0;
-
-	if (acpi_disabled)
-		port = bus->sysdata;
-	else {
-		cfg = bus->sysdata;
-		port = cfg->priv;
-	}
 
 	b = bus->number;
 	d = PCI_SLOT(devfn);
@@ -177,15 +173,7 @@ static void __iomem *xgene_pcie_map_bus(struct pci_bus *bus, unsigned int devfn,
 static int xgene_pcie_config_read32(struct pci_bus *bus, unsigned int devfn,
 				    int where, int size, u32 *val)
 {
-	struct pci_config_window *cfg;
-	struct xgene_pcie_port *port;
-
-	if (acpi_disabled)
-		port = bus->sysdata;
-	else {
-		cfg = bus->sysdata;
-		port = cfg->priv;
-	}
+	struct xgene_pcie_port *port = pcie_bus_to_port(bus);
 
 	if (pci_generic_config_read32(bus, devfn, where & ~0x3, 4, val) !=
 	    PCIBIOS_SUCCESSFUL)
@@ -209,47 +197,75 @@ static int xgene_pcie_config_read32(struct pci_bus *bus, unsigned int devfn,
 
 	return PCIBIOS_SUCCESSFUL;
 }
+#endif
 
-static struct pci_ops xgene_pcie_ops = {
-	.map_bus = xgene_pcie_map_bus,
-	.read = xgene_pcie_config_read32,
-	.write = pci_generic_config_write32,
-};
+#if defined(CONFIG_ACPI) && defined(CONFIG_PCI_QUIRKS)
+static int xgene_get_csr_resource(struct acpi_device *adev,
+				  struct resource *res)
+{
+	struct device *dev = &adev->dev;
+	struct resource_entry *entry;
+	struct list_head list;
+	unsigned long flags;
+	int ret;
 
-#ifdef CONFIG_ACPI
-static struct resource xgene_v1_csr_res[] = {
-	[0] = DEFINE_RES_MEM(0x1f2b0000UL, SZ_64K),
-	[1] = DEFINE_RES_MEM(0x1f2c0000UL, SZ_64K),
-	[2] = DEFINE_RES_MEM(0x1f2d0000UL, SZ_64K),
-	[3] = DEFINE_RES_MEM(0x1f500000UL, SZ_64K),
-	[4] = DEFINE_RES_MEM(0x1f510000UL, SZ_64K),
-};
+	INIT_LIST_HEAD(&list);
+	flags = IORESOURCE_MEM;
+	ret = acpi_dev_get_resources(adev, &list,
+				     acpi_dev_filter_resource_type_cb,
+				     (void *) flags);
+	if (ret < 0) {
+		dev_err(dev, "failed to parse _CRS method, error code %d\n",
+			ret);
+		return ret;
+	}
 
-static int xgene_v1_pcie_ecam_init(struct pci_config_window *cfg)
+	if (ret == 0) {
+		dev_err(dev, "no IO and memory resources present in _CRS\n");
+		return -EINVAL;
+	}
+
+	entry = list_first_entry(&list, struct resource_entry, node);
+	*res = *entry->res;
+	acpi_dev_free_resource_list(&list);
+	return 0;
+}
+
+static int xgene_pcie_ecam_init(struct pci_config_window *cfg, u32 ipversion)
 {
 	struct acpi_device *adev = to_acpi_device(cfg->parent);
-	struct acpi_pci_root *root = acpi_driver_data(adev);
 	struct device *dev = cfg->parent;
 	struct xgene_pcie_port *port;
-	struct resource *csr;
+	struct resource csr;
+	int ret;
 
 	port = devm_kzalloc(dev, sizeof(*port), GFP_KERNEL);
 	if (!port)
 		return -ENOMEM;
 
-	csr = &xgene_v1_csr_res[root->segment];
-	port->csr_base = devm_ioremap_resource(dev, csr);
+	ret = xgene_get_csr_resource(adev, &csr);
+	if (ret) {
+		dev_err(dev, "can't get CSR resource\n");
+		kfree(port);
+		return ret;
+	}
+	port->csr_base = devm_ioremap_resource(dev, &csr);
 	if (IS_ERR(port->csr_base)) {
 		kfree(port);
 		return -ENOMEM;
 	}
 
 	port->cfg_base = cfg->win;
-	port->version = XGENE_PCIE_IP_VER_1;
+	port->version = ipversion;
 
 	cfg->priv = port;
 
 	return 0;
+}
+
+static int xgene_v1_pcie_ecam_init(struct pci_config_window *cfg)
+{
+	return xgene_pcie_ecam_init(cfg, XGENE_PCIE_IP_VER_1);
 }
 
 struct pci_ecam_ops xgene_v1_pcie_ecam_ops = {
@@ -262,84 +278,14 @@ struct pci_ecam_ops xgene_v1_pcie_ecam_ops = {
 	}
 };
 
-static struct resource xgene_v2_1_csr_res[] = {
-	[0] = DEFINE_RES_MEM(0x1f2b0000UL, SZ_64K),
-	[1] = DEFINE_RES_MEM(0x1f2c0000UL, SZ_64K),
-};
-
-static int xgene_v2_1_pcie_ecam_init(struct pci_config_window *cfg)
+static int xgene_v2_pcie_ecam_init(struct pci_config_window *cfg)
 {
-	struct acpi_device *adev = to_acpi_device(cfg->parent);
-	struct acpi_pci_root *root = acpi_driver_data(adev);
-	struct device *dev = cfg->parent;
-	struct xgene_pcie_port *port;
-	struct resource *csr;
-
-	port = devm_kzalloc(dev, sizeof(*port), GFP_KERNEL);
-	if (!port)
-		return -ENOMEM;
-
-	csr = &xgene_v2_1_csr_res[root->segment];
-	port->csr_base = devm_ioremap_resource(dev, csr);
-	if (IS_ERR(port->csr_base)) {
-		kfree(port);
-		return -ENOMEM;
-	}
-
-	port->cfg_base = cfg->win;
-	port->version = XGENE_PCIE_IP_VER_2;
-
-	cfg->priv = port;
-
-	return 0;
+	return xgene_pcie_ecam_init(cfg, XGENE_PCIE_IP_VER_2);
 }
 
-struct pci_ecam_ops xgene_v2_1_pcie_ecam_ops = {
+struct pci_ecam_ops xgene_v2_pcie_ecam_ops = {
 	.bus_shift      = 16,
-	.init           = xgene_v2_1_pcie_ecam_init,
-	.pci_ops        = {
-		.map_bus        = xgene_pcie_map_bus,
-		.read           = xgene_pcie_config_read32,
-		.write          = pci_generic_config_write,
-	}
-};
-
-static struct resource xgene_v2_2_csr_res[] = {
-	[0] = DEFINE_RES_MEM(0x1f2b0000UL, SZ_64K),
-	[1] = DEFINE_RES_MEM(0x1f500000UL, SZ_64K),
-	[2] = DEFINE_RES_MEM(0x1f2d0000UL, SZ_64K),
-};
-
-static int xgene_v2_2_pcie_ecam_init(struct pci_config_window *cfg)
-{
-	struct acpi_device *adev = to_acpi_device(cfg->parent);
-	struct acpi_pci_root *root = acpi_driver_data(adev);
-	struct device *dev = cfg->parent;
-	struct xgene_pcie_port *port;
-	struct resource *csr;
-
-	port = devm_kzalloc(dev, sizeof(*port), GFP_KERNEL);
-	if (!port)
-		return -ENOMEM;
-
-	csr = &xgene_v2_2_csr_res[root->segment];
-	port->csr_base = devm_ioremap_resource(dev, csr);
-	if (IS_ERR(port->csr_base)) {
-		kfree(port);
-		return -ENOMEM;
-	}
-
-	port->cfg_base = cfg->win;
-	port->version = XGENE_PCIE_IP_VER_2;
-
-	cfg->priv = port;
-
-	return 0;
-}
-
-struct pci_ecam_ops xgene_v2_2_pcie_ecam_ops = {
-	.bus_shift      = 16,
-	.init           = xgene_v2_2_pcie_ecam_init,
+	.init           = xgene_v2_pcie_ecam_init,
 	.pci_ops        = {
 		.map_bus        = xgene_pcie_map_bus,
 		.read           = xgene_pcie_config_read32,
@@ -348,6 +294,7 @@ struct pci_ecam_ops xgene_v2_2_pcie_ecam_ops = {
 };
 #endif
 
+#if defined(CONFIG_PCI_XGENE)
 static u64 xgene_pcie_set_ib_mask(struct xgene_pcie_port *port, u32 addr,
 				  u32 flags, u64 size)
 {
@@ -680,6 +627,12 @@ static int xgene_pcie_setup(struct xgene_pcie_port *port,
 	return 0;
 }
 
+static struct pci_ops xgene_pcie_ops = {
+	.map_bus = xgene_pcie_map_bus,
+	.read = xgene_pcie_config_read32,
+	.write = pci_generic_config_write32,
+};
+
 static int xgene_pcie_probe_bridge(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -750,3 +703,4 @@ static struct platform_driver xgene_pcie_driver = {
 	.probe = xgene_pcie_probe_bridge,
 };
 builtin_platform_driver(xgene_pcie_driver);
+#endif
