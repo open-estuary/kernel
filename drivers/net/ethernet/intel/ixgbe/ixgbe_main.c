@@ -171,10 +171,19 @@ static int debug = -1;
 module_param(debug, int, 0);
 MODULE_PARM_DESC(debug, "Debug level (0=none,...,16=all)");
 
+static bool wro_enable = 0;
+module_param(wro_enable, bool, 0);
+MODULE_PARM_DESC(wro_enable, "enable IXGBE NIC TX and RX's relax ordering attribute");
+
 MODULE_AUTHOR("Intel Corporation, <linux.nics@intel.com>");
 MODULE_DESCRIPTION("Intel(R) 10 Gigabit PCI Express Network Driver");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(DRV_VERSION);
+
+bool ixgbe_wro_enable(void)
+{
+	return wro_enable;
+}
 
 static struct workqueue_struct *ixgbe_wq;
 
