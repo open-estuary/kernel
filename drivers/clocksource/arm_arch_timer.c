@@ -1122,7 +1122,7 @@ static void __init erratum_workaround_enable(void *context)
 	if (erratum & HISILICON_161601) {
 		timer_unstable_counter_workaround = &arch_timer_hisi_161601;
 		static_branch_enable(&arch_timer_read_ool_enabled);
-		pr_info_once("Enabling workaround for HISILICON ERRATUM 161601\n");
+		pr_info("Enabling workaround for HISILICON ERRATUM 161601\n");
 	}
 }
 #endif
@@ -1149,12 +1149,8 @@ void __init arch_timer_acpi_quirks_handler(char *oem_id,
 		if (!memcmp(quirks->oem_id, oem_id, ACPI_OEM_ID_SIZE) &&
 		    !memcmp(quirks->oem_table_id, oem_table_id, ACPI_OEM_TABLE_ID_SIZE) &&
 		    quirks->oem_revision == oem_revision) {
-			if (quirks->handler && quirks->context) {
+			if (quirks->handler && quirks->context)
 				quirks->handler(quirks->context);
-				pr_info("enabled quirk for <OEM %s>-<Table ID %s>-<Revision %d>\n",
-					quirks->oem_id, quirks->oem_table_id,
-					quirks->oem_revision);
-			}
 		}
 	}
 }
