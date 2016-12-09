@@ -1105,8 +1105,8 @@ CLOCKSOURCE_OF_DECLARE(armv7_arch_timer_mem, "arm,armv7-timer-mem",
 
 #ifdef CONFIG_ACPI_GTDT
 struct gtdt_arch_timer_fixup {
-	char oem_id[ACPI_OEM_ID_SIZE];
-	char oem_table_id[ACPI_OEM_TABLE_ID_SIZE];
+	char oem_id[ACPI_OEM_ID_SIZE + 1];
+	char oem_table_id[ACPI_OEM_TABLE_ID_SIZE + 1];
 	u32 oem_revision;
 
 	/* quirk handler for arch timer erratum */
