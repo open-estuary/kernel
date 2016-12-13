@@ -144,13 +144,16 @@ static struct arch_timer_erratum_workaround arch_timer_fsl_a008585 = {
 /*
  * Theoretically the erratum should not occur more than twice in succession,
  * so set the retry count to 2 is sufficient here.
+ * But in the stress test with lots of interrupts happened, it will interrupt
+ * the read for _old and _new, then we will get WARNING even with timer counter
+ * is right, so use 10 instead to retry more.
  * Verify whether the value of the second read is larger than the first by
  * less than 32 is the only way to confirm the value is correct, so clear the
  * lower 5 bits to check whether the difference is greater than 32 or not.
  */
 #define __hisi_161601_read_reg(reg) ({				\
 	u64 _old, _new;						\
-	int _retries = 2;					\
+	int _retries = 10;					\
 								\
 	do {							\
 		_old = read_sysreg(reg);			\
