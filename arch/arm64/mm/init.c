@@ -31,7 +31,6 @@
 #include <linux/memblock.h>
 #include <linux/sort.h>
 #include <linux/of_fdt.h>
-#include <linux/page-flags.h>
 #include <linux/dma-mapping.h>
 #include <linux/dma-contiguous.h>
 #include <linux/efi.h>
@@ -402,8 +401,6 @@ static void __init free_unused_memmap(void)
  */
 void __init mem_init(void)
 {
-	struct memblock_region *region;
-
 	if (swiotlb_force || max_pfn > (arm64_dma_phys_limit >> PAGE_SHIFT))
 		swiotlb_init(1);
 
@@ -481,17 +478,6 @@ void __init mem_init(void)
 		 * overcommit, so turn it on by default.
 		 */
 		sysctl_overcommit_memory = OVERCOMMIT_ALWAYS;
-	}
-
-	/* Mark struct pages for the memblock:nomap regions as reserved */
-	for_each_memblock(memory, region) {
-		u64 pfn;
-		u64 start_pfn = memblock_region_memory_base_pfn(region);
-		u64 end_pfn = memblock_region_memory_end_pfn(region);
-
-		if (memblock_is_nomap(region))
-			for (pfn = start_pfn; pfn < end_pfn; pfn++)
-				SetPageReserved(pfn_to_page(pfn));
 	}
 }
 
