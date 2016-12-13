@@ -17,7 +17,6 @@
 #define pr_fmt(x) "hibernate: " x
 #include <linux/cpu.h>
 #include <linux/kvm_host.h>
-#include <linux/memblock.h>
 #include <linux/mm.h>
 #include <linux/pm.h>
 #include <linux/sched.h>
@@ -106,10 +105,7 @@ int pfn_is_nosave(unsigned long pfn)
 	unsigned long nosave_begin_pfn = virt_to_pfn(&__nosave_begin);
 	unsigned long nosave_end_pfn = virt_to_pfn(&__nosave_end - 1);
 
-	if ((pfn >= nosave_begin_pfn) && (pfn <= nosave_end_pfn))
-		return 1;
-
-	return !memblock_is_map_memory(pfn << PAGE_SHIFT);
+	return (pfn >= nosave_begin_pfn) && (pfn <= nosave_end_pfn);
 }
 
 void notrace save_processor_state(void)
