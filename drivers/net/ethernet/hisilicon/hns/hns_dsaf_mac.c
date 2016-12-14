@@ -74,13 +74,22 @@ void hns_mac_get_link_status(struct hns_mac_cb *mac_cb, u32 *link_status)
 {
 	struct mac_driver *mac_ctrl_drv;
 	int ret, sfp_prsnt;
+	int i;
 
 	mac_ctrl_drv = hns_mac_get_drv(mac_cb);
 
-	if (mac_ctrl_drv->get_link_status)
-		mac_ctrl_drv->get_link_status(mac_ctrl_drv, link_status);
-	else
+	if (mac_ctrl_drv->get_link_status) {
+		for (i = 0; i < 10; i++) {
+			mac_ctrl_drv->get_link_status(mac_ctrl_drv,
+				link_status);
+			if (*link_status == 0)
+				break;
+			usleep_range(1000, 2000);
+		}
+	}
+	else {
 		*link_status = 0;
+	}
 
 	ret = mac_cb->dsaf_dev->misc_op->get_sfp_prsnt(mac_cb, &sfp_prsnt);
 	if (!ret)
