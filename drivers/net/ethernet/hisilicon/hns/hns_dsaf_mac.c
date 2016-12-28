@@ -263,6 +263,46 @@ int hns_mac_change_vf_addr(struct hns_mac_cb *mac_cb,
 	return 0;
 }
 
+int hns_mac_add_uc_addr(struct hns_mac_cb *mac_cb, u8 vf_id,
+			const unsigned char *addr)
+{
+	struct dsaf_device *dsaf_dev = mac_cb->dsaf_dev;
+	struct dsaf_drv_mac_single_dest_entry mac_entry;
+	int ret;
+
+	if (HNS_DSAF_IS_DEBUG(dsaf_dev))
+		return -ENOSPC;
+
+	memset(&mac_entry, 0, sizeof(mac_entry));
+	memcpy(mac_entry.addr, addr, sizeof(mac_entry.addr));
+	mac_entry.in_port_num = mac_cb->mac_id;
+	ret = hns_mac_get_inner_port_num(mac_cb, vf_id, &mac_entry.port_num);
+	if (ret)
+		return ret;
+
+	return hns_dsaf_set_mac_uc_entry(dsaf_dev, &mac_entry);
+}
+
+int hns_mac_rm_uc_addr(struct hns_mac_cb *mac_cb, u8 vf_id,
+		       const unsigned char *addr)
+{
+	struct dsaf_device *dsaf_dev = mac_cb->dsaf_dev;
+	struct dsaf_drv_mac_single_dest_entry mac_entry;
+	int ret;
+
+	if (HNS_DSAF_IS_DEBUG(dsaf_dev))
+		return -ENOSPC;
+
+	memset(&mac_entry, 0, sizeof(mac_entry));
+	memcpy(mac_entry.addr, addr, sizeof(mac_entry.addr));
+	mac_entry.in_port_num = mac_cb->mac_id;
+	ret = hns_mac_get_inner_port_num(mac_cb, vf_id, &mac_entry.port_num);
+	if (ret)
+		return ret;
+
+	return hns_dsaf_rm_mac_addr(dsaf_dev, &mac_entry);
+}
+
 int hns_mac_set_multi(struct hns_mac_cb *mac_cb,
 		      u32 port_num, char *addr, bool enable)
 {
@@ -328,6 +368,18 @@ int hns_mac_del_mac(struct hns_mac_cb *mac_cb, u32 vfn, char *mac)
 	}
 
 	return 0;
+}
+
+int hns_mac_clr_multicast(struct hns_mac_cb *mac_cb, int vfn)
+{
+	struct dsaf_device *dsaf_dev = mac_cb->dsaf_dev;
+	u8 port_num;
+	int ret = hns_mac_get_inner_port_num(mac_cb, vfn, &port_num);
+
+	if (ret)
+		return ret;
+
+	return hns_dsaf_clr_mac_mc_port(dsaf_dev, mac_cb->mac_id, port_num);
 }
 
 static void hns_mac_param_get(struct mac_params *param,
@@ -439,10 +491,9 @@ void hns_mac_reset(struct hns_mac_cb *mac_cb)
 	}
 }
 
-int hns_mac_set_mtu(struct hns_mac_cb *mac_cb, u32 new_mtu)
+int hns_mac_set_mtu(struct hns_mac_cb *mac_cb, u32 new_mtu, u32 buf_size)
 {
 	struct mac_driver *drv = hns_mac_get_drv(mac_cb);
-	u32 buf_size = mac_cb->dsaf_dev->buf_size;
 	u32 new_frm = new_mtu + ETH_HLEN + ETH_FCS_LEN + VLAN_HLEN;
 	u32 max_frm = AE_IS_VER1(mac_cb->dsaf_dev->dsaf_ver) ?
 			MAC_MAX_MTU : MAC_MAX_MTU_V2;

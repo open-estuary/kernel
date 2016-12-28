@@ -791,7 +791,9 @@ static int hns_set_coalesce(struct net_device *net_dev,
 {
 	struct hns_nic_priv *priv = netdev_priv(net_dev);
 	struct hnae_ae_ops *ops;
-	int ret;
+	int rc1, rc2;
+
+	assert(priv || priv->ae_handle);
 
 	ops = priv->ae_handle->dev->ops;
 
@@ -805,16 +807,34 @@ static int hns_set_coalesce(struct net_device *net_dev,
 	    (!ops->set_coalesce_frames))
 		return -ESRCH;
 
-	ret = ops->set_coalesce_usecs(priv->ae_handle,
+	/* If we set usecs and coalesced frames both to 1,
+	 * then self-adaptionwill be enable,
+	 * or coalesce parameters will be set to the value user config.
+	 */
+	if ((ec->rx_coalesce_usecs == 1) &&
+	    (ec->rx_max_coalesced_frames == 1)) {
+		set_bit(HNAE_COAL_ADAPT_ENABLE,
+			&priv->ae_handle->coal_set_adapt_flag);
+		return 0;
+	}
+
+	clear_bit(HNAE_COAL_ADAPT_ENABLE,
+		  &priv->ae_handle->coal_set_adapt_flag);
+
+	spin_lock_bh(&priv->ae_handle->coal_set_lock);
+
+	rc1 = ops->set_coalesce_usecs(priv->ae_handle,
 				      ec->rx_coalesce_usecs);
-	if (ret)
-		return ret;
 
-	ret = ops->set_coalesce_frames(
-		priv->ae_handle,
-		ec->rx_max_coalesced_frames);
+	rc2 = ops->set_coalesce_frames(priv->ae_handle,
+				       ec->rx_max_coalesced_frames);
 
-	return ret;
+	spin_unlock_bh(&priv->ae_handle->coal_set_lock);
+
+	if (rc1 || rc2)
+		return -EINVAL;
+
+	return 0;
 }
 
 /**
@@ -1236,6 +1256,7 @@ hns_set_rss(struct net_device *netdev, const u32 *indir, const u8 *key,
 {
 	struct hns_nic_priv *priv = netdev_priv(netdev);
 	struct hnae_ae_ops *ops;
+	int ret;
 
 	if (AE_IS_VER1(priv->enet_ver)) {
 		netdev_err(netdev,
@@ -1245,14 +1266,14 @@ hns_set_rss(struct net_device *netdev, const u32 *indir, const u8 *key,
 
 	ops = priv->ae_handle->dev->ops;
 
-	/* currently hfunc can only be Toeplitz hash */
-	if (key ||
-	    (hfunc != ETH_RSS_HASH_NO_CHANGE && hfunc != ETH_RSS_HASH_TOP))
+	if (hfunc != ETH_RSS_HASH_NO_CHANGE && hfunc != ETH_RSS_HASH_TOP) {
+		netdev_err(netdev, "Invalid hfunc!\n");
 		return -EOPNOTSUPP;
-	if (!indir)
-		return 0;
+	}
 
-	return ops->set_rss(priv->ae_handle, indir, key, hfunc);
+	ret = ops->set_rss(priv->ae_handle, indir, key, hfunc);
+
+	return ret;
 }
 
 static int hns_get_rxnfc(struct net_device *netdev,
