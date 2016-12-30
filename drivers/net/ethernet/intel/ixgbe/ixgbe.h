@@ -269,6 +269,7 @@ struct ixgbe_ring {
 	unsigned long state;
 	u8 __iomem *tail;
 	dma_addr_t dma;			/* phys. address of descriptor ring */
+	struct dma_attrs * dma_attrs;	/* DMA attributes */
 	unsigned int size;		/* length in bytes */
 
 	u16 count;			/* amount of descriptors */

@@ -946,15 +946,17 @@ void ixgbe_unmap_and_free_tx_resource(struct ixgbe_ring *ring,
 	if (tx_buffer->skb) {
 		dev_kfree_skb_any(tx_buffer->skb);
 		if (dma_unmap_len(tx_buffer, len))
-			dma_unmap_single(ring->dev,
+			dma_unmap_single_attrs(ring->dev,
 					 dma_unmap_addr(tx_buffer, dma),
 					 dma_unmap_len(tx_buffer, len),
-					 DMA_TO_DEVICE);
+					 DMA_TO_DEVICE,
+					 ring->dma_attrs);
 	} else if (dma_unmap_len(tx_buffer, len)) {
-		dma_unmap_page(ring->dev,
+		dma_unmap_single_attrs(ring->dev,
 			       dma_unmap_addr(tx_buffer, dma),
 			       dma_unmap_len(tx_buffer, len),
-			       DMA_TO_DEVICE);
+			       DMA_TO_DEVICE,
+			       ring->dma_attrs);
 	}
 	tx_buffer->next_to_watch = NULL;
 	tx_buffer->skb = NULL;
@@ -1151,6 +1153,8 @@ static bool ixgbe_clean_tx_irq(struct ixgbe_q_vector *q_vector,
 	struct ixgbe_adapter *adapter = q_vector->adapter;
 	struct ixgbe_tx_buffer *tx_buffer;
 	union ixgbe_adv_tx_desc *tx_desc;
+	dma_addr_t addr;
+	size_t size;
 	unsigned int total_bytes = 0, total_packets = 0;
 	unsigned int budget = q_vector->tx.work_limit;
 	unsigned int i = tx_ring->next_to_clean;
@@ -1187,14 +1191,17 @@ static bool ixgbe_clean_tx_irq(struct ixgbe_q_vector *q_vector,
 		napi_consume_skb(tx_buffer->skb, napi_budget);
 
 		/* unmap skb header data */
-		dma_unmap_single(tx_ring->dev,
+		dma_unmap_single_attrs(tx_ring->dev,
 				 dma_unmap_addr(tx_buffer, dma),
 				 dma_unmap_len(tx_buffer, len),
-				 DMA_TO_DEVICE);
+				 DMA_TO_DEVICE,
+				 tx_ring->dma_attrs);
 
 		/* clear tx_buffer data */
 		tx_buffer->skb = NULL;
 		dma_unmap_len_set(tx_buffer, len, 0);
+		addr = dma_unmap_addr(tx_buffer, dma);
+		size = dma_unmap_len(tx_buffer, len);
 
 		/* unmap remaining buffers */
 		while (tx_desc != eop_desc) {
@@ -1209,10 +1216,11 @@ static bool ixgbe_clean_tx_irq(struct ixgbe_q_vector *q_vector,
 
 			/* unmap any remaining paged data */
 			if (dma_unmap_len(tx_buffer, len)) {
-				dma_unmap_page(tx_ring->dev,
-					       dma_unmap_addr(tx_buffer, dma),
-					       dma_unmap_len(tx_buffer, len),
-					       DMA_TO_DEVICE);
+				dma_unmap_single_attrs(tx_ring->dev,
+						addr,
+						size,
+					        DMA_TO_DEVICE,
+						tx_ring->dma_attrs);
 				dma_unmap_len_set(tx_buffer, len, 0);
 			}
 		}
@@ -1566,8 +1574,8 @@ static bool ixgbe_alloc_mapped_page(struct ixgbe_ring *rx_ring,
 	}
 
 	/* map page for use */
-	dma = dma_map_page(rx_ring->dev, page, 0,
-			   ixgbe_rx_pg_size(rx_ring), DMA_FROM_DEVICE);
+	dma = dma_map_single_attrs(rx_ring->dev, page_address(page), ixgbe_rx_pg_size(rx_ring),
+			   DMA_FROM_DEVICE, rx_ring->dma_attrs);
 
 	/*
 	 * if mapping failed free memory back to system since
@@ -2076,9 +2084,9 @@ dma_sync:
 		IXGBE_CB(skb)->page_released = true;
 	} else {
 		/* we are not reusing the buffer so unmap it */
-		dma_unmap_page(rx_ring->dev, rx_buffer->dma,
+		dma_unmap_single_attrs(rx_ring->dev, rx_buffer->dma,
 			       ixgbe_rx_pg_size(rx_ring),
-			       DMA_FROM_DEVICE);
+			       DMA_FROM_DEVICE, rx_ring->dma_attrs);
 	}
 
 	/* clear contents of buffer_info */
@@ -4902,8 +4910,8 @@ static void ixgbe_clean_rx_ring(struct ixgbe_ring *rx_ring)
 		if (!rx_buffer->page)
 			continue;
 
-		dma_unmap_page(dev, rx_buffer->dma,
-			       ixgbe_rx_pg_size(rx_ring), DMA_FROM_DEVICE);
+		dma_unmap_single_attrs(dev, rx_buffer->dma,
+			       ixgbe_rx_pg_size(rx_ring), DMA_FROM_DEVICE, rx_ring->dma_attrs);
 		__free_pages(rx_buffer->page, ixgbe_rx_pg_order(rx_ring));
 
 		rx_buffer->page = NULL;
@@ -5835,6 +5843,7 @@ int ixgbe_setup_tx_resources(struct ixgbe_ring *tx_ring)
 	tx_ring->size = tx_ring->count * sizeof(union ixgbe_adv_tx_desc);
 	tx_ring->size = ALIGN(tx_ring->size, 4096);
 
+	dma_set_attr(DMA_ATTR_WEAK_ORDERING,tx_ring->dma_attrs);
 	set_dev_node(dev, ring_node);
 	tx_ring->desc = dma_alloc_coherent(dev,
 					   tx_ring->size,
@@ -5919,6 +5928,7 @@ int ixgbe_setup_rx_resources(struct ixgbe_ring *rx_ring)
 	rx_ring->size = rx_ring->count * sizeof(union ixgbe_adv_rx_desc);
 	rx_ring->size = ALIGN(rx_ring->size, 4096);
 
+	dma_set_attr(DMA_ATTR_WEAK_ORDERING,rx_ring->dma_attrs);
 	set_dev_node(dev, ring_node);
 	rx_ring->desc = dma_alloc_coherent(dev,
 					   rx_ring->size,
@@ -7547,7 +7557,7 @@ static void ixgbe_tx_map(struct ixgbe_ring *tx_ring,
 	}
 
 #endif
-	dma = dma_map_single(tx_ring->dev, skb->data, size, DMA_TO_DEVICE);
+	dma = dma_map_single_attrs(tx_ring->dev, skb->data, size, DMA_TO_DEVICE, tx_ring->dma_attrs);
 
 	tx_buffer = first;
 
