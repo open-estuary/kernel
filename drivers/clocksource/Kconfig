@@ -317,7 +317,7 @@ config FSL_ERRATUM_A008585
 
 config HISILICON_ERRATUM_161601
 	bool "Workaround for Hisilicon Erratum 161601"
-	default y
+	default n
 	depends on ARM_ARCH_TIMER && ARM64
 	help
 	  This option enables a workaround for Hisilicon Erratum
