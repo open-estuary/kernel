@@ -165,17 +165,17 @@ static struct arch_timer_erratum_workaround arch_timer_fsl_a008585 = {
 	_new;							\
 })
 
-static u32 hisi_161601_read_cntp_tval_el0(void)
+static u32 notrace hisi_161601_read_cntp_tval_el0(void)
 {
 	return __hisi_161601_read_reg(cntp_tval_el0);
 }
 
-static  u32 hisi_161601_read_cntv_tval_el0(void)
+static  u32 notrace hisi_161601_read_cntv_tval_el0(void)
 {
 	return __hisi_161601_read_reg(cntv_tval_el0);
 }
 
-static u64 hisi_161601_read_cntvct_el0(void)
+static u64 notrace hisi_161601_read_cntvct_el0(void)
 {
 	return __hisi_161601_read_reg(cntvct_el0);
 }
