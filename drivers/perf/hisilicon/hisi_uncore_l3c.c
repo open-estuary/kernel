@@ -18,6 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <linux/acpi.h>
 #include <linux/bitmap.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -321,6 +322,13 @@ static const struct of_device_id l3c_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, l3c_of_match);
 
+static const struct acpi_device_id hisi_l3c_pmu_acpi_match[] = {
+	{ "HISI0211", (kernel_ulong_t)&l3c_hw_v1},
+	{ "HISI0212", (kernel_ulong_t)&l3c_hw_v2},
+	{},
+};
+MODULE_DEVICE_TABLE(acpi, hisi_l3c_pmu_acpi_match);
+
 static int hisi_l3c_get_module_instance_id(struct device *dev,
 					   struct  hisi_l3c_data *l3c_data)
 {
@@ -349,7 +357,6 @@ static int hisi_l3c_init_data(struct hisi_pmu *l3c_pmu,
 	struct hisi_l3c_data *l3c_data;
 	const struct hisi_l3c_hw_diff *l3c_hw;
 	struct device *dev = &client->dev;
-	const struct of_device_id *of_id;
 	int ret;
 
 	l3c_data = devm_kzalloc(dev, sizeof(*l3c_data), GFP_KERNEL);
@@ -361,12 +368,26 @@ static int hisi_l3c_init_data(struct hisi_pmu *l3c_pmu,
 
 	l3c_pmu->hwmod_data = l3c_data;
 
-	of_id = of_match_device(l3c_of_match, dev);
-	if (!of_id) {
-		dev_err(dev, "DT: Match device fail!\n");
+	if (dev->of_node) {
+		const struct of_device_id *of_id;
+
+		of_id = of_match_device(l3c_of_match, dev);
+		if (!of_id) {
+			dev_err(dev, "DT: Match device fail!\n");
+			return -EINVAL;
+		}
+		l3c_hw = of_id->data;
+	} else if (ACPI_COMPANION(dev)) {
+		const struct acpi_device_id *acpi_id;
+
+		acpi_id = acpi_match_device(hisi_l3c_pmu_acpi_match, dev);
+		if (!acpi_id) {
+			dev_err(dev, "ACPI: Match device fail!\n");
+			return -EINVAL;
+		}
+		l3c_hw = (struct hisi_l3c_hw_diff *)acpi_id->driver_data;
+	} else
 		return -EINVAL;
-	}
-	l3c_hw = of_id->data;
 
 	/* Get the L3C Module and Instance ID to identify bank index */
 	ret = hisi_l3c_get_module_instance_id(dev, l3c_data);
@@ -543,6 +564,7 @@ static struct hisi_djtag_driver hisi_pmu_l3c_driver = {
 	.driver = {
 		.name = "hisi-pmu-l3c",
 		.of_match_table = l3c_of_match,
+		.acpi_match_table = ACPI_PTR(hisi_l3c_pmu_acpi_match),
 	},
 	.probe = hisi_pmu_l3c_dev_probe,
 	.remove = hisi_pmu_l3c_dev_remove,
