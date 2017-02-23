@@ -18,6 +18,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <linux/acpi.h>
 #include <linux/bitmap.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -228,12 +229,18 @@ static const struct of_device_id mn_of_match[] = {
 };
 MODULE_DEVICE_TABLE(of, mn_of_match);
 
+static const struct acpi_device_id hisi_mn_pmu_acpi_match[] = {
+	{ "HISI0221", },
+	{ "HISI0222", },
+	{},
+};
+MODULE_DEVICE_TABLE(acpi, hisi_mn_pmu_acpi_match);
+
 static int hisi_mn_init_data(struct hisi_pmu *mn_pmu,
 			     struct hisi_djtag_client *client)
 {
 	struct hisi_mn_data *mn_data;
 	struct device *dev = &client->dev;
-	const struct of_device_id *of_id;
 	int ret;
 
 	mn_data = devm_kzalloc(dev, sizeof(*mn_data), GFP_KERNEL);
@@ -244,11 +251,24 @@ static int hisi_mn_init_data(struct hisi_pmu *mn_pmu,
 	mn_data->client = client;
 	mn_pmu->hwmod_data = mn_data;
 
-	of_id = of_match_device(mn_of_match, dev);
-	if (!of_id) {
-		dev_err(dev, "DT: Match device fail!\n");
+	if (dev->of_node) {
+		const struct of_device_id *of_id;
+
+		of_id = of_match_device(mn_of_match, dev);
+		if (!of_id) {
+			dev_err(dev, "DT: Match device fail!\n");
+			return -EINVAL;
+		}
+	} else if (ACPI_COMPANION(dev)) {
+		const struct acpi_device_id *acpi_id;
+
+		acpi_id = acpi_match_device(hisi_mn_pmu_acpi_match, dev);
+		if (!acpi_id) {
+			dev_err(dev, "ACPI: Match device fail!\n");
+			return -EINVAL;
+		}
+	} else
 		return -EINVAL;
-	}
 
 	ret = device_property_read_u32(dev, "hisilicon,module-id",
 				       &mn_data->module_id);
@@ -418,6 +438,7 @@ static struct hisi_djtag_driver hisi_pmu_mn_driver = {
 	.driver = {
 		.name = "hisi-pmu-mn",
 		.of_match_table = mn_of_match,
+		.acpi_match_table = ACPI_PTR(hisi_mn_pmu_acpi_match),
 	},
 	.probe = hisi_pmu_mn_dev_probe,
 	.remove = hisi_pmu_mn_dev_remove,
