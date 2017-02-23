@@ -57,6 +57,9 @@
 #define SC_DJTAG_MSTR_DATA		0x681c
 #define SC_DJTAG_RD_DATA_BASE		0xe800
 
+#define SC_DJTAG_V1_UNLOCK             0x3B
+#define SC_DJTAG_V1_KERNEL_LOCK        0x3C
+
 /* for djtag v2 */
 #define SC_DJTAG_SEC_ACC_EN_EX		0xd800
 #define DJTAG_SEC_ACC_EN_EX		0x1
@@ -73,6 +76,10 @@
 #define SC_DJTAG_RD_DATA_BASE_EX	0xe800
 #define SC_DJTAG_OP_ST_EX		0xe828
 #define DJTAG_OP_DONE_EX		BIT(8)
+
+#define SC_DJTAG_V2_UNLOCK             0xAA
+#define SC_DJTAG_V2_KERNEL_LOCK        0xAB
+#define SC_DJTAG_V2_MODULE_SEL_MASK    0xFF00FFFF
 
 #define DJTAG_SYSCTRL_ADDR_SIZE		0x10000
 
@@ -102,6 +109,30 @@ struct hisi_djtag_host {
 #define to_hisi_djtag_driver(d) container_of(d, struct hisi_djtag_driver, \
 					     driver)
 #define MODULE_PREFIX "hisi_djtag:"
+
+/*
+ * hisi_djtag_lock_v1: djtag lock to avoid djtag access conflict
+ * @reg_base:	djtag register base address
+ *
+ */
+static void hisi_djtag_lock_v1(void __iomem *regs_base)
+{
+	u32 rd;
+
+	/* Continuously poll to ensure the djtag is free */
+	while (1) {
+		rd = readl(regs_base + SC_DJTAG_DEBUG_MODULE_SEL);
+		if (rd == SC_DJTAG_V1_UNLOCK) {
+			writel(SC_DJTAG_V1_KERNEL_LOCK,
+			       regs_base + SC_DJTAG_DEBUG_MODULE_SEL);
+			udelay(10);
+			rd = readl(regs_base + SC_DJTAG_DEBUG_MODULE_SEL);
+			if (rd == SC_DJTAG_V1_KERNEL_LOCK)
+				break;
+		}
+		udelay(10); /* 10us */
+	}
+}
 
 static void hisi_djtag_prepare_v1(void __iomem *regs_base, u32 offset,
 				  u32 mod_sel, u32 mod_mask)
@@ -135,6 +166,58 @@ static void hisi_djtag_do_operation_v1(void __iomem *regs_base)
 	 * condition. BUG_ON as subsequent access are also likely to go wrong.
 	 */
 	BUG_ON(ret == -ETIMEDOUT);
+}
+
+/*
+ * hisi_djtag_lock_v2: djtag lock to avoid djtag access conflict b/w kernel
+ * and UEFI.
+ * @reg_base:	djtag register base address
+ *
+ * Return - none.
+ */
+static void hisi_djtag_lock_v2(void __iomem *regs_base)
+{
+	u32 rd, wr, mod_sel;
+
+	/* Continuously poll to ensure the djtag is free */
+	while (1) {
+		rd = readl(regs_base + SC_DJTAG_MSTR_CFG_EX);
+		mod_sel = ((rd >> DEBUG_MODULE_SEL_SHIFT_EX) & 0xFF);
+		if (mod_sel == SC_DJTAG_V2_UNLOCK) {
+			wr = ((rd & SC_DJTAG_V2_MODULE_SEL_MASK) |
+			      (SC_DJTAG_V2_KERNEL_LOCK <<
+			       DEBUG_MODULE_SEL_SHIFT_EX));
+			writel(wr, regs_base + SC_DJTAG_MSTR_CFG_EX);
+			udelay(10); /* 10us */
+
+			rd = readl(regs_base + SC_DJTAG_MSTR_CFG_EX);
+			mod_sel = ((rd >> DEBUG_MODULE_SEL_SHIFT_EX) & 0xFF);
+			if (mod_sel == SC_DJTAG_V2_KERNEL_LOCK)
+				break;
+		}
+		udelay(10); /* 10us */
+	}
+}
+
+/*
+ * hisi_djtag_unlock_v2: djtag unlock
+ * @reg_base:	djtag register base address
+ *
+ * Return - none.
+ */
+static void hisi_djtag_unlock_v2(void __iomem *regs_base)
+{
+	u32 rd, wr;
+
+	rd = readl(regs_base + SC_DJTAG_MSTR_CFG_EX);
+
+	wr = ((rd & SC_DJTAG_V2_MODULE_SEL_MASK) |
+	      (SC_DJTAG_V2_UNLOCK << DEBUG_MODULE_SEL_SHIFT_EX));
+	/*
+	 * Release djtag module by writing to module
+	 * selection bits of DJTAG_MSTR_CFG register
+	 */
+	writel(wr, regs_base + SC_DJTAG_MSTR_CFG_EX);
 }
 
 static void hisi_djtag_prepare_v2(void __iomem *regs_base, u32 offset,
@@ -191,6 +274,8 @@ static void hisi_djtag_do_operation_v2(void __iomem *regs_base)
 static void hisi_djtag_read_v1(void __iomem *regs_base, u32 offset, u32 mod_sel,
 			       u32 mod_mask, int chain_id, u32 *rval)
 {
+	hisi_djtag_lock_v1(regs_base);
+
 	hisi_djtag_prepare_v1(regs_base, offset, mod_sel, mod_mask);
 
 	writel(DJTAG_MSTR_R, regs_base + SC_DJTAG_MSTR_WR);
@@ -198,6 +283,9 @@ static void hisi_djtag_read_v1(void __iomem *regs_base, u32 offset, u32 mod_sel,
 	hisi_djtag_do_operation_v1(regs_base);
 
 	*rval = readl(regs_base + SC_DJTAG_RD_DATA_BASE + chain_id * 0x4);
+
+	/* Unlock djtag by setting module selection register to 0x3A */
+	writel(SC_DJTAG_V1_UNLOCK, regs_base + SC_DJTAG_DEBUG_MODULE_SEL);
 }
 
 static void hisi_djtag_read_v2(void __iomem *regs_base, u32 offset, u32 mod_sel,
@@ -207,6 +295,8 @@ static void hisi_djtag_read_v2(void __iomem *regs_base, u32 offset, u32 mod_sel,
 		(mod_sel << DEBUG_MODULE_SEL_SHIFT_EX) |
 		(mod_mask & CHAIN_UNIT_CFG_EN_EX);
 
+	hisi_djtag_lock_v2(regs_base);
+
 	hisi_djtag_prepare_v2(regs_base, offset, mod_sel, mod_mask);
 
 	writel(val, regs_base + SC_DJTAG_MSTR_CFG_EX);
@@ -214,6 +304,8 @@ static void hisi_djtag_read_v2(void __iomem *regs_base, u32 offset, u32 mod_sel,
 	hisi_djtag_do_operation_v2(regs_base);
 
 	*rval = readl(regs_base + SC_DJTAG_RD_DATA_BASE_EX + chain_id * 0x4);
+
+	hisi_djtag_unlock_v2(regs_base);
 }
 
 /*
@@ -231,12 +323,17 @@ static void hisi_djtag_write_v1(void __iomem *regs_base, u32 offset,
 				u32 mod_sel, u32 mod_mask, u32 wval,
 				int chain_id)
 {
+	hisi_djtag_lock_v1(regs_base);
+
 	hisi_djtag_prepare_v1(regs_base, offset, mod_sel, mod_mask);
 
 	writel(DJTAG_MSTR_W, regs_base + SC_DJTAG_MSTR_WR);
 	writel(wval, regs_base + SC_DJTAG_MSTR_DATA);
 
 	hisi_djtag_do_operation_v1(regs_base);
+
+	/* Unlock djtag by setting module selection register to 0x3A */
+	writel(SC_DJTAG_V1_UNLOCK, regs_base + SC_DJTAG_DEBUG_MODULE_SEL);
 }
 
 static void hisi_djtag_write_v2(void __iomem *regs_base, u32 offset,
@@ -246,6 +343,7 @@ static void hisi_djtag_write_v2(void __iomem *regs_base, u32 offset,
 	u32 val = DJTAG_MSTR_WR_EX |
 		(mod_sel << DEBUG_MODULE_SEL_SHIFT_EX) |
 		(mod_mask & CHAIN_UNIT_CFG_EN_EX);
+	hisi_djtag_lock_v2(regs_base);
 
 	hisi_djtag_prepare_v2(regs_base, offset, mod_sel, mod_mask);
 
@@ -253,6 +351,8 @@ static void hisi_djtag_write_v2(void __iomem *regs_base, u32 offset,
 	writel(wval, regs_base + SC_DJTAG_MSTR_DATA_EX);
 
 	hisi_djtag_do_operation_v2(regs_base);
+
+	hisi_djtag_unlock_v2(regs_base);
 }
 
 /*
