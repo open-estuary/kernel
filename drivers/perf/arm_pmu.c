@@ -11,7 +11,6 @@
  */
 #define pr_fmt(fmt) "hw perfevents: " fmt
 
-#include <linux/acpi.h>
 #include <linux/bitmap.h>
 #include <linux/cpumask.h>
 #include <linux/cpu_pm.h>
@@ -25,7 +24,6 @@
 #include <linux/irq.h>
 #include <linux/irqdesc.h>
 
-#include <asm/cpu.h>
 #include <asm/cputype.h>
 #include <asm/irq_regs.h>
 
@@ -891,67 +889,25 @@ static void cpu_pmu_destroy(struct arm_pmu *cpu_pmu)
 }
 
 /*
- * CPU PMU identification and probing. Its possible to have
- * multiple CPU types in an ARM machine. Assure that we are
- * picking the right PMU types based on the CPU in question
+ * CPU PMU identification and probing.
  */
-static int probe_plat_pmu(struct arm_pmu *pmu,
-			     const struct pmu_probe_info *info,
-			     unsigned int pmuid)
+static int probe_current_pmu(struct arm_pmu *pmu,
+			     const struct pmu_probe_info *info)
 {
+	int cpu = get_cpu();
+	unsigned int cpuid = read_cpuid_id();
 	int ret = -ENODEV;
-	int cpu;
-	int aff_ctr = 0;
-	static int duplicate_pmus;
-	struct platform_device *pdev = pmu->plat_device;
-	int irq = platform_get_irq(pdev, 0);
 
-	if (irq >= 0 && !irq_is_percpu(irq)) {
-		pmu->irq_affinity = kcalloc(pdev->num_resources, sizeof(int),
-					    GFP_KERNEL);
-		if (!pmu->irq_affinity)
-			return -ENOMEM;
-	}
+	pr_info("probing PMU on CPU %d\n", cpu);
 
-	for_each_possible_cpu(cpu) {
-		unsigned int cpuid = read_specific_cpuid(cpu);
-
-		if (cpuid == pmuid) {
-			cpumask_set_cpu(cpu, &pmu->supported_cpus);
-			if (pmu->irq_affinity) {
-				pmu->irq_affinity[aff_ctr] = cpu;
-				aff_ctr++;
-			}
-		}
-	}
-
-	/* find the type of PMU given the CPU */
 	for (; info->init != NULL; info++) {
-		if ((pmuid & info->mask) != info->cpuid)
+		if ((cpuid & info->mask) != info->cpuid)
 			continue;
 		ret = info->init(pmu);
-		/*
-		 * if this pmu declaration is unspecified and we have
-		 * previously found a PMU on this platform then append
-		 * a PMU number to the pmu name. This avoids changing
-		 * the names of PMUs that are specific to a class of CPUs.
-		 * The assumption is that if we match a specific PMU in the
-		 * provided pmu_probe_info then it's unique, and another PMU
-		 * in the system will match a different entry rather than
-		 * needing the _number to assure its unique.
-		 */
-		if ((!info->cpuid) && (duplicate_pmus)) {
-			pmu->name = kasprintf(GFP_KERNEL, "%s_%d",
-					    pmu->name, duplicate_pmus);
-			if (!pmu->name) {
-				kfree(pmu->irq_affinity);
-				ret = -ENOMEM;
-			}
-		}
-		duplicate_pmus++;
 		break;
 	}
 
+	put_cpu();
 	return ret;
 }
 
@@ -1087,7 +1043,8 @@ int arm_pmu_device_probe(struct platform_device *pdev,
 		if (!ret)
 			ret = init_fn(pmu);
 	} else if (probe_table) {
-		ret = probe_plat_pmu(pmu, probe_table, read_cpuid_id());
+		cpumask_setall(&pmu->supported_cpus);
+		ret = probe_current_pmu(pmu, probe_table);
 	}
 
 	if (ret) {
