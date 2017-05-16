@@ -412,6 +412,11 @@
 #define MSI_IOVA_BASE			0x8000000
 #define MSI_IOVA_LENGTH			0x100000
 
+/* Until ACPICA headers cover IORT rev. C */
+#ifndef ACPI_IORT_SMMU_HISILICON_HI161X
+#define ACPI_IORT_SMMU_HISILICON_HI161X 0x1
+#endif
+
 static bool disable_bypass;
 module_param_named(disable_bypass, disable_bypass, bool, S_IRUGO);
 MODULE_PARM_DESC(disable_bypass,
@@ -2605,6 +2610,20 @@ static int arm_smmu_device_hw_probe(struct arm_smmu_device *smmu)
 }
 
 #ifdef CONFIG_ACPI
+static void parse_driver_acpi_options(struct acpi_iort_smmu_v3 *iort_smmu,
+				      struct arm_smmu_device *smmu)
+{
+	switch (iort_smmu->model) {
+	case ACPI_IORT_SMMU_HISILICON_HI161X:
+		smmu->options |= ARM_SMMU_OPT_SKIP_PREFETCH;
+		break;
+	default:
+		break;
+	}
+
+	dev_notice(smmu->dev, "options set 0x%x\n", smmu->options);
+}
+
 static int arm_smmu_device_acpi_probe(struct platform_device *pdev,
 				      struct arm_smmu_device *smmu)
 {
@@ -2616,6 +2635,8 @@ static int arm_smmu_device_acpi_probe(struct platform_device *pdev,
 
 	/* Retrieve SMMUv3 specific data */
 	iort_smmu = (struct acpi_iort_smmu_v3 *)node->node_data;
+
+	parse_driver_acpi_options(iort_smmu, smmu);
 
 	if (iort_smmu->flags & ACPI_IORT_SMMU_V3_COHACC_OVERRIDE)
 		smmu->features |= ARM_SMMU_FEAT_COHERENCY;
