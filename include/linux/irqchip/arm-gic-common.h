@@ -27,6 +27,8 @@ struct gic_kvm_info {
 	unsigned int	maint_irq;
 	/* Virtual control interface */
 	struct resource vctrl;
+	/* HiSilicon GIC quirk: virtual timer irq map not supported */
+	bool hisi_vtimer_quirk;
 };
 
 const struct gic_kvm_info *gic_get_kvm_info(void);
