@@ -412,6 +412,11 @@
 #define MSI_IOVA_BASE			0x8000000
 #define MSI_IOVA_LENGTH			0x100000
 
+/* Until ACPICA headers cover IORT rev. C */
+#ifndef ACPI_IORT_SMMU_HISILICON_HI161X
+#define ACPI_IORT_SMMU_HISILICON_HI161X 0x1
+#endif
+
 static bool disable_bypass;
 module_param_named(disable_bypass, disable_bypass, bool, S_IRUGO);
 MODULE_PARM_DESC(disable_bypass,
@@ -597,6 +602,7 @@ struct arm_smmu_device {
 	u32				features;
 
 #define ARM_SMMU_OPT_SKIP_PREFETCH	(1 << 0)
+#define ARM_SMMU_OPT_RESV_HW_MSI	(1 << 1)
 	u32				options;
 
 	struct arm_smmu_cmdq		cmdq;
@@ -1904,14 +1910,29 @@ static void arm_smmu_get_resv_regions(struct device *dev,
 				      struct list_head *head)
 {
 	struct iommu_resv_region *region;
+	struct arm_smmu_device *smmu;
+	struct iommu_fwspec *fwspec = dev->iommu_fwspec;
 	int prot = IOMMU_WRITE | IOMMU_NOEXEC | IOMMU_MMIO;
 
-	region = iommu_alloc_resv_region(MSI_IOVA_BASE, MSI_IOVA_LENGTH,
-					 prot, IOMMU_RESV_SW_MSI);
-	if (!region)
-		return;
+	smmu = arm_smmu_get_by_fwnode(fwspec->iommu_fwnode);
 
-	list_add_tail(&region->list, head);
+	if (smmu && (smmu->options & ARM_SMMU_OPT_RESV_HW_MSI) &&
+		      dev_is_pci(dev)) {
+		int ret;
+
+		ret = iort_iommu_its_get_resv_regions(dev, head);
+		if (ret) {
+			dev_warn(dev, "HW MSI region reserve failed\n");
+			return;
+		}
+	} else {
+		region = iommu_alloc_resv_region(MSI_IOVA_BASE, MSI_IOVA_LENGTH,
+						 prot, IOMMU_RESV_SW_MSI);
+		if (!region)
+			return;
+
+		list_add_tail(&region->list, head);
+	}
 
 	iommu_dma_get_resv_regions(dev, head);
 }
@@ -2605,6 +2626,21 @@ static int arm_smmu_device_hw_probe(struct arm_smmu_device *smmu)
 }
 
 #ifdef CONFIG_ACPI
+static void parse_driver_acpi_options(struct acpi_iort_smmu_v3 *iort_smmu,
+				      struct arm_smmu_device *smmu)
+{
+	switch (iort_smmu->model) {
+	case ACPI_IORT_SMMU_HISILICON_HI161X:
+		smmu->options |= ARM_SMMU_OPT_SKIP_PREFETCH;
+		smmu->options |= ARM_SMMU_OPT_RESV_HW_MSI;
+		break;
+	default:
+		break;
+	}
+
+	dev_notice(smmu->dev, "options set 0x%x\n", smmu->options);
+}
+
 static int arm_smmu_device_acpi_probe(struct platform_device *pdev,
 				      struct arm_smmu_device *smmu)
 {
@@ -2616,6 +2652,8 @@ static int arm_smmu_device_acpi_probe(struct platform_device *pdev,
 
 	/* Retrieve SMMUv3 specific data */
 	iort_smmu = (struct acpi_iort_smmu_v3 *)node->node_data;
+
+	parse_driver_acpi_options(iort_smmu, smmu);
 
 	if (iort_smmu->flags & ACPI_IORT_SMMU_V3_COHACC_OVERRIDE)
 		smmu->features |= ARM_SMMU_FEAT_COHERENCY;
