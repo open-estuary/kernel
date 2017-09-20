@@ -28,6 +28,7 @@
 #include <linux/of_irq.h>
 #include <linux/percpu.h>
 #include <linux/slab.h>
+#include <linux/console.h>
 
 #include <linux/irqchip.h>
 #include <linux/irqchip/arm-gic-common.h>
@@ -1390,8 +1391,12 @@ static void __init acpi_madt_oem_check(char *oem_id, char *oem_table_id)
 	 */
 	if (!strncmp(oem_id, "HISI", 4) &&
 		(!strncmp(oem_table_id, "HIP05", 5) ||
-			!strncmp(oem_table_id, "HIP06", 5)))
+			!strncmp(oem_table_id, "HIP06", 5))) {
 		gic_v3_kvm_info.hisi_vtimer_quirk = true;
+
+		/* set console=ttyS0,115200 */
+		add_preferred_console("ttyS", 0, "115200");
+	}
 }
 
 static int __init acpi_parse_madt(struct acpi_table_header *table)
