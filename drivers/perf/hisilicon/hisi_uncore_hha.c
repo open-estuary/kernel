@@ -108,28 +108,6 @@ static u64 hisi_hha_read_counter(struct hisi_pmu *hha_pmu, int cntr_idx)
 	return value;
 }
 
-static u64 hisi_hha_event_update(struct perf_event *event,
-				 struct hw_perf_event *hwc, int idx)
-{
-	struct hisi_pmu *hha_pmu = to_hisi_pmu(event->pmu);
-	u64 delta, prev_raw_count, new_raw_count = 0;
-
-	do {
-		/* Get count from the HHA bank or instance */
-		new_raw_count = hisi_hha_read_counter(hha_pmu, idx);
-		prev_raw_count = local64_read(&hwc->prev_count);
-	} while (local64_cmpxchg(&hwc->prev_count, prev_raw_count,
-				 new_raw_count) != prev_raw_count);
-
-	/*
-	 *  compute the delta and add to event->count
-	 */
-	delta = (new_raw_count - prev_raw_count) & HISI_MAX_PERIOD;
-	local64_add(delta, &event->count);
-
-	return new_raw_count;
-}
-
 static void hisi_hha_set_event_period(struct perf_event *event)
 {
 	struct hisi_pmu *hha_pmu = to_hisi_pmu(event->pmu);
@@ -214,10 +192,10 @@ static void hisi_hha_clear_evtype(struct hisi_pmu *hha_pmu, int idx)
 }
 
 /* counter reg in hha is RO */
-static u32 hisi_hha_write_counter(struct hisi_pmu *hha_pmu,
+static void hisi_hha_write_counter(struct hisi_pmu *hha_pmu,
 				   struct hw_perf_event *hwc, u32 value)
 {
-	return 0;
+	return;
 }
 
 static void hisi_hha_start_counters(struct hisi_pmu *hha_pmu)
@@ -270,10 +248,10 @@ static void hisi_hha_clear_event_idx(struct hisi_pmu *hha_pmu, int idx)
 	clear_bit(idx, hha_data->event_used_mask);
 }
 
-static int hisi_hha_get_event_idx(struct hisi_pmu *hha_pmu)
+static int hisi_hha_get_event_idx(struct perf_event *event)
 {
-	struct hisi_hha_data *hha_data = hha_pmu->hwmod_data;
-	unsigned long *used_mask = hha_data->event_used_mask;
+	struct hisi_pmu *hha_pmu = to_hisi_pmu(event->pmu);
+	unsigned long *used_mask = hha_pmu->pmu_events.used_mask;
 	u32 num_counters = hha_pmu->num_counters;
 	int event_idx;
 
@@ -329,13 +307,6 @@ static int hisi_hha_pmu_init_data(struct hisi_pmu *hha_pmu,
 
 	/* Set the djtag Identifier */
 	hha_data->client = client;
-
-	hha_pmu->hw_perf_events = devm_kcalloc(dev, hha_pmu->num_counters,
-				sizeof(*hha_pmu->hw_perf_events),
-				GFP_KERNEL);
-	if(!hha_pmu->hw_perf_events)
-		return -ENOMEM;
-
 	hha_pmu->hwmod_data = hha_data;
 
 	if (dev->of_node) {
@@ -428,7 +399,7 @@ static struct hisi_uncore_ops hisi_uncore_HHA_ops = {
 	.set_event_period = hisi_hha_set_event_period,
 	.get_event_idx = hisi_hha_get_event_idx,
 	.clear_event_idx = hisi_hha_clear_event_idx,
-	.event_update = hisi_hha_event_update,
+	.event_update = hisi_uncore_pmu_event_update,
 	.start_counters = hisi_hha_start_counters,
 	.stop_counters = hisi_hha_stop_counters,
 	.write_counter = hisi_hha_write_counter,
@@ -466,7 +437,7 @@ static int hisi_hha_pmu_dev_probe(struct hisi_pmu *hha_pmu,
 	hha_pmu->dev = dev;
 
 	/* Pick one core to use for cpumask attributes */
-	cpumask_set_cpu(smp_processor_id(), &hha_pmu->cpu);
+	cpumask_set_cpu(smp_processor_id(), &hha_pmu->cpus);
 
 	/*
 	 * Use poll method to avoid counter overflow as overflow IRQ
@@ -483,7 +454,7 @@ static int hisi_hha_pmu_probe(struct hisi_djtag_client *client)
 	struct device *dev = &client->dev;
 	int ret;
 
-	hha_pmu = hisi_pmu_alloc(dev);
+	hha_pmu = hisi_pmu_alloc(dev, HISI_IDX_HHA_COUNTER_MAX);
 	if (!hha_pmu)
 		return -ENOMEM;
 
