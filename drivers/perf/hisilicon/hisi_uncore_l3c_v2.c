@@ -24,7 +24,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/perf_event.h>
-#include "hisi_uncore_pmu.h"
+#include "hisi_uncore_pmu_v2.h"
 
 /*
  * ARMv8 HiSilicon L3C event types.
@@ -140,7 +140,7 @@ static inline u32 get_counter_reg_off(int cntr_idx)
 	return (L3C_CNT0_REG_OFF + (cntr_idx * 4));
 }
 
-static u64 hisi_l3c_read_counter(struct hisi_pmu *l3c_pmu, int cntr_idx)
+static u64 hisi_l3c_read_counter(struct hisi_pmu_v2 *l3c_pmu, int cntr_idx)
 {
 	struct hisi_l3c_data *l3c_data = l3c_pmu->hwmod_data;
 	struct hisi_djtag_client *client = l3c_data->client;
@@ -154,7 +154,7 @@ static u64 hisi_l3c_read_counter(struct hisi_pmu *l3c_pmu, int cntr_idx)
 	return value;
 }
 
-static void hisi_l3c_set_evtype(struct hisi_pmu *l3c_pmu, int idx, u32 val)
+static void hisi_l3c_set_evtype(struct hisi_pmu_v2 *l3c_pmu, int idx, u32 val)
 {
 	struct hisi_l3c_data *l3c_data = l3c_pmu->hwmod_data;
 	struct hisi_djtag_client *client = l3c_data->client;
@@ -187,7 +187,7 @@ static void hisi_l3c_set_evtype(struct hisi_pmu *l3c_pmu, int idx, u32 val)
 	hisi_djtag_writereg(module_id, bank_sel, reg_off, value, client);
 }
 
-static void hisi_l3c_clear_evtype(struct hisi_pmu *l3c_pmu, int idx)
+static void hisi_l3c_clear_evtype(struct hisi_pmu_v2 *l3c_pmu, int idx)
 {
 	struct hisi_l3c_data *l3c_data = l3c_pmu->hwmod_data;
 	struct hisi_djtag_client *client = l3c_data->client;
@@ -223,7 +223,7 @@ static void hisi_l3c_clear_evtype(struct hisi_pmu *l3c_pmu, int idx)
 	hisi_djtag_writereg(module_id, bank_sel, reg_off, value, client);
 }
 
-static void hisi_l3c_write_counter(struct hisi_pmu *l3c_pmu,
+static void hisi_l3c_write_counter(struct hisi_pmu_v2 *l3c_pmu,
 				   struct hw_perf_event *hwc, u32 value)
 {
 	struct hisi_l3c_data *l3c_data = l3c_pmu->hwmod_data;
@@ -237,7 +237,7 @@ static void hisi_l3c_write_counter(struct hisi_pmu *l3c_pmu,
 	hisi_djtag_writereg(module_id, bank_sel, reg_off, value, client);
 }
 
-static void hisi_l3c_start_counters(struct hisi_pmu *l3c_pmu)
+static void hisi_l3c_start_counters(struct hisi_pmu_v2 *l3c_pmu)
 {
 	struct hisi_l3c_data *l3c_data = l3c_pmu->hwmod_data;
 	struct hisi_djtag_client *client = l3c_data->client;
@@ -262,7 +262,7 @@ static void hisi_l3c_start_counters(struct hisi_pmu *l3c_pmu)
 			    value, client);
 }
 
-static void hisi_l3c_stop_counters(struct hisi_pmu *l3c_pmu)
+static void hisi_l3c_stop_counters(struct hisi_pmu_v2 *l3c_pmu)
 {
 	struct hisi_l3c_data *l3c_data = l3c_pmu->hwmod_data;
 	struct hisi_djtag_client *client = l3c_data->client;
@@ -280,7 +280,7 @@ static void hisi_l3c_stop_counters(struct hisi_pmu *l3c_pmu)
 			    value, client);
 }
 
-static void hisi_l3c_clear_event_idx(struct hisi_pmu *l3c_pmu, int idx)
+static void hisi_l3c_clear_event_idx(struct hisi_pmu_v2 *l3c_pmu, int idx)
 {
 	if (!hisi_l3c_counter_valid(idx)) {
 		dev_err(l3c_pmu->dev, "Unsupported event index:%d!\n", idx);
@@ -291,7 +291,7 @@ static void hisi_l3c_clear_event_idx(struct hisi_pmu *l3c_pmu, int idx)
 
 static int hisi_l3c_get_event_idx(struct perf_event *event)
 {
-	struct hisi_pmu *l3c_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *l3c_pmu = to_hisi_pmu_v2(event->pmu);
 	unsigned long *used_mask = l3c_pmu->pmu_events.used_mask;
 	u32 num_counters = l3c_pmu->num_counters;
 	int event_idx;
@@ -351,7 +351,7 @@ static int hisi_l3c_get_module_instance_id(struct device *dev,
 	return 0;
 }
 
-static int hisi_l3c_init_data(struct hisi_pmu *l3c_pmu,
+static int hisi_l3c_init_data(struct hisi_pmu_v2 *l3c_pmu,
 			      struct hisi_djtag_client *client)
 {
 	struct hisi_l3c_data *l3c_data;
@@ -406,7 +406,7 @@ static int hisi_l3c_init_data(struct hisi_pmu *l3c_pmu,
 }
 
 static struct attribute *hisi_l3c_format_attr[] = {
-	HISI_PMU_FORMAT_ATTR(event, "config:0-7"),
+	HISI_PMU_FORMAT_ATTR_V2(event, "config:0-7"),
 	NULL,
 };
 
@@ -416,12 +416,12 @@ static const struct attribute_group hisi_l3c_format_group = {
 };
 
 static struct attribute *hisi_l3c_events_attr[] = {
-	HISI_PMU_EVENT_ATTR_STR(read_allocate, "event=0x0"),
-	HISI_PMU_EVENT_ATTR_STR(write_allocate, "event=0x01"),
-	HISI_PMU_EVENT_ATTR_STR(read_noallocate, "event=0x02"),
-	HISI_PMU_EVENT_ATTR_STR(write_noallocate, "event=0x03"),
-	HISI_PMU_EVENT_ATTR_STR(read_hit, "event=0x04"),
-	HISI_PMU_EVENT_ATTR_STR(write_hit, "event=0x05"),
+	HISI_PMU_EVENT_ATTR_STR_V2(read_allocate, "event=0x0"),
+	HISI_PMU_EVENT_ATTR_STR_V2(write_allocate, "event=0x01"),
+	HISI_PMU_EVENT_ATTR_STR_V2(read_noallocate, "event=0x02"),
+	HISI_PMU_EVENT_ATTR_STR_V2(write_noallocate, "event=0x03"),
+	HISI_PMU_EVENT_ATTR_STR_V2(read_hit, "event=0x04"),
+	HISI_PMU_EVENT_ATTR_STR_V2(write_hit, "event=0x05"),
 	NULL,
 };
 
@@ -438,7 +438,7 @@ static const struct attribute_group hisi_l3c_attr_group = {
 	.attrs = hisi_l3c_attrs,
 };
 
-static DEVICE_ATTR(cpumask, 0444, hisi_cpumask_sysfs_show, NULL);
+static DEVICE_ATTR(cpumask, 0444, hisi_cpumask_sysfs_show_v2, NULL);
 
 static struct attribute *hisi_l3c_cpumask_attrs[] = {
 	&dev_attr_cpumask.attr,
@@ -457,13 +457,13 @@ static const struct attribute_group *hisi_l3c_pmu_attr_groups[] = {
 	NULL,
 };
 
-static struct hisi_uncore_ops hisi_uncore_l3c_ops = {
+static struct hisi_uncore_ops_v2 hisi_uncore_l3c_ops = {
 	.set_evtype = hisi_l3c_set_evtype,
 	.clear_evtype = hisi_l3c_clear_evtype,
-	.set_event_period = hisi_uncore_pmu_set_event_period,
+	.set_event_period = hisi_uncore_pmu_set_event_period_v2,
 	.get_event_idx = hisi_l3c_get_event_idx,
 	.clear_event_idx = hisi_l3c_clear_event_idx,
-	.event_update = hisi_uncore_pmu_event_update,
+	.event_update = hisi_uncore_pmu_event_update_v2,
 	.start_counters = hisi_l3c_start_counters,
 	.stop_counters = hisi_l3c_stop_counters,
 	.write_counter = hisi_l3c_write_counter,
@@ -471,7 +471,7 @@ static struct hisi_uncore_ops hisi_uncore_l3c_ops = {
 };
 
 /* Initialize hrtimer to poll for avoiding counter overflow */
-static void hisi_l3c_hrtimer_init(struct hisi_pmu *l3c_pmu)
+static void hisi_l3c_hrtimer_init(struct hisi_pmu_v2 *l3c_pmu)
 {
 	INIT_LIST_HEAD(&l3c_pmu->active_list);
 	l3c_pmu->ops->start_hrtimer = hisi_hrtimer_start;
@@ -479,7 +479,7 @@ static void hisi_l3c_hrtimer_init(struct hisi_pmu *l3c_pmu)
 	hisi_hrtimer_init(l3c_pmu, L3C_HRTIMER_INTERVAL);
 }
 
-static void hisi_l3c_pmu_init(struct hisi_pmu *l3c_pmu,
+static void hisi_l3c_pmu_init(struct hisi_pmu_v2 *l3c_pmu,
 			      struct hisi_djtag_client *client)
 {
 	struct device *dev = &client->dev;
@@ -507,11 +507,11 @@ static void hisi_l3c_pmu_init(struct hisi_pmu *l3c_pmu,
 
 static int hisi_pmu_l3c_dev_probe(struct hisi_djtag_client *client)
 {
-	struct hisi_pmu *l3c_pmu;
+	struct hisi_pmu_v2 *l3c_pmu;
 	struct device *dev = &client->dev;
 	int ret;
 
-	l3c_pmu = hisi_pmu_alloc(dev, HISI_IDX_L3C_COUNTER_MAX);
+	l3c_pmu = hisi_pmu_alloc_v2(dev, HISI_IDX_L3C_COUNTER_MAX);
 	if (!l3c_pmu)
 		return -ENOMEM;
 
@@ -524,18 +524,18 @@ static int hisi_pmu_l3c_dev_probe(struct hisi_djtag_client *client)
 	l3c_pmu->pmu = (struct pmu) {
 		.name = l3c_pmu->name,
 		.task_ctx_nr = perf_invalid_context,
-		.event_init = hisi_uncore_pmu_event_init,
-		.pmu_enable = hisi_uncore_pmu_enable,
-		.pmu_disable = hisi_uncore_pmu_disable,
-		.add = hisi_uncore_pmu_add,
-		.del = hisi_uncore_pmu_del,
-		.start = hisi_uncore_pmu_start,
-		.stop = hisi_uncore_pmu_stop,
-		.read = hisi_uncore_pmu_read,
+		.event_init = hisi_uncore_pmu_event_init_v2,
+		.pmu_enable = hisi_uncore_pmu_enable_v2,
+		.pmu_disable = hisi_uncore_pmu_disable_v2,
+		.add = hisi_uncore_pmu_add_v2,
+		.del = hisi_uncore_pmu_del_v2,
+		.start = hisi_uncore_pmu_start_v2,
+		.stop = hisi_uncore_pmu_stop_v2,
+		.read = hisi_uncore_pmu_read_v2,
 		.attr_groups = hisi_l3c_pmu_attr_groups,
 	};
 
-	ret = hisi_uncore_pmu_setup(l3c_pmu, l3c_pmu->name);
+	ret = hisi_uncore_pmu_setup_v2(l3c_pmu, l3c_pmu->name);
 	if (ret) {
 		dev_err(dev, "hisi_uncore_pmu_init FAILED!!\n");
 		kfree(l3c_pmu->name);
@@ -550,7 +550,7 @@ static int hisi_pmu_l3c_dev_probe(struct hisi_djtag_client *client)
 
 static int hisi_pmu_l3c_dev_remove(struct hisi_djtag_client *client)
 {
-	struct hisi_pmu *l3c_pmu;
+	struct hisi_pmu_v2 *l3c_pmu;
 	struct device *dev = &client->dev;
 
 	l3c_pmu = dev_get_drvdata(dev);

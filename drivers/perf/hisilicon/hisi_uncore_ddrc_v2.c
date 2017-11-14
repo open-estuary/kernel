@@ -28,7 +28,8 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/perf_event.h>
-#include "hisi_uncore_pmu.h"
+
+#include "hisi_uncore_pmu_v2.h"
 
 /*
  * ARMv8 HiSilicon DDRC event types.
@@ -67,7 +68,7 @@ struct hisi_ddrc_data {
 	struct hisi_ddrc_hwcfg ddrc_hwcfg;
 };
 
-static inline int hisi_ddrc_counter_valid(int idx, struct hisi_pmu *ddrc_pmu)
+static inline int hisi_ddrc_counter_valid(int idx, struct hisi_pmu_v2 *ddrc_pmu)
 {
 	return (idx >= 0 && idx < HISI_HWEVENT_DDRC_EVENT_MAX);
 }
@@ -96,7 +97,7 @@ static u32 hisi_read_ddrc_counter(struct hisi_ddrc_data *ddrc_data,
 
 static u64 hisi_ddrc_event_update(struct perf_event *event)
 {
-	struct hisi_pmu *ddrc_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *ddrc_pmu = to_hisi_pmu_v2(event->pmu);
 	struct hw_perf_event *hwc = &event->hw;
 	struct hisi_ddrc_data *ddrc_data = ddrc_pmu->hwmod_data;
 	u64 delta, prev_raw_count, new_raw_count = 0;
@@ -119,7 +120,7 @@ static u64 hisi_ddrc_event_update(struct perf_event *event)
 	return new_raw_count;
 }
 
-static void hisi_write_ddrc_counter(struct hisi_pmu *ddrc_pmu,
+static void hisi_write_ddrc_counter(struct hisi_pmu_v2 *ddrc_pmu,
 				   struct hw_perf_event *hwc, u32 value)
 {
 	struct hisi_ddrc_data *ddrc_data = ddrc_pmu->hwmod_data;
@@ -144,7 +145,7 @@ static void hisi_write_ddrc_counter(struct hisi_pmu *ddrc_pmu,
 
 static void hisi_ddrc_set_event_period(struct perf_event *event)
 {
-	struct hisi_pmu *ddrc_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *ddrc_pmu = to_hisi_pmu_v2(event->pmu);
 	struct hisi_ddrc_data *ddrc_data = ddrc_pmu->hwmod_data;
 	struct hw_perf_event *hwc = &event->hw;
 	u32 event_code = hwc->config_base;
@@ -160,7 +161,7 @@ static void hisi_ddrc_set_event_period(struct perf_event *event)
 	local64_set(&hwc->prev_count, value);
 }
 
-static void hisi_clear_ddrc_event_idx(struct hisi_pmu *ddrc_pmu, int idx)
+static void hisi_clear_ddrc_event_idx(struct hisi_pmu_v2 *ddrc_pmu, int idx)
 {
 	struct hisi_ddrc_data *ddrc_data = ddrc_pmu->hwmod_data;
 	void *bitmap_addr;
@@ -177,7 +178,7 @@ static void hisi_clear_ddrc_event_idx(struct hisi_pmu *ddrc_pmu, int idx)
 
 static int hisi_ddrc_get_event_idx(struct perf_event *event)
 {
-	struct hisi_pmu *ddrc_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *ddrc_pmu = to_hisi_pmu_v2(event->pmu);
 	unsigned long *used_mask = ddrc_pmu->pmu_events.used_mask;
 	u32 num_counters = ddrc_pmu->num_counters;
 	int event_idx;
@@ -221,7 +222,7 @@ static const struct of_device_id ddrc_of_match[] = {
 MODULE_DEVICE_TABLE(of, ddrc_of_match);
 
 static int hisi_ddrc_init_data(struct platform_device *pdev,
-					struct hisi_pmu *ddrc_pmu)
+					struct hisi_pmu_v2 *ddrc_pmu)
 {
 	struct device *dev = &pdev->dev;
 	struct hisi_ddrc_data *ddrc_data;
@@ -292,7 +293,7 @@ static int hisi_ddrc_init_data(struct platform_device *pdev,
 }
 
 static struct attribute *hisi_ddrc_format_attr[] = {
-	HISI_PMU_FORMAT_ATTR(event, "config:0-11"),
+	HISI_PMU_FORMAT_ATTR_V2(event, "config:0-11"),
 	NULL,
 };
 
@@ -302,19 +303,19 @@ static const struct attribute_group hisi_ddrc_format_group = {
 };
 
 static struct attribute *hisi_ddrc_events_attr[] = {
-	HISI_PMU_EVENT_ATTR_STR(flux_write, "event=0x00"),
-	HISI_PMU_EVENT_ATTR_STR(flux_read, "event=0x01"),
-	HISI_PMU_EVENT_ATTR_STR(flux_write_cmd, "event=0x02"),
-	HISI_PMU_EVENT_ATTR_STR(flux_read_cmd, "event=0x03"),
-	HISI_PMU_EVENT_ATTR_STR(fluxid_write, "event=0x04"),
-	HISI_PMU_EVENT_ATTR_STR(fluxid_read, "event=0x05"),
-	HISI_PMU_EVENT_ATTR_STR(fluxid_write_cmd, "event=0x06"),
-	HISI_PMU_EVENT_ATTR_STR(fluxid_read_cmd, "event=0x07"),
-	HISI_PMU_EVENT_ATTR_STR(write_latency_cnt0, "event=0x08"),
-	HISI_PMU_EVENT_ATTR_STR(read_latency_cnt0, "event=0x09"),
-	HISI_PMU_EVENT_ATTR_STR(write_latency_cnt1, "event=0x0A"),
-	HISI_PMU_EVENT_ATTR_STR(read_latency_cnt1, "event=0x0B"),
-	HISI_PMU_EVENT_ATTR_STR(read_latency_cnt_inher,	"event=0x0C"),
+	HISI_PMU_EVENT_ATTR_STR_V2(flux_write, "event=0x00"),
+	HISI_PMU_EVENT_ATTR_STR_V2(flux_read, "event=0x01"),
+	HISI_PMU_EVENT_ATTR_STR_V2(flux_write_cmd, "event=0x02"),
+	HISI_PMU_EVENT_ATTR_STR_V2(flux_read_cmd, "event=0x03"),
+	HISI_PMU_EVENT_ATTR_STR_V2(fluxid_write, "event=0x04"),
+	HISI_PMU_EVENT_ATTR_STR_V2(fluxid_read, "event=0x05"),
+	HISI_PMU_EVENT_ATTR_STR_V2(fluxid_write_cmd, "event=0x06"),
+	HISI_PMU_EVENT_ATTR_STR_V2(fluxid_read_cmd, "event=0x07"),
+	HISI_PMU_EVENT_ATTR_STR_V2(write_latency_cnt0, "event=0x08"),
+	HISI_PMU_EVENT_ATTR_STR_V2(read_latency_cnt0, "event=0x09"),
+	HISI_PMU_EVENT_ATTR_STR_V2(write_latency_cnt1, "event=0x0A"),
+	HISI_PMU_EVENT_ATTR_STR_V2(read_latency_cnt1, "event=0x0B"),
+	HISI_PMU_EVENT_ATTR_STR_V2(read_latency_cnt_inher,	"event=0x0C"),
 	NULL,
 };
 
@@ -331,7 +332,7 @@ static const struct attribute_group hisi_ddrc_attr_group = {
 	.attrs = hisi_ddrc_attrs,
 };
 
-static DEVICE_ATTR(cpumask, 0444, hisi_cpumask_sysfs_show, NULL);
+static DEVICE_ATTR(cpumask, 0444, hisi_cpumask_sysfs_show_v2, NULL);
 
 static struct attribute *hisi_ddrc_cpumask_attrs[] = {
 	&dev_attr_cpumask.attr,
@@ -364,7 +365,7 @@ static const struct attribute_group *hisi_ddrc_pmu_attr_groups[] = {
 	NULL,
 };
 
-static struct hisi_uncore_ops hisi_uncore_ddrc_ops = {
+static struct hisi_uncore_ops_v2 hisi_uncore_ddrc_ops = {
 	.set_event_period = hisi_ddrc_set_event_period,
 	.get_event_idx = hisi_ddrc_get_event_idx,
 	.clear_event_idx = hisi_clear_ddrc_event_idx,
@@ -373,7 +374,7 @@ static struct hisi_uncore_ops hisi_uncore_ddrc_ops = {
 };
 
 /* Initialize hrtimer to poll for avoiding counter overflow */
-static void hisi_ddrc_hrtimer_init(struct hisi_pmu *ddrc_pmu)
+static void hisi_ddrc_hrtimer_init(struct hisi_pmu_v2 *ddrc_pmu)
 {
 	INIT_LIST_HEAD(&ddrc_pmu->active_list);
 	ddrc_pmu->ops->start_hrtimer = hisi_hrtimer_start;
@@ -381,7 +382,7 @@ static void hisi_ddrc_hrtimer_init(struct hisi_pmu *ddrc_pmu)
 	hisi_hrtimer_init(ddrc_pmu, DDRC_HRTIMER_INTERVAL);
 }
 
-static int hisi_ddrc_pmu_init(struct device *dev, struct hisi_pmu *ddrc_pmu)
+static int hisi_ddrc_pmu_init(struct device *dev, struct hisi_pmu_v2 *ddrc_pmu)
 {
 	struct hisi_ddrc_data *ddrc_data = ddrc_pmu->hwmod_data;
 	struct hisi_ddrc_hwcfg *ddrc_hwcfg;
@@ -408,11 +409,11 @@ static int hisi_ddrc_pmu_init(struct device *dev, struct hisi_pmu *ddrc_pmu)
 
 static int hisi_pmu_ddrc_dev_probe(struct platform_device *pdev)
 {
-	struct hisi_pmu *ddrc_pmu;
+	struct hisi_pmu_v2 *ddrc_pmu;
 	struct device *dev = &pdev->dev;
 	int ret;
 
-	ddrc_pmu = hisi_pmu_alloc(dev, HISI_HWEVENT_DDRC_EVENT_MAX);
+	ddrc_pmu = hisi_pmu_alloc_v2(dev, HISI_HWEVENT_DDRC_EVENT_MAX);
 	if (!ddrc_pmu)
 		return -ENOMEM;
 
@@ -427,18 +428,18 @@ static int hisi_pmu_ddrc_dev_probe(struct platform_device *pdev)
 	ddrc_pmu->pmu = (struct pmu) {
 		.name = ddrc_pmu->name,
 		.task_ctx_nr = perf_invalid_context,
-		.event_init = hisi_uncore_pmu_event_init,
-		.pmu_enable = hisi_uncore_pmu_enable,
-		.pmu_disable = hisi_uncore_pmu_disable,
-		.add = hisi_uncore_pmu_add,
-		.del = hisi_uncore_pmu_del,
-		.start = hisi_uncore_pmu_start,
-		.stop = hisi_uncore_pmu_stop,
-		.read = hisi_uncore_pmu_read,
+		.event_init = hisi_uncore_pmu_event_init_v2,
+		.pmu_enable = hisi_uncore_pmu_enable_v2,
+		.pmu_disable = hisi_uncore_pmu_disable_v2,
+		.add = hisi_uncore_pmu_add_v2,
+		.del = hisi_uncore_pmu_del_v2,
+		.start = hisi_uncore_pmu_start_v2,
+		.stop = hisi_uncore_pmu_stop_v2,
+		.read = hisi_uncore_pmu_read_v2,
 		.attr_groups = hisi_ddrc_pmu_attr_groups,
 	};
 
-	ret = hisi_uncore_pmu_setup(ddrc_pmu, ddrc_pmu->name);
+	ret = hisi_uncore_pmu_setup_v2(ddrc_pmu, ddrc_pmu->name);
 	if (ret) {
 		dev_err(ddrc_pmu->dev, "hisi_uncore_pmu_init FAILED!!\n");
 		return ret;
@@ -451,7 +452,7 @@ static int hisi_pmu_ddrc_dev_probe(struct platform_device *pdev)
 
 static int hisi_pmu_ddrc_dev_remove(struct platform_device *pdev)
 {
-	struct hisi_pmu *ddrc_pmu = platform_get_drvdata(pdev);
+	struct hisi_pmu_v2 *ddrc_pmu = platform_get_drvdata(pdev);
 
 	perf_pmu_unregister(&ddrc_pmu->pmu);
 	platform_set_drvdata(pdev, NULL);

@@ -24,7 +24,7 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/perf_event.h>
-#include "hisi_uncore_pmu.h"
+#include "hisi_uncore_pmu_v2.h"
 
 /*
  * ARMv8 HiSilicon MN event types.
@@ -81,7 +81,7 @@ static inline u32 get_counter_reg_off(int cntr_idx)
 	return (MN1_CNT0_REG_OFF + (cntr_idx * 4));
 }
 
-static u64 hisi_mn_read_counter(struct hisi_pmu *mn_pmu, int cntr_idx)
+static u64 hisi_mn_read_counter(struct hisi_pmu_v2 *mn_pmu, int cntr_idx)
 {
 	struct hisi_mn_data *mn_data = mn_pmu->hwmod_data;
 	struct hisi_djtag_client *client = mn_data->client;
@@ -95,7 +95,7 @@ static u64 hisi_mn_read_counter(struct hisi_pmu *mn_pmu, int cntr_idx)
 	return value;
 }
 
-static void hisi_mn_set_evtype(struct hisi_pmu *mn_pmu, int idx, u32 val)
+static void hisi_mn_set_evtype(struct hisi_pmu_v2 *mn_pmu, int idx, u32 val)
 {
 	struct hisi_mn_data *mn_data = mn_pmu->hwmod_data;
 	struct hisi_djtag_client *client = mn_data->client;
@@ -120,7 +120,7 @@ static void hisi_mn_set_evtype(struct hisi_pmu *mn_pmu, int idx, u32 val)
 			    value, client);
 }
 
-static void hisi_mn_clear_evtype(struct hisi_pmu *mn_pmu, int idx)
+static void hisi_mn_clear_evtype(struct hisi_pmu_v2 *mn_pmu, int idx)
 {
 	struct hisi_mn_data *mn_data = mn_pmu->hwmod_data;
 	struct hisi_djtag_client *client = mn_data->client;
@@ -145,7 +145,7 @@ static void hisi_mn_clear_evtype(struct hisi_pmu *mn_pmu, int idx)
 			    value, client);
 }
 
-static void hisi_mn_write_counter(struct hisi_pmu *mn_pmu,
+static void hisi_mn_write_counter(struct hisi_pmu_v2 *mn_pmu,
 				  struct hw_perf_event *hwc, u32 value)
 {
 	struct hisi_mn_data *mn_data = mn_pmu->hwmod_data;
@@ -158,7 +158,7 @@ static void hisi_mn_write_counter(struct hisi_pmu *mn_pmu,
 	hisi_djtag_writereg(module_id, MN1_BANK_SELECT, reg_off, value, client);
 }
 
-static void hisi_mn_start_counters(struct hisi_pmu *mn_pmu)
+static void hisi_mn_start_counters(struct hisi_pmu_v2 *mn_pmu)
 {
 	struct hisi_mn_data *mn_data = mn_pmu->hwmod_data;
 	struct hisi_djtag_client *client = mn_data->client;
@@ -179,7 +179,7 @@ static void hisi_mn_start_counters(struct hisi_pmu *mn_pmu)
 			    value, client);
 }
 
-static void hisi_mn_stop_counters(struct hisi_pmu *mn_pmu)
+static void hisi_mn_stop_counters(struct hisi_pmu_v2 *mn_pmu)
 {
 	struct hisi_mn_data *mn_data = mn_pmu->hwmod_data;
 	struct hisi_djtag_client *client = mn_data->client;
@@ -196,7 +196,7 @@ static void hisi_mn_stop_counters(struct hisi_pmu *mn_pmu)
 			    value, client);
 }
 
-static void hisi_mn_clear_event_idx(struct hisi_pmu *mn_pmu, int idx)
+static void hisi_mn_clear_event_idx(struct hisi_pmu_v2 *mn_pmu, int idx)
 {
 	if (!hisi_mn_counter_valid(idx)) {
 		dev_err(mn_pmu->dev, "Unsupported event index:%d!\n", idx);
@@ -207,7 +207,7 @@ static void hisi_mn_clear_event_idx(struct hisi_pmu *mn_pmu, int idx)
 
 static int hisi_mn_get_event_idx(struct perf_event *event)
 {
-	struct hisi_pmu *mn_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *mn_pmu = to_hisi_pmu_v2(event->pmu);
 	unsigned long *used_mask = mn_pmu->pmu_events.used_mask;
 	u32 num_counters = mn_pmu->num_counters;
 	int event_idx;
@@ -236,7 +236,7 @@ static const struct acpi_device_id hisi_mn_pmu_acpi_match[] = {
 };
 MODULE_DEVICE_TABLE(acpi, hisi_mn_pmu_acpi_match);
 
-static int hisi_mn_init_data(struct hisi_pmu *mn_pmu,
+static int hisi_mn_init_data(struct hisi_pmu_v2 *mn_pmu,
 			     struct hisi_djtag_client *client)
 {
 	struct hisi_mn_data *mn_data;
@@ -281,7 +281,7 @@ static int hisi_mn_init_data(struct hisi_pmu *mn_pmu,
 }
 
 static struct attribute *hisi_mn_format_attr[] = {
-	HISI_PMU_FORMAT_ATTR(event, "config:0-7"),
+	HISI_PMU_FORMAT_ATTR_V2(event, "config:0-7"),
 	NULL,
 };
 
@@ -291,12 +291,12 @@ static const struct attribute_group hisi_mn_format_group = {
 };
 
 static struct attribute *hisi_mn_events_attr[] = {
-	HISI_PMU_EVENT_ATTR_STR(eo_barrier_req, "event=0x0"),
-	HISI_PMU_EVENT_ATTR_STR(ec_barrier_req,	"event=0x01"),
-	HISI_PMU_EVENT_ATTR_STR(dvm_op_req, "event=0x02"),
-	HISI_PMU_EVENT_ATTR_STR(dvm_sync_req, "event=0x03"),
-	HISI_PMU_EVENT_ATTR_STR(read_req, "event=0x04"),
-	HISI_PMU_EVENT_ATTR_STR(write_req, "event=0x05"),
+	HISI_PMU_EVENT_ATTR_STR_V2(eo_barrier_req, "event=0x0"),
+	HISI_PMU_EVENT_ATTR_STR_V2(ec_barrier_req,	"event=0x01"),
+	HISI_PMU_EVENT_ATTR_STR_V2(dvm_op_req, "event=0x02"),
+	HISI_PMU_EVENT_ATTR_STR_V2(dvm_sync_req, "event=0x03"),
+	HISI_PMU_EVENT_ATTR_STR_V2(read_req, "event=0x04"),
+	HISI_PMU_EVENT_ATTR_STR_V2(write_req, "event=0x05"),
 	NULL,
 };
 
@@ -313,7 +313,7 @@ static const struct attribute_group hisi_mn_attr_group = {
 	.attrs = hisi_mn_attrs,
 };
 
-static DEVICE_ATTR(cpumask, 0444, hisi_cpumask_sysfs_show, NULL);
+static DEVICE_ATTR(cpumask, 0444, hisi_cpumask_sysfs_show_v2, NULL);
 
 static struct attribute *hisi_mn_cpumask_attrs[] = {
 	&dev_attr_cpumask.attr,
@@ -332,13 +332,13 @@ static const struct attribute_group *hisi_mn_pmu_attr_groups[] = {
 	NULL,
 };
 
-static struct hisi_uncore_ops hisi_uncore_mn_ops = {
+static struct hisi_uncore_ops_v2 hisi_uncore_mn_ops = {
 	.set_evtype = hisi_mn_set_evtype,
 	.clear_evtype = hisi_mn_clear_evtype,
-	.set_event_period = hisi_uncore_pmu_set_event_period,
+	.set_event_period = hisi_uncore_pmu_set_event_period_v2,
 	.get_event_idx = hisi_mn_get_event_idx,
 	.clear_event_idx = hisi_mn_clear_event_idx,
-	.event_update = hisi_uncore_pmu_event_update,
+	.event_update = hisi_uncore_pmu_event_update_v2,
 	.start_counters = hisi_mn_start_counters,
 	.stop_counters = hisi_mn_stop_counters,
 	.write_counter = hisi_mn_write_counter,
@@ -346,7 +346,7 @@ static struct hisi_uncore_ops hisi_uncore_mn_ops = {
 };
 
 /* Use hrtimer when no IRQ, to poll for avoiding counter overflow */
-static void hisi_mn_hrtimer_init(struct hisi_pmu *mn_pmu)
+static void hisi_mn_hrtimer_init(struct hisi_pmu_v2 *mn_pmu)
 {
 	INIT_LIST_HEAD(&mn_pmu->active_list);
 	mn_pmu->ops->start_hrtimer = hisi_hrtimer_start;
@@ -354,7 +354,7 @@ static void hisi_mn_hrtimer_init(struct hisi_pmu *mn_pmu)
 	hisi_hrtimer_init(mn_pmu, MN1_HRTIMER_INTERVAL);
 }
 
-static void hisi_mn_pmu_init(struct hisi_pmu *mn_pmu,
+static void hisi_mn_pmu_init(struct hisi_pmu_v2 *mn_pmu,
 			     struct hisi_djtag_client *client)
 {
 	struct device *dev = &client->dev;
@@ -381,11 +381,11 @@ static void hisi_mn_pmu_init(struct hisi_pmu *mn_pmu,
 
 static int hisi_pmu_mn_dev_probe(struct hisi_djtag_client *client)
 {
-	struct hisi_pmu *mn_pmu;
+	struct hisi_pmu_v2 *mn_pmu;
 	struct device *dev = &client->dev;
 	int ret;
 
-	mn_pmu = hisi_pmu_alloc(dev, HISI_IDX_MN_COUNTER_MAX);
+	mn_pmu = hisi_pmu_alloc_v2(dev, HISI_IDX_MN_COUNTER_MAX);
 	if (!mn_pmu)
 		return -ENOMEM;
 
@@ -398,18 +398,18 @@ static int hisi_pmu_mn_dev_probe(struct hisi_djtag_client *client)
 	mn_pmu->pmu = (struct pmu) {
 		.name = mn_pmu->name,
 		.task_ctx_nr = perf_invalid_context,
-		.event_init = hisi_uncore_pmu_event_init,
-		.pmu_enable = hisi_uncore_pmu_enable,
-		.pmu_disable = hisi_uncore_pmu_disable,
-		.add = hisi_uncore_pmu_add,
-		.del = hisi_uncore_pmu_del,
-		.start = hisi_uncore_pmu_start,
-		.stop = hisi_uncore_pmu_stop,
-		.read = hisi_uncore_pmu_read,
+		.event_init = hisi_uncore_pmu_event_init_v2,
+		.pmu_enable = hisi_uncore_pmu_enable_v2,
+		.pmu_disable = hisi_uncore_pmu_disable_v2,
+		.add = hisi_uncore_pmu_add_v2,
+		.del = hisi_uncore_pmu_del_v2,
+		.start = hisi_uncore_pmu_start_v2,
+		.stop = hisi_uncore_pmu_stop_v2,
+		.read = hisi_uncore_pmu_read_v2,
 		.attr_groups = hisi_mn_pmu_attr_groups,
 	};
 
-	ret = hisi_uncore_pmu_setup(mn_pmu, mn_pmu->name);
+	ret = hisi_uncore_pmu_setup_v2(mn_pmu, mn_pmu->name);
 	if (ret) {
 		dev_err(dev, "hisi_uncore_pmu_init FAILED!!\n");
 		kfree(mn_pmu->name);
@@ -424,7 +424,7 @@ static int hisi_pmu_mn_dev_probe(struct hisi_djtag_client *client)
 
 static int hisi_pmu_mn_dev_remove(struct hisi_djtag_client *client)
 {
-	struct hisi_pmu *mn_pmu;
+	struct hisi_pmu_v2 *mn_pmu;
 	struct device *dev = &client->dev;
 
 	mn_pmu = dev_get_drvdata(dev);

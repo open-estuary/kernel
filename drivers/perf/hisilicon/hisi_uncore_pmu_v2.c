@@ -23,12 +23,13 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/perf_event.h>
-#include "hisi_uncore_pmu.h"
+
+#include "hisi_uncore_pmu_v2.h"
 
 /*
  * PMU format attributes
  */
-ssize_t hisi_format_sysfs_show(struct device *dev,
+ssize_t hisi_format_sysfs_show_v2(struct device *dev,
 			       struct device_attribute *attr, char *buf)
 {
 	struct dev_ext_attribute *eattr;
@@ -40,7 +41,7 @@ ssize_t hisi_format_sysfs_show(struct device *dev,
 /*
  * PMU event attributes
  */
-ssize_t hisi_event_sysfs_show(struct device *dev,
+ssize_t hisi_event_sysfs_show_v2(struct device *dev,
 			      struct device_attribute *attr, char *page)
 {
 	struct perf_pmu_events_attr *pmu_attr =
@@ -52,11 +53,11 @@ ssize_t hisi_event_sysfs_show(struct device *dev,
 /*
  * sysfs cpumask attributes
  */
-ssize_t hisi_cpumask_sysfs_show(struct device *dev,
+ssize_t hisi_cpumask_sysfs_show_v2(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct pmu *pmu = dev_get_drvdata(dev);
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(pmu);
 
 	return cpumap_print_to_pagebuf(true, buf, &hisi_pmu->cpus);
 }
@@ -66,8 +67,8 @@ ssize_t hisi_cpumask_sysfs_show(struct device *dev,
  */
 static enum hrtimer_restart hisi_hrtimer_callback(struct hrtimer *hrtimer)
 {
-	struct hisi_pmu *hisi_pmu = container_of(hrtimer,
-						 struct hisi_pmu, hrtimer);
+	struct hisi_pmu_v2 *hisi_pmu = container_of(hrtimer,
+						 struct hisi_pmu_v2, hrtimer);
 	struct perf_event *event;
 	unsigned long flags;
 
@@ -88,7 +89,7 @@ static enum hrtimer_restart hisi_hrtimer_callback(struct hrtimer *hrtimer)
 	return HRTIMER_RESTART;
 }
 
-void hisi_hrtimer_init(struct hisi_pmu *hisi_pmu, u64 timer_interval)
+void hisi_hrtimer_init(struct hisi_pmu_v2 *hisi_pmu, u64 timer_interval)
 {
 	/* hr timer clock initalization */
 	hrtimer_init(&hisi_pmu->hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
@@ -96,14 +97,14 @@ void hisi_hrtimer_init(struct hisi_pmu *hisi_pmu, u64 timer_interval)
 	hisi_pmu->hrt_duration = timer_interval;
 }
 
-void hisi_hrtimer_start(struct hisi_pmu *hisi_pmu)
+void hisi_hrtimer_start(struct hisi_pmu_v2 *hisi_pmu)
 {
 	hrtimer_start(&hisi_pmu->hrtimer,
 		      ms_to_ktime(hisi_pmu->hrt_duration),
 		      HRTIMER_MODE_REL_PINNED);
 }
 
-void hisi_hrtimer_stop(struct hisi_pmu *hisi_pmu)
+void hisi_hrtimer_stop(struct hisi_pmu_v2 *hisi_pmu)
 {
 	hrtimer_cancel(&hisi_pmu->hrtimer);
 }
@@ -137,7 +138,7 @@ void hisi_djtag_writereg(int module_id, int bank, u32 offset,
 static bool hisi_validate_event_group(struct perf_event *event)
 {
 	struct perf_event *sibling, *leader = event->group_leader;
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(event->pmu);
 	int counters = 1; /* Include count for the event */
 
 	/*
@@ -164,9 +165,9 @@ static bool hisi_validate_event_group(struct perf_event *event)
 	return counters <= hisi_pmu->num_counters;
 }
 
-int hisi_uncore_pmu_event_init(struct perf_event *event)
+int hisi_uncore_pmu_event_init_v2(struct perf_event *event)
 {
-	struct hisi_pmu *hisi_pmu;
+	struct hisi_pmu_v2 *hisi_pmu;
 	struct hw_perf_event *hwc = &event->hw;
 	int cpu;
 
@@ -213,7 +214,7 @@ int hisi_uncore_pmu_event_init(struct perf_event *event)
 	hwc->config		= event->attr.config;
 
 	/* Select an available CPU to monitor events in this PMU */
-	hisi_pmu = to_hisi_pmu(event->pmu);
+	hisi_pmu = to_hisi_pmu_v2(event->pmu);
 	cpu = cpumask_first(&hisi_pmu->cpus);
 	if (cpu >= nr_cpu_ids)
 		return -EINVAL;
@@ -228,10 +229,10 @@ int hisi_uncore_pmu_event_init(struct perf_event *event)
  * Enable counter and set the counter to count
  * the event that we're interested in.
  */
-static void hisi_uncore_pmu_enable_event(struct perf_event *event)
+static void hisi_uncore_pmu_enable_event_v2(struct perf_event *event)
 {
 	struct hw_perf_event *hwc = &event->hw;
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(event->pmu);
 
 	/*
 	 * Set event in Event select registers.
@@ -247,10 +248,10 @@ static void hisi_uncore_pmu_enable_event(struct perf_event *event)
 /*
  * Disable counting and clear the event.
  */
-static void hisi_uncore_pmu_disable_event(struct perf_event *event)
+static void hisi_uncore_pmu_disable_event_v2(struct perf_event *event)
 {
 	struct hw_perf_event *hwc = &event->hw;
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(event->pmu);
 
 	/* Disable the hardware event counting */
 	if (hisi_pmu->ops->disable_counter)
@@ -262,10 +263,10 @@ static void hisi_uncore_pmu_disable_event(struct perf_event *event)
 	hisi_pmu->ops->clear_evtype(hisi_pmu, GET_CNTR_IDX(hwc));
 }
 
-void hisi_uncore_pmu_set_event_period(struct perf_event *event)
+void hisi_uncore_pmu_set_event_period_v2(struct perf_event *event)
 {
 	struct hw_perf_event *hwc = &event->hw;
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(event->pmu);
 
 	/*
 	 * The Hisilicon PMU counters have a period of 2^32. We reduce it
@@ -281,9 +282,9 @@ void hisi_uncore_pmu_set_event_period(struct perf_event *event)
 	hisi_pmu->ops->write_counter(hisi_pmu, hwc, (u32) val);
 }
 
-u64 hisi_uncore_pmu_event_update(struct perf_event *event)
+u64 hisi_uncore_pmu_event_update_v2(struct perf_event *event)
 {
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(event->pmu);
 	struct hw_perf_event *hwc = &event->hw;
 	int idx = GET_CNTR_IDX(hwc);
 	u64 delta, prev_raw_count, new_raw_count;
@@ -304,10 +305,10 @@ u64 hisi_uncore_pmu_event_update(struct perf_event *event)
 	return new_raw_count;
 }
 
-void hisi_uncore_pmu_start(struct perf_event *event, int flags)
+void hisi_uncore_pmu_start_v2(struct perf_event *event, int flags)
 {
 	struct hw_perf_event *hwc = &event->hw;
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(event->pmu);
 
 	if (WARN_ON_ONCE(!(hwc->state & PERF_HES_STOPPED)))
 		return;
@@ -332,16 +333,16 @@ void hisi_uncore_pmu_start(struct perf_event *event, int flags)
 			hisi_pmu->ops->start_hrtimer(hisi_pmu);
 	}
 
-	hisi_uncore_pmu_enable_event(event);
+	hisi_uncore_pmu_enable_event_v2(event);
 	perf_event_update_userpage(event);
 }
 
-void hisi_uncore_pmu_stop(struct perf_event *event, int flags)
+void hisi_uncore_pmu_stop_v2(struct perf_event *event, int flags)
 {
 	struct hw_perf_event *hwc = &event->hw;
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(event->pmu);
 
-	hisi_uncore_pmu_disable_event(event);
+	hisi_uncore_pmu_disable_event_v2(event);
 	WARN_ON_ONCE(hwc->state & PERF_HES_STOPPED);
 	hwc->state |= PERF_HES_STOPPED;
 
@@ -362,10 +363,10 @@ void hisi_uncore_pmu_stop(struct perf_event *event, int flags)
 	hwc->state |= PERF_HES_UPTODATE;
 }
 
-int hisi_uncore_pmu_add(struct perf_event *event, int flags)
+int hisi_uncore_pmu_add_v2(struct perf_event *event, int flags)
 {
 	struct hw_perf_event *hwc = &event->hw;
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(event->pmu);
 	int idx;
 
 	hwc->state = PERF_HES_STOPPED | PERF_HES_UPTODATE;
@@ -379,26 +380,26 @@ int hisi_uncore_pmu_add(struct perf_event *event, int flags)
 	hisi_pmu->pmu_events.hw_events[idx] = event;
 
 	if (flags & PERF_EF_START)
-		hisi_uncore_pmu_start(event, PERF_EF_RELOAD);
+		hisi_uncore_pmu_start_v2(event, PERF_EF_RELOAD);
 
 	return 0;
 }
 
-void hisi_uncore_pmu_del(struct perf_event *event, int flags)
+void hisi_uncore_pmu_del_v2(struct perf_event *event, int flags)
 {
 	struct hw_perf_event *hwc = &event->hw;
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(event->pmu);
 
-	hisi_uncore_pmu_stop(event, PERF_EF_UPDATE);
+	hisi_uncore_pmu_stop_v2(event, PERF_EF_UPDATE);
 	hisi_pmu->ops->clear_event_idx(hisi_pmu, GET_CNTR_IDX(hwc));
 	perf_event_update_userpage(event);
 	hisi_pmu->pmu_events.hw_events[GET_CNTR_IDX(hwc)] = NULL;
 }
 
-struct hisi_pmu *hisi_pmu_alloc(struct device *dev, u32 num_cntrs)
+struct hisi_pmu_v2 *hisi_pmu_alloc_v2(struct device *dev, u32 num_cntrs)
 {
-	struct hisi_pmu *hisi_pmu;
-	struct hisi_pmu_hwevents *pmu_events;
+	struct hisi_pmu_v2 *hisi_pmu;
+	struct hisi_pmu_v2_hwevents *pmu_events;
 
 	hisi_pmu = devm_kzalloc(dev, sizeof(*hisi_pmu), GFP_KERNEL);
 	if (!hisi_pmu)
@@ -422,29 +423,29 @@ struct hisi_pmu *hisi_pmu_alloc(struct device *dev, u32 num_cntrs)
 	return hisi_pmu;
 }
 
-void hisi_uncore_pmu_read(struct perf_event *event)
+void hisi_uncore_pmu_read_v2(struct perf_event *event)
 {
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(event->pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(event->pmu);
 
 	/* Read hardware counter and update the Perf counter statistics */
 	hisi_pmu->ops->event_update(event);
 }
 
-void hisi_uncore_pmu_enable(struct pmu *pmu)
+void hisi_uncore_pmu_enable_v2(struct pmu *pmu)
 {
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(pmu);
 
 	hisi_pmu->ops->start_counters(hisi_pmu);
 }
 
-void hisi_uncore_pmu_disable(struct pmu *pmu)
+void hisi_uncore_pmu_disable_v2(struct pmu *pmu)
 {
-	struct hisi_pmu *hisi_pmu = to_hisi_pmu(pmu);
+	struct hisi_pmu_v2 *hisi_pmu = to_hisi_pmu_v2(pmu);
 
 	hisi_pmu->ops->stop_counters(hisi_pmu);
 }
 
-int hisi_uncore_pmu_setup(struct hisi_pmu *hisi_pmu, const char *pmu_name)
+int hisi_uncore_pmu_setup_v2(struct hisi_pmu_v2 *hisi_pmu, const char *pmu_name)
 {
 	/* Register the events with perf */
 	return perf_pmu_register(&hisi_pmu->pmu, pmu_name, -1);
