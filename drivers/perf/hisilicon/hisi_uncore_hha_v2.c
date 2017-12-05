@@ -403,6 +403,7 @@ static struct hisi_uncore_ops_v2 hisi_uncore_HHA_ops = {
 	.start_counters = hisi_hha_start_counters,
 	.stop_counters = hisi_hha_stop_counters,
 	.write_counter = hisi_hha_write_counter,
+	.read_counter = hisi_hha_read_counter,
 };
 
 /* Initialize hrtimer to poll for avoiding counter overflow */

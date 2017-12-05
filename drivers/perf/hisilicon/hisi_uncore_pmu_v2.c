@@ -320,8 +320,7 @@ void hisi_uncore_pmu_start_v2(struct perf_event *event, int flags)
 	if (flags & PERF_EF_RELOAD) {
 		u64 prev_raw_count =  local64_read(&hwc->prev_count);
 
-		hisi_pmu->ops->write_counter(hisi_pmu, hwc,
-					     (u32) prev_raw_count);
+		hisi_pmu->ops->write_counter(hisi_pmu, hwc,(u32)prev_raw_count);
 	}
 
 	/* Start hrtimer when the first event is started in this PMU */
