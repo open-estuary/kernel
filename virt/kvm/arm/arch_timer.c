@@ -31,7 +31,6 @@
 #include <kvm/arm_arch_timer.h>
 
 #include "trace.h"
-#include "vgic/vgic.h"
 
 static struct timecounter *timecounter;
 static unsigned int host_vtimer_irq;
@@ -71,11 +70,9 @@ static void soft_timer_start(struct hrtimer *hrt, u64 ns)
 		      HRTIMER_MODE_ABS);
 }
 
-static void soft_timer_cancel(struct hrtimer *hrt, struct work_struct *work)
+static void soft_timer_cancel(struct hrtimer *hrt)
 {
 	hrtimer_cancel(hrt);
-	if (work)
-		cancel_work_sync(work);
 }
 
 static irqreturn_t kvm_arch_timer_handler(int irq, void *dev_id)
@@ -100,27 +97,7 @@ static irqreturn_t kvm_arch_timer_handler(int irq, void *dev_id)
 	    !static_branch_unlikely(&has_gic_active_state))
 		disable_percpu_irq(host_vtimer_irq);
 
-	if (needs_hisi_vtimer_quirk())
-		kvm_vtimer_mask();
-
 	return IRQ_HANDLED;
-}
-
-/*
- * Work function for handling the backup timer that we schedule when a vcpu is
- * no longer running, but had a timer programmed to fire in the future.
- */
-static void kvm_timer_inject_irq_work(struct work_struct *work)
-{
-	struct kvm_vcpu *vcpu;
-
-	vcpu = container_of(work, struct kvm_vcpu, arch.timer_cpu.expired);
-
-	/*
-	 * If the vcpu is blocked we want to wake it up so that it will see
-	 * the timer has expired when entering the guest.
-	 */
-	kvm_vcpu_wake_up(vcpu);
 }
 
 static u64 kvm_timer_compute_delta(struct arch_timer_context *timer_ctx)
@@ -192,7 +169,7 @@ static enum hrtimer_restart kvm_bg_timer_expire(struct hrtimer *hrt)
 		return HRTIMER_RESTART;
 	}
 
-	schedule_work(&timer->expired);
+	kvm_vcpu_wake_up(vcpu);
 	return HRTIMER_NORESTART;
 }
 
@@ -292,37 +269,6 @@ static void kvm_timer_update_irq(struct kvm_vcpu *vcpu, bool new_level,
 	}
 }
 
-static inline void set_vtimer_irq_phys_active(struct kvm_vcpu *vcpu, bool active);
-void kvm_vtimer_irq_eoi(struct kvm_vcpu *vcpu)
-{
-	struct arch_timer_context *vtimer = vcpu_vtimer(vcpu);
-
-	kvm_timer_update_irq(vcpu, false, vtimer);
-
-	set_vtimer_irq_phys_active(vcpu, false);
-}
-
-void kvm_timer_flush_hwstate(struct kvm_vcpu *vcpu)
-{
-	bool hw_masked = kvm_vtimer_is_masked();
-	struct arch_timer_context *vtimer = vcpu_vtimer(vcpu);
-
-	if (!needs_hisi_vtimer_quirk())
-		return ;
-
-	if (hw_masked) {
-		struct vgic_irq *irq;
-
-		irq = vgic_get_irq(vcpu->kvm, vcpu, vtimer->irq.irq);
-		if (irq) {
-			if (irq->line_level)
-				set_vtimer_irq_phys_active(vcpu, true);
-		}
-
-		kvm_vtimer_unmask();
-	}
-}
-
 /* Schedule the background timer for the emulated timer. */
 static void phys_timer_emulate(struct kvm_vcpu *vcpu)
 {
@@ -335,7 +281,7 @@ static void phys_timer_emulate(struct kvm_vcpu *vcpu)
 	 * then we also don't need a soft timer.
 	 */
 	if (kvm_timer_should_fire(ptimer) || !kvm_timer_irq_can_fire(ptimer)) {
-		soft_timer_cancel(&timer->phys_timer, NULL);
+		soft_timer_cancel(&timer->phys_timer);
 		return;
 	}
 
@@ -461,7 +407,7 @@ void kvm_timer_unschedule(struct kvm_vcpu *vcpu)
 
 	vtimer_restore_state(vcpu);
 
-	soft_timer_cancel(&timer->bg_timer, &timer->expired);
+	soft_timer_cancel(&timer->bg_timer);
 }
 
 static void set_cntvoff(u64 cntvoff)
@@ -495,16 +441,6 @@ static void kvm_timer_vcpu_load_gic(struct kvm_vcpu *vcpu)
 		phys_active = kvm_vgic_map_is_active(vcpu, vtimer->irq.irq);
 	else
 		phys_active = vtimer->irq.level;
-
-	if (needs_hisi_vtimer_quirk()) {
-		struct vgic_irq *irq;
-
-		irq = vgic_get_irq(vcpu->kvm, vcpu, vtimer->irq.irq);
-		if (irq) {
-			phys_active = irq->line_level;
-		}
-	}
-
 	set_vtimer_irq_phys_active(vcpu, phys_active);
 }
 
@@ -589,7 +525,7 @@ void kvm_timer_vcpu_put(struct kvm_vcpu *vcpu)
 	 * In any case, we re-schedule the hrtimer for the physical timer when
 	 * coming back to the VCPU thread in kvm_timer_vcpu_load().
 	 */
-	soft_timer_cancel(&timer->phys_timer, NULL);
+	soft_timer_cancel(&timer->phys_timer);
 
 	/*
 	 * The kernel may decide to run userspace after calling vcpu_put, so
@@ -682,7 +618,6 @@ void kvm_timer_vcpu_init(struct kvm_vcpu *vcpu)
 	update_vtimer_cntvoff(vcpu, kvm_phys_timer_read());
 	vcpu_ptimer(vcpu)->cntvoff = 0;
 
-	INIT_WORK(&timer->expired, kvm_timer_inject_irq_work);
 	hrtimer_init(&timer->bg_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	timer->bg_timer.function = kvm_bg_timer_expire;
 
@@ -813,13 +748,11 @@ int kvm_timer_hyp_init(bool has_gic)
 	}
 
 	if (has_gic) {
-		if (!needs_hisi_vtimer_quirk()) {
-			err = irq_set_vcpu_affinity(host_vtimer_irq,
-						    kvm_get_running_vcpus());
-			if (err) {
-				kvm_err("kvm_arch_timer: error setting vcpu affinity\n");
-				goto out_free_irq;
-			}
+		err = irq_set_vcpu_affinity(host_vtimer_irq,
+					    kvm_get_running_vcpus());
+		if (err) {
+			kvm_err("kvm_arch_timer: error setting vcpu affinity\n");
+			goto out_free_irq;
 		}
 
 		static_branch_enable(&has_gic_active_state);
@@ -839,13 +772,8 @@ out_free_irq:
 void kvm_timer_vcpu_terminate(struct kvm_vcpu *vcpu)
 {
 	struct arch_timer_cpu *timer = &vcpu->arch.timer_cpu;
-	struct arch_timer_context *vtimer = vcpu_vtimer(vcpu);
 
-	soft_timer_cancel(&timer->bg_timer, &timer->expired);
-	soft_timer_cancel(&timer->phys_timer, NULL);
-
-	if (!needs_hisi_vtimer_quirk())
-		kvm_vgic_unmap_phys_irq(vcpu, vtimer->irq.irq);
+	soft_timer_cancel(&timer->bg_timer);
 }
 
 static bool timer_irqs_are_valid(struct kvm_vcpu *vcpu)
@@ -906,12 +834,10 @@ int kvm_timer_enable(struct kvm_vcpu *vcpu)
 		return -EINVAL;
 	}
 
-	if (!needs_hisi_vtimer_quirk()) {
-		ret = kvm_vgic_map_phys_irq(vcpu, host_vtimer_irq, vtimer->irq.irq,
-                                   kvm_arch_timer_get_input_level);
-		if (ret)
-			return ret;
-	}
+	ret = kvm_vgic_map_phys_irq(vcpu, host_vtimer_irq, vtimer->irq.irq,
+				    kvm_arch_timer_get_input_level);
+	if (ret)
+		return ret;
 
 no_vgic:
 	timer->enabled = 1;
